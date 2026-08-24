@@ -27,13 +27,14 @@ export interface TenantSettings {
   minRestDays: number | null;
 }
 
+// `| undefined` صريح في كل حقل — راجع التعليق في authService.LoginInput
 export interface TenantSettingsUpdate {
-  feedBagWeightKg?: number;
-  feedStarterEndDay?: number;
-  feedGrowerEndDay?: number;
-  feedAnomalyThresholdPct?: number;
-  feedLowStockThresholdDays?: number;
-  minRestDays?: number;
+  feedBagWeightKg?: number | undefined;
+  feedStarterEndDay?: number | undefined;
+  feedGrowerEndDay?: number | undefined;
+  feedAnomalyThresholdPct?: number | undefined;
+  feedLowStockThresholdDays?: number | undefined;
+  minRestDays?: number | undefined;
 }
 
 function pickSettings(row: Record<string, unknown>): TenantSettings {

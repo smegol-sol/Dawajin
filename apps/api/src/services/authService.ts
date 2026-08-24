@@ -33,7 +33,9 @@ export type LoginOutcome =
 export interface LoginInput {
   phone: string;
   password: string;
-  tenantId?: number;
+  // `| undefined` صريح: zod يستنتج الحقل الاختياري كـ`number | undefined`،
+  // و`exactOptionalPropertyTypes` يفرّق بين "غائب" و"موجود بقيمة undefined"
+  tenantId?: number | undefined;
 }
 
 /**
