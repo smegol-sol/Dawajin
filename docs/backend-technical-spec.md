@@ -1,0 +1,1135 @@
+# المواصفة التقنية الكاملة — إعادة البناء
+## نظام إدارة مزارع دواجن التسمين
+
+**النسخة 2.0 · وثيقة تنفيذية وتعاقدية للمطوّرين**
+
+> **الغرض:** بناء النظام من الصفر. تُقرأ مع «الوثيقة الشاملة» (`docs/app-complete-spec.md`) التي تصف الواجهة.
+>
+> **الوثيقة الشاملة = ماذا يرى المستخدم · هذه الوثيقة = ماذا يحدث خلف الشاشة وكيف يُبنى.**
+>
+> **القاعدة الحاكمة:** كل قرار هنا له سبب في الملحق أ (`docs/decisions.md`). لا تُلغَ قيدًا قبل قراءة سببه — أغلب القيود نتجت عن أخطاء وقعت فعلًا.
+
+> **ملاحظة تحويل:** هذا الملف نسخة Markdown نظيفة ومراجَعة يدويًا من `docs/backend-technical-spec.pdf` الأصلي، لجعل المحتوى قابلًا للمقارنة (diff) وللقراءة الآلية. عند أي تعارض دقيق، يبقى الـ PDF الأصلي هو المرجع الحرفي، لكن هذا الملف هو المصدر العملي اليومي للفريق.
+
+---
+
+## الفهرس
+
+**الجزء الأول — المكدّس والبنية**
+1. المبادئ المعمارية · 2. المكدّس التقني الكامل · 3. البنية التحتية والاستضافة · 4. بيئة التطوير · 5. بنية المشروع · 6. معايير الكود
+
+**الجزء الثاني — البيانات**
+7. مخطط قاعدة البيانات · 8. أنواع Enum · 9. الفهارس والقيود · 10. الترحيلات
+
+**الجزء الثالث — المنطق**
+11. المصادقة · 12. الصلاحيات · 13. دفتر المخزون · 14. التدفقات · 15. المعادلات · 16. المهام المجدولة والإشعارات
+
+**الجزء الرابع — الواجهة البرمجية**
+17. نقاط الـ API · 18. العقود · 19. رموز الأخطاء
+
+**الجزء الخامس — الجودة والتشغيل**
+20. الاختبارات · 21. الفحوص الآلية · 22. الأداء والحدود · 23. الأمان · 24. المراقبة · 25. النشر · 26. معايير القبول
+
+**الملاحق**
+أ. سجل القرارات ومبرراتها (→ `docs/decisions.md`) · ب. قائمة الحزم · ج. متغيرات البيئة
+
+---
+---
+
+# الجزء الأول — المكدّس والبنية
+
+---
+
+# 1 · المبادئ المعمارية
+
+سبعة قيود بنيوية، كل واحد نتج عن خطأ وقع فعلًا. التفصيل الكامل لكل قرار في `docs/decisions.md`.
+
+| # | المبدأ | القاعدة |
+|---|---|---|
+| 1 | الفرض المركزي | أي قيد أمني يُفرض في طبقة واحدة، لا باستدعاء يدوي في كل نقطة |
+| 2 | المعاملة والقفل | كل عملية متعددة الجداول في معاملة، مع إعادة قراءة الحرّاس داخلها تحت القفل |
+| 3 | دفتر حركة | لا عمود رصيد يُحدَّث — الرصيد = مجموع الحركات |
+| 4 | السجل غير قابل للتعديل | لا `UPDATE` على سجل ميداني — التصحيح بسجل جديد مرتبط |
+| 5 | لا يُمنع الميدان بسبب الإدارة | إعداد ناقص أو رصيد غير كافٍ يُنبّه ولا يمنع |
+| 6 | الوجود ثم التعيين | غير موجود ← 404 · موجود غير مُسند ← 403 |
+| 7 | عزل مطلق | `tenant_id` من JWT حصريًا · فلترة مركزية |
+
+---
+
+# 2 · المكدّس التقني الكامل
+
+## 2.1 نظرة عامة
+
+```
+┌──────────────────────────────────────────────────────────┐
+│  تطبيق الموبايل — Expo / React Native (iOS+Android)        │
+└──────────────────────────────┬─────────────────────────────┘
+                                │ HTTPS · REST · JWT
+┌──────────────────────────────▼─────────────────────────────┐
+│  خادم API — Node.js + Express + TypeScript                 │
+│  ├─ middleware: auth · tenant · entityAccess                │
+│  ├─ routes · services · lib                                 │
+│  └─ cron: التصعيد · التنبيهات · الملخص اليومي                │
+└──────────────────────────────┬─────────────────────────────┘
+                                │ Drizzle ORM · pg
+┌──────────────────────────────▼─────────────────────────────┐
+│  PostgreSQL 15+                                             │
+└──────────────────────────────────────────────────────────────┘
+```
+
+## 2.2 تطبيق الموبايل
+
+| العنصر | الاختيار | الإصدار | لماذا |
+|---|---|---|---|
+| الإطار | Expo (Managed) | SDK 54+ | بلا Xcode/Android Studio لبناء iOS/Android · EAS Build · تحديثات OTA |
+| القاعدة | React Native | 0.81+ | مربوط بإصدار Expo SDK |
+| اللغة | TypeScript | 5.4+ | `strict: true` إلزامي |
+| التوجيه | Expo Router | 6+ | توجيه قائم على الملفات · Tabs متداخل حقيقي لكل دور |
+| جلب البيانات | TanStack Query | 5+ | تخزين مؤقت · إبطال · إعادة محاولة |
+| عميل HTTP | Axios | 1.7+ | مع interceptor لتجديد الرمز |
+| التخزين الآمن | expo-secure-store | — | JWT حصريًا — لا AsyncStorage للرموز |
+| التخزين العادي | AsyncStorage | — | التفضيلات · مسودات النماذج · آخر عنبر مختار |
+| الإشعارات | expo-notifications | — | بلا خادم دفع خاص — Expo Push |
+| الكاميرا والصور | expo-image-picker · expo-camera | — | — |
+| الصوت | expo-av | — | الملاحظة الصوتية (60 ثانية) |
+| ضغط الصور | expo-image-manipulator | — | قبل الرفع |
+| الخط | Tajawal (500 · 700) | expo-font | لا وزن أخف من 500 |
+| الأيقونات | lucide-react-native | — | مكتبة واحدة · لا إيموجي إطلاقًا |
+| الرسوم البيانية | react-native-svg + رسم يدوي | — | لا مكتبة ثقيلة — منحنى واحد لكل تقرير |
+| التواريخ | date-fns + date-fns/locale/ar | 3+ | خفيفة وقابلة للاهتزاز الشجري |
+| النماذج | react-hook-form + zod | — | نفس مخططات zod المستخدمة في الخادم |
+| الحالة | Context API | — | الحالة العامة محدودة (auth · farmerContext) — لا Redux |
+
+**قرارات مرفوضة صراحة:**
+- ❌ Bare React Native — يضاعف عبء البناء بلا مكسب هنا
+- ❌ Redux/Zustand — TanStack Query تغطي حالة الخادم، والباقي محلي
+- ❌ NativeWind/Tailwind — نظام الرموز مباشر و`StyleSheet` أوضح للفريق
+- ❌ الوضع الداكن — التطبيق يُستخدم تحت الشمس (انظر `docs/decisions.md`)
+
+## 2.3 الخادم
+
+| العنصر | الاختيار | الإصدار | لماذا |
+|---|---|---|---|
+| البيئة | Node.js LTS | 20+ | — |
+| الإطار | Express | 4.19+ | بسيط · middleware واضح · يناسب حجم النظام |
+| اللغة | TypeScript | 5.4+ | `strict: true` |
+| البناء | esbuild | — | سريع · حزمة واحدة للنشر |
+| التحقق | zod | 3+ | مشترك مع العميل — مصدر واحد للتحقق |
+| المصادقة | jose | 5+ | JWT توقيعًا وتحققًا |
+| التشفير | bcryptjs | 2.4+ | كلمات المرور · تكلفة 10 |
+| التسجيل | pino | 9+ | JSON منظّم · سريع |
+| الجدولة | node-cron | 3+ | التصعيد والتنبيهات |
+| رفع الملفات | multer + S3 SDK | — | الصور والملاحظات الصوتية |
+| التوثيق | OpenAPI 3.1 | — | مصدر الحقيقة لعقود الـ API |
+| الحماية | helmet · cors · express-rate-limit | — | — |
+| التوليد | openapi-typescript + orval | — | توليد hooks العميل من العقد |
+
+**قرارات مرفوضة:**
+- ❌ NestJS — عبء بنيوي أكبر من حاجة النظام
+- ❌ GraphQL — التطبيق يستهلك مسارات محددة، وREST أوضح للتدقيق الأمني
+- ❌ Prisma — Drizzle أخف وأقرب لـ SQL، ومهم هنا لأن دفتر المخزون يحتاج استعلامات تجميع دقيقة
+
+## 2.4 قاعدة البيانات
+
+| العنصر | الاختيار | لماذا |
+|---|---|---|
+| المحرك | PostgreSQL 15+ | معاملات · أقفال استشارية · فهارس جزئية · قيود `CHECK` كلها مستخدمة فعليًا |
+| ORM | Drizzle ORM | مخطط بـ TypeScript·SQL شفاف · لا طبقة سحرية |
+| الترحيلات | Drizzle Kit | ملفات مرقّمة + journal — لا `push` إطلاقًا |
+| مجمّع الاتصالات | pg.Pool | حد أقصى قابل للضبط حسب خطة الاستضافة |
+
+**ميزات PostgreSQL المستخدمة — لا بديل عنها:**
+- `pg_advisory_xact_lock` — تسلسل العمليات على العنبر الواحد
+- الفهارس الجزئية — `WHERE correction_of_id IS NULL` · `WHERE tenant_id IS NULL`
+- قيود `CHECK` — تطابق `location_type` مع `house_id`
+- `numeric` للكميات (لا `float` — أخطاء تقريب تكسر ثابت الدفتر)
+- `timestamptz` لكل الأوقات
+- أنواع Enum أصلية
+
+**قرارات مرفوضة:**
+- ❌ MySQL — لا أقفال استشارية ولا فهارس جزئية
+- ❌ MongoDB — النظام علائقي بامتياز، وثابت الدفتر يحتاج معاملات
+- ❌ SQLite — لا يخدم عدة مستأجرين متزامنين
+
+## 2.5 المونوريبو
+
+`pnpm workspaces` — مشاركة الأنواع ومخططات zod ومخطط قاعدة البيانات بين التطبيق والخادم بلا نشر حزم.
+
+## 2.6 الخدمات الخارجية
+
+| الخدمة | الغرض | البديل |
+|---|---|---|
+| Expo Push | إشعارات الدفع | مجاني · لا خادم خاص |
+| تخزين كائنات (S3 أو متوافق) | الصور والصوت | Cloudflare R2 · Supabase Storage |
+| خدمة بريد | استعادة كلمة المرور (لاحقًا) | اختيارية |
+
+لا مطلوب حاليًا: بوابة دفع (التفعيل يدوي) · SMS (المشرف ينشئ الحسابات) · خدمة تحليلات خارجية.
+
+---
+
+# 3 · البنية التحتية والاستضافة
+
+## 3.1 المتطلبات
+
+| المكوّن | الحد الأدنى | التوسّع |
+|---|---|---|
+| خادم API | 2 vCPU · 4 GB RAM | أفقي خلف موازن حمل |
+| قاعدة البيانات | 2 vCPU · 4 GB RAM · 50 GB SSD | رأسي ثم نسخ قراءة |
+| تخزين الكائنات | بداية 20 GB | حسب الاستهلاك |
+
+## 3.2 البيئات الثلاث
+
+| البيئة | القاعدة | البيانات |
+|---|---|---|
+| `development` | منفصلة | تجريبية كاملة |
+| `test` | منفصلة · بعلامة · تُمسح كل تشغيل | تُولَّد لكل اختبار |
+| `production` | منفصلة | لا بيانات تجريبية إطلاقًا |
+
+## 3.3 النسخ الاحتياطي
+
+- نسخ يومي تلقائي · احتفاظ 30 يومًا
+- استعادة مختبَرة شهريًا — نسخة لم تُختبر ليست نسخة
+- نسخة يدوية قبل كل ترحيل على الإنتاج
+
+## 3.4 الشبكة والأمان
+
+- HTTPS إلزامي · HSTS
+- CORS مقيّد بنطاقات التطبيق
+- تحديد معدل: 100 طلب/دقيقة للمستخدم · 5 محاولات دخول ثم تأخير
+
+---
+
+# 4 · بيئة التطوير
+
+## 4.1 المتطلبات
+
+Node.js 20+ · pnpm 9+ · PostgreSQL 15+ (محلي أو Docker) · Expo CLI · EAS CLI
+
+## 4.2 التشغيل
+
+```bash
+pnpm install
+cp .env.example .env
+pnpm --filter @app/db run migrate        # الترحيلات
+pnpm --filter @app/api run seed:demo     # بيانات تجريبية (تطوير فقط)
+pnpm --filter @app/api run dev           # الخادم
+pnpm --filter @app/mobile run start      # Expo
+```
+
+## 4.3 السكربتات الإلزامية
+
+| السكربت | الوظيفة |
+|---|---|
+| `migrate` | تطبيق الترحيلات |
+| `generate` | توليد ترحيل من تغيّر المخطط |
+| `seed:demo` | بيانات تجريبية عبر الـ API بحارس بيئة |
+| `test` | اختبارات الوحدة |
+| `test:integration` | اختبارات التكامل · قاعدة منفصلة · متسلسلة |
+| `typecheck` | `tsc --noEmit` لكل الحزم |
+| `check:all` | الفحوص الآلية الستة (القسم 21) |
+| `api:generate` | توليد hooks العميل من OpenAPI |
+
+## 4.4 مؤشر البيئة
+
+`GET /health` يُرجع: البيئة · اسم القاعدة · آخر ترحيل، وشريط علوي مرئي في غير الإنتاج مطبّق.
+
+---
+
+# 5 · بنية المشروع
+
+```
+workspace/
+├── apps/
+│   ├── mobile/
+│   │   ├── app/
+│   │   │   ├── (farmer)/_layout.tsx              ← Tabs متداخل
+│   │   │   ├── (supervisor)/_layout.tsx
+│   │   │   ├── (vet)/_layout.tsx
+│   │   │   ├── (owner)/_layout.tsx
+│   │   │   └── platform/                         ← مسار منفصل
+│   │   ├── components/ui/                         ← المكوّنات المشتركة
+│   │   ├── constants/theme.ts                     ← الرموز — مصدر وحيد
+│   │   ├── lib/                                    ← auth · contexts · format
+│   │   └── hooks/
+│   └── api/
+│       └── src/
+│           ├── middleware/     ← requireAuth · requireTenant · enforceEntityAccess
+│           ├── routes/
+│           ├── services/       ← منطق الأعمال
+│           ├── lib/            ← access · inventory · scheduler · notify
+│           ├── openapi/
+│           └── index.ts
+├── packages/
+│   ├── db/
+│   │   ├── src/schema/
+│   │   └── migrations/          ← Drizzle Kit مرقّمة
+│   ├── shared/                  ← أنواع ومخططات zod مشتركة
+│   └── api-client/              ← hooks موّلدة
+├── docs/
+│   ├── app-complete-spec.md
+│   ├── backend-technical-spec.md    ← هذا الملف
+│   ├── backend-technical-spec.pdf   ← النسخة الأصلية المرجعية
+│   ├── decisions.md                 ← نسخة حيّة من الملحق أ
+│   └── work-plan.md
+└── scripts/                       ← الفحوص الآلية — بلا ترحيلات backfill
+```
+
+---
+
+# 6 · معايير الكود
+
+- `TypeScript strict: true` في كل الحزم · لا `any` ضمني
+- ESLint + Prettier — تنسيق موحّد يُفرض في CI
+- أسماء الجداول والأعمدة `snake_case` · الكود `camelCase` · التحويل في طبقة ORM مركزية
+- رسائل الخطأ عربية جاهزة للعرض — لا نصوص إنجليزية تصل المستخدم
+- لا قيمة مُدمَجة في الكود (hardcoded) لأي شيء قابل للضبط — انظر إعدادات المستأجر
+- كل دالة تكتب في أكثر من جدول تستقبل `tx` (سياق المعاملة) — لا اتصالًا مستقلًا
+- الأنواع المشتركة في `packages/shared` — لا تكرار تعريف بين التطبيق والخادم
+
+---
+---
+
+# الجزء الثاني — البيانات
+
+---
+
+# 7 · مخطط قاعدة البيانات
+
+## 7.1 الجداول الأساسية
+
+### `tenants`
+| العمود | النوع | ملاحظات |
+|---|---|---|
+| id | serial PK | |
+| name | varchar(128) NOT NULL | |
+| contact_phone | varchar(32) | |
+| subscription_plan | varchar(64) NOT NULL DEFAULT 'أساسية' | |
+| subscription_status | enum NOT NULL DEFAULT 'تجريبي' | |
+| subscription_expires_at | timestamptz | |
+| max_houses | integer NOT NULL DEFAULT 5 | |
+| feed_bag_weight_kg | numeric(6,2) NOT NULL DEFAULT 50 | |
+| feed_starter_end_day | integer NOT NULL DEFAULT 10 | |
+| feed_grower_end_day | integer NOT NULL DEFAULT 24 | |
+| feed_anomaly_threshold_pct | integer NOT NULL DEFAULT 30 | |
+| feed_low_stock_threshold_days | integer NOT NULL DEFAULT 3 | |
+| min_rest_days | integer NOT NULL DEFAULT 10 | |
+| prep_protocol | jsonb | |
+| default_country_code | varchar(8) NOT NULL DEFAULT '+967' | |
+| timezone | varchar(64) NOT NULL | |
+| is_active | boolean NOT NULL DEFAULT true | |
+| created_at | timestamptz NOT NULL | |
+
+### `users`
+| العمود | النوع | ملاحظات |
+|---|---|---|
+| id · tenant_id | FK NULL | NULL لمدير المنصة |
+| username | varchar(64) NULL | للعرض والسجلات |
+| password_hash | varchar(255) NOT NULL | bcrypt |
+| full_name | varchar(128) NOT NULL | |
+| role | enum user_role NOT NULL | |
+| phone | varchar(30) NOT NULL | كما أُدخل |
+| phone_e164 | varchar(20) NOT NULL | المطبَّع · حقل المطابقة |
+| is_active | boolean NOT NULL DEFAULT true | |
+| must_change_password | boolean NOT NULL DEFAULT false | |
+| expo_push_token | varchar(255) | |
+| last_active_at | timestamptz | |
+| created_at | timestamptz NOT NULL | |
+
+### `farms`
+id · tenant_id FK · name · created_at
+
+### `houses`
+| العمود | النوع | ملاحظات |
+|---|---|---|
+| id · tenant_id · farm_id | FK | |
+| name | varchar(64) NOT NULL | |
+| type | enum house_type | |
+| status | enum house_status NOT NULL DEFAULT 'جاهز للإسكان' | |
+| status_changed_at | timestamptz NOT NULL | |
+| water_tank_capacity_l | numeric(10,2) | NULL = حقل الماء مخفي |
+| power_sources | text[] | |
+| created_at | timestamptz | |
+
+### `batches`
+| العمود | النوع | ملاحظات |
+|---|---|---|
+| id · tenant_id · house_id | FK | |
+| breed | enum NOT NULL | |
+| start_date | date NOT NULL | |
+| initial_bird_count | integer NOT NULL | |
+| status | enum NOT NULL DEFAULT 'نشطة' | |
+| closed_at | timestamptz | |
+| sold_bird_count | integer | |
+| market_avg_weight_g | integer | |
+| housed_before_ready | boolean NOT NULL DEFAULT false | علامة دائمة |
+| housed_reason | text | |
+| created_at | timestamptz | |
+
+### `user_assignments`
+id · user_id FK · house_id FK · tenant_id FK · created_at
+
+**تراكمية:** مستخدم واحد لعدة عنابر في نفس المزرعة (مربي مسؤول عن عنبرين متجاورين — حالة شائعة). التكرار ← 409.
+
+## 7.2 السجلات الميدانية
+
+### `daily_logs`
+| العمود | النوع | ملاحظات |
+|---|---|---|
+| id · uuid · tenant_id · house_id · batch_id | | |
+| log_date | date NOT NULL | |
+| mortality_count | integer NOT NULL | |
+| mortality_cause | enum | + mortality_cause_note text |
+| water_tanks | numeric(8,3) | |
+| water_liters | numeric(10,2) | محسوب |
+| tank_capacity_l | numeric(10,2) | السائد وقت الإدخال |
+| sampled_birds | integer | |
+| sampled_weight_kg | numeric(8,3) | |
+| avg_weight_g | numeric(8,2) | محسوب |
+| temperature_c · humidity_pct | numeric(5,2) | |
+| notes · photo_urls · voice_note_url | text · text[] · text | |
+| review_status | enum NOT NULL DEFAULT 'none' | |
+| correction_of_id | integer FK daily_logs | |
+| client_id | uuid | عطالة عند إعادة الإرسال |
+| created_by · created_at | | |
+
+### `daily_log_feed_rows`
+| العمود | النوع | ملاحظات |
+|---|---|---|
+| id · daily_log_id FK · product_id FK | | |
+| feed_stage | enum NOT NULL | |
+| bags | numeric(8,3) NOT NULL | |
+| kg | numeric(10,2) NOT NULL | محسوب |
+| bag_weight_kg | numeric(6,2) NOT NULL | السائد وقت الإدخال |
+
+جدول منفصل لأن أيام الانتقال بين المراحل تحمل نوعين معًا.
+
+### `log_notes`
+id · daily_log_id FK · author_id FK · body text NOT NULL · created_at
+
+غير قابلة للتعديل أو الحذف · إضافتها تنقل السجل لـ `pending_review` في نفس المعاملة.
+
+## 7.3 المخزون
+
+### `warehouses`
+id · tenant_id FK · name · is_active · created_at
+
+مخزن افتراضي واحد لكل مستأجر يُنشأ تلقائيًا · الجدول يسمح بأكثر لاحقًا.
+
+### `products`
+| العمود | النوع | ملاحظات |
+|---|---|---|
+| id · tenant_id | | |
+| category | enum product_category NOT NULL | |
+| name | varchar(160) NOT NULL | |
+| feed_stage | enum | للعلف فقط |
+| is_system | boolean NOT NULL DEFAULT false | |
+| stock_unit | enum stock_unit NOT NULL | |
+| package_size | numeric(10,3) | |
+| package_unit | varchar(16) | |
+| dose_unit | varchar(16) | |
+| default_dose_amount | numeric(10,3) | |
+| default_dose_basis | enum | |
+| default_route | enum | |
+| withdrawal_days | integer | |
+| storage_conditions | enum | |
+| supplier | varchar(160) | |
+| notes · is_active | text · boolean NOT NULL DEFAULT true | |
+| created_by · created_at | | |
+
+### `inventory_movements` — الدفتر
+| العمود | النوع | ملاحظات |
+|---|---|---|
+| id · uuid · tenant_id | | |
+| location_type | enum ('warehouse','house') NOT NULL | |
+| location_id | integer NOT NULL | |
+| farm_id | integer FK NULL | NULL للمخزن |
+| house_id | integer FK NULL | NULL للمخزن |
+| batch_id | integer FK NULL | |
+| product_id | integer FK NOT NULL | |
+| movement_type | enum NOT NULL | |
+| quantity | numeric(12,3) NOT NULL | موجب وارد · سالب منصرف |
+| unit | enum stock_unit NOT NULL | |
+| source_type | varchar(48) NOT NULL | |
+| source_uuid | uuid NOT NULL | |
+| notes · created_by · created_at | | |
+
+**قيد `CHECK` إلزامي:**
+```sql
+CHECK (
+    (location_type='house'      AND location_id = house_id AND house_id IS NOT NULL)
+    OR
+    (location_type='warehouse'  AND house_id IS NULL AND farm_id IS NULL)
+)
+```
+
+**قواعد:** لا حذف أبدًا · الرصيد يُحسب لا يُخزَّن · كل حركة مرتبطة بمصدرها.
+
+### `shipments`
+| العمود | النوع | ملاحظات |
+|---|---|---|
+| id · uuid · tenant_id · farm_id · house_id · batch_id | | |
+| type · product_id FK NOT NULL | | |
+| sent_quantity | numeric(12,3) NOT NULL | |
+| unit | enum NOT NULL | مشتق من المنتج المختار |
+| sent_by · sent_at | | |
+| carrier_name · vehicle_number | | |
+| handover_code | varchar(8) NOT NULL | 4 أرقام |
+| notes_sender | text | |
+| counted_quantity | numeric(12,3) | |
+| received_by · received_at | | |
+| variance | numeric(12,3) | محسوب |
+| status | enum NOT NULL DEFAULT 'معلّقة' | |
+| variance_status · notes_receiver | enum · text | |
+| signature_url · photo_urls | | |
+| dispute_status · dispute_outcome · dispute_reason | | |
+| dispute_closed_by · dispute_closed_at | | |
+| bypass_code_used | boolean NOT NULL DEFAULT false | |
+| correction_of_uuid | uuid | |
+
+### `stocktakes` · `stocktake_items` · `wastage` · `inventory_transfers`
+
+- **stocktakes:** id · uuid · tenant_id · location_type · location_id · opened_by · opened_at · closed_at · is_opening boolean
+- **stocktake_items:** id · stocktake_id FK · product_id FK · counted_qty · book_qty · variance · reason text
+- **wastage:** id · uuid · tenant_id · location_type · location_id · product_id · quantity · unit · reason enum NOT NULL · notes · photo_url · created_by · created_at
+- **transfers:** id · uuid · tenant_id · from_location_type/id · to_location_type/id · product_id · quantity · unit · reason · created_by · created_at · confirmed_by · confirmed_at
+
+## 7.4 الصحة
+
+- **health_tasks:** id · uuid · tenant_id · house_id · batch_id · product_id FK · dose_amount · dose_unit · dose_basis · route · scheduled_date · priority enum · notes_vet · status enum · created_by(vet) · created_at
+- **health_task_executions:** id · task_id FK · executed_at · quantity_used · notes · photo_url · executed_by · failed boolean · failure_reason
+- **health_observations:** id · uuid · tenant_id · house_id · batch_id · symptoms text[] NOT NULL · severity enum NOT NULL · affected_estimate · photo_urls · notes · status enum NOT NULL DEFAULT 'جديد' · vet_response · responded_by · responded_at · created_by · created_at
+- **batch_diagnoses:** id · batch_id FK · observation_id FK NULL · diagnosis · treatment_plan · created_by(vet) · created_at
+
+## 7.5 دورة العنبر
+
+- **house_prep_cycles:** id · house_id FK · started_at · completed_at · rest_started_at
+- **house_prep_steps:** id · cycle_id FK · step_key · label · is_required boolean · completed_at · completed_by · notes · photo_url · product_id FK NULL · quantity_used
+- **house_status_history:** id · house_id FK · from_status · to_status · changed_by · changed_at · reason
+
+## 7.6 المعايير
+
+### `breed_standards`
+| العمود | النوع | ملاحظات |
+|---|---|---|
+| id · tenant_id | NULL | NULL = عالمي · قيمة = تجاوز المستأجر |
+| breed | enum NOT NULL | |
+| day | integer NOT NULL | إلزامي |
+| target_weight_g | integer NOT NULL | |
+| cumulative_mortality_pct | numeric(5,2) NOT NULL | |
+| target_fcr | numeric(5,3) NOT NULL | |
+| daily_feed_g_per_bird | numeric(8,2) | |
+| chick_weight_g | numeric(6,2) | |
+| — | UNIQUE (tenant_id, breed, day) | |
+
+كل مقارنة بالمعيار بلا معنى ما لم يُعبَّأ هذا الجدول من اليوم 1 إلى 45 للسلالات الثلاث.
+
+## 7.7 الإشعارات والتدقيق
+
+### `notifications`
+id · uuid · tenant_id · user_id FK · type · urgency enum NOT NULL · title · body · entity_type · entity_id · deep_link · is_read · read_at · escalated_from_id FK notifications · push_scheduled_for timestamptz · created_at
+
+**ثلاثة سجلات تدقيق منفصلة:**
+
+| الجدول | النطاق |
+|---|---|
+| `entity_audit_log` | عمليات المالك التشغيلية |
+| `settings_audit_log` | تغييرات الإعدادات |
+| `admin_audit_log` | مدير المنصة حصريًا |
+
+---
+
+# 8 · أنواع Enum
+
+| النوع | القيم |
+|---|---|
+| `user_role` | farmer · supervisor · vet · owner · platform_admin |
+| `batch_status` | نشطة · منتهية |
+| `breed` | Ross 308 · Cobb 500 · Arbor Acres |
+| `house_status` | مشغول · تحت الإخلاء · تحت التنظيف والتطهير · في فترة الراحة · جاهز للإسكان · تحت الصيانة · معطّل |
+| `house_type` | مفتوح · مغلق · هجين |
+| `mortality_cause` | مرض تنفسي · إجهاد حراري · مشاكل مياه/علف · حادث · غير معروف · أخرى |
+| `review_status` | none · pending_review · reviewed · correction_submitted |
+| `feed_stage` | بادئ · نامي · ناهي |
+| `product_category` | علف · دواء · لقاح · فيتامين · مستلزمات |
+| `stock_unit` | عبوة · زجاجة · كيس · لتر · كجم · قطعة |
+| `dose_basis` | لكل لتر ماء · لكل كجم وزن حي · لكل طير · لكل 1000 طير |
+| `route` | مع الماء · مع العلف · حقن · رش · تقطير بالعين · فموي · أخرى |
+| `inventory_movement_type` | استلام · شحن صادر · شحن وارد · مرتجع صادر · مرتجع وارد · تحويل صادر · تحويل وارد · استهلاك يومي · تنفيذ علاج · استهلاك تجهيز · تسوية جرد · هالك/تلف |
+| `shipment_status` | معلّقة · مستلمة · ملغاة |
+| `shipment_variance_status` | مطابق · فرق مسجّل · قيد النزاع |
+| `dispute_outcome` | خطأ قياس · فاقد نقل · فاقد بعد التسليم |
+| `wastage_reason` | انتهاء صلاحية · تلف بالرطوبة · كسر · انقطاع تبريد · تلوث · أخرى |
+| `health_task_status` | معلقة · منفّذة · متأخرة · متعذّرة · ملغاة |
+| `health_observation_severity` | خفيف · متوسط · شديد |
+| `notification_urgency` | urgent · action · info |
+| `subscription_status` | تجريبي · نشط · موقوف · منتهي |
+
+> **قاعدة:** كل قيمة enum يجب أن يكتبها مسار API فعلي — والفاحص الآلي يتحقق.
+
+---
+
+# 9 · الفهارس والقيود
+
+```sql
+UNIQUE (tenant_id, phone_e164)
+
+-- يشمل المعطّلين
+CREATE UNIQUE INDEX users_platform_phone_unique
+  ON users (phone_e164) WHERE tenant_id IS NULL;
+
+CREATE UNIQUE INDEX daily_logs_batch_date_uq
+  ON daily_logs (batch_id, log_date) WHERE correction_of_id IS NULL;
+
+UNIQUE (user_id, house_id)
+UNIQUE (farm_id, name)
+UNIQUE (tenant_id, breed, day)
+
+CREATE UNIQUE INDEX products_system_feed_uq
+  ON products (tenant_id, feed_stage) WHERE is_system = true AND category='علف';
+
+-- أداء
+INDEX (location_type, location_id, product_id)
+INDEX (tenant_id, house_id, log_date)
+INDEX (tenant_id, status)      -- shipments
+INDEX (user_id, is_read)       -- notifications
+```
+
+الحماية المنطقية في الخادم لا تكفي — طلبان متزامنان يتجاوزانها. الفهرس هو الحل، والخادم يحوّل `23505` إلى رسالة مفهومة مقيَّدة باسم القيد.
+
+---
+
+# 10 · الترحيلات
+
+- Drizzle Kit حصريًا · ملفات مرقّمة + journal
+- تُطبَّق كخطوة نشر صريحة — لا عند إقلاع الخادم
+- `drizzle push` محذوف من كل السكربتات
+- لا backfill تلقائي — أي تعديل بيانات مرة واحدة يدويًا ومسجّل
+- الترحيل الأول: لقطة المخطط · الثاني: بذر معايير السلالات بحارس `NOT EXISTS`
+
+---
+---
+
+# الجزء الثالث — المنطق
+
+---
+
+# 11 · المصادقة
+
+**معرّف الدخول: رقم الجوال.** التطبيع إلزامي قبل الحفظ وكل مقارنة:
+
+1. تحويل إلى E.164
+2. حذف المسافات والشرطات والأقواس
+3. تحويل الأرقام العربية-الهندية (٩-٠) إلى لاتينية
+4. توحيد الصيغ (`967` · `967+` · `00967` · الصفر البادئ)
+
+**قواعد:**
+- لا كلمة مرور كنص عادي في القاعدة أو السجلات · bcrypt
+- تجديد تلقائي عند 401 · JWT في expo-secure-store
+- 5 محاولات ثم تأخير 60 ثانية · رسالة رفض عامة
+- مدير المنصة: مسار منفصل · كلمة مرور 12 محرفًا · 3 محاولات · لا واجهة لإنشائه
+- `must_change_password` عند الإنشاء بكلمة مؤقتة
+- المستخدم لا يغيّر رقمه — المشرف أو المالك فقط مع audit
+
+---
+
+# 12 · الصلاحيات
+
+## 12.1 الآلية
+
+```
+requireAuth        → التحقق من JWT وتحميل req.user
+requireTenant       → tenant_id من JWT حصريًا → استدعاء enforceEntityAccess
+enforceEntityAccess → مسح params+query+body عن:
+                      farmId · houseId · fromHouseId · toHouseId · batchId
+                    → تطبيق قواعد الإسناد → batchId يُحل لعنبره
+```
+
+المعرّفات المشتقة تُجلب بدوال مفحوصة تفرض الوصول قبل الإرجاع:
+`getShipmentChecked` · `getDailyLogChecked` · `getHealthTaskChecked` · `getStocktakeChecked` · `getWastageChecked`
+
+لا تجلب كيانًا بـ `select` خام ثم تستخدم `house_id` المشتق منه — هذا النمط أنتج ثلاث ثغرات سابقًا.
+
+## 12.2 المصفوفة
+
+| العملية | farmer | supervisor | vet | owner | platform |
+|---|---|---|---|---|---|
+| إنشاء سجل يومي | ✅ عنابره | ❌ | ❌ | ❌ | ❌ |
+| تعديل سجل محفوظ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| إضافة ملاحظة مراجعة | ✅ | ✅ | ✅ | ✅ | ❌ |
+| تأكيد وإنشاء تصحيح | ❌ | ✅ | ❌ | ❌ | ❌ |
+| تصحيح دون ملاحظة | ❌ | ❌ | ❌ | ❌ | ❌ |
+| إنشاء شحنة | ❌ | ✅ علف+مستلزمات | ✅ أدوية+لقاحات | ✅ الكل | ❌ |
+| تأكيد الاستلام | ✅ عنابره | ❌ | ❌ | ❌ | ❌ |
+| فتح نزاع | ✅ | ✅ | ✅ | ✅ | ❌ |
+| حسم نزاع | ❌ | ❌ | ❌ | ✅ | ❌ |
+| جرد · تحويل · هالك | ❌ | ✅ بفئته | ✅ بفئته | ✅ | ❌ |
+| إنشاء منتج | ❌ | ✅ مستلزمات | ✅ دواء+لقاح+فيتامين | ❌ | ❌ |
+| إنشاء مهمة صحية | ❌ | ❌ | ✅ | ❌ | ❌ |
+| تنفيذ مهمة صحية | ✅ | ❌ | ❌ | ❌ | ❌ |
+| رفع بلاغ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| الرد والتشخيص | ❌ | ❌ | ✅ | ❌ | ❌ |
+| إنشاء دفعة | ❌ | ✅ | ❌ | ✅ | ❌ |
+| تصفية دفعة | ❌ | ❌ | ❌ | ✅ | ❌ |
+| إعادة فتح دفعة | ❌ | ❌ | ❌ | ✅ بسبب | ❌ |
+| تغيير حالة عنبر | ❌ | ✅ | ❌ | ✅ | ❌ |
+| خطوة تجهيز | ✅ المسندة | ✅ | ❌ | ✅ | ❌ |
+| إدارة المستخدمين | ❌ | ✅ مرّبين فقط | ❌ | ✅ | ❌ |
+| التقارير التحليلية | ❌ | ❌ | ✅ صحية فقط | ✅ | ❌ |
+| الإعدادات | ❌ | ❌ | ❌ | ✅ | ❌ |
+| إدارة المستأجرين | ❌ | ❌ | ❌ | ❌ | ✅ |
+| بيانات المستأجرين التشغيلية | — | — | — | — | ❌ |
+
+> الصف الأخير مقصود: مدير المنصة يدير الاشتراكات ولا يرى بيانات المزارع التشغيلية (سجلات، مخزون) لأي مستأجر — فصل خصوصية صريح.
+
+---
+
+# 13 · دفتر المخزون
+
+## 13.1 المستويان
+
+```
+المورّد → warehouse → shipment → house → استهلاك
+              ↑                              │
+              └────────────── مرتجع ─────────┘
+```
+
+## 13.2 مصادر الحركة
+
+| الحدث | الحركات |
+|---|---|
+| استلام من موّرد | استلام (+) مخزن |
+| إرسال شحنة | شحن صادر (−) — يُرفض إن تجاوز الرصيد |
+| تأكيد الاستلام | شحن وارد (+) بالكمية المعدودة |
+| تصحيح شحنة | حركة بالفرق مرتبطة بالتصحيح |
+| مرتجع | مرتجع صادر (−) + مرتجع وارد (+) |
+| تحويل | تحويل صادر (−) + تحويل وارد (+) |
+| السجل اليومي | استهلاك يومي (−) لكل صف علف |
+| تنفيذ علاج | تنفيذ علاج (−) |
+| خطوة تجهيز | استهلاك تجهيز (−) |
+| الجرد | تسوية جرد (±) |
+| الهالك | هالك/تلف (−) |
+
+## 13.3 ثابت الدفتر — بعد كل عملية
+
+لكل (مستأجر · منتج): **Σ كل الحركات == رصيد المخزن + Σ أرصدة العنابر**
+ولكل موقع: الرصيد ≥ 0.
+
+## 13.4 قواعد الرصيد
+
+- يُمنع الإرسال والتحويل والهالك فوق الرصيد ← 400 (الفحص داخل المعاملة تحت القفل)
+- لا يُمنع الاستهلاك اليومي ولا تنفيذ العلاج — تنبيه فقط
+- رصيد سالب ← تنبيه فوري للمالك
+
+---
+
+# 14 · التدفقات
+
+## 14.1 السجل اليومي
+
+```
+POST /daily-logs
+  قفل العنبر → التحقق من الدفعة النشطة →
+  تحقق التكرار داخل المعاملة (والفهرس كشبكة أمان) →
+  [معاملة] → السجل + صفوف العلف + حركات المخزون →
+  تنبيه معقولية عند الانحراف (لا يمنع) →
+  مكرر ← يُعاد السجل الموجود بـ client_id 200
+```
+
+## 14.2 الملاحظة والمراجعة
+
+```
+POST /daily-logs/:id/notes
+  [معاملة] → المالحظة + نقل لـ pending_review → إشعارات (supervisor)
+
+POST /daily-logs/:id/review
+  [معاملة] → تأكيد: سجل تصحيح + حركة معاكسة بالفرق
+           → رفض: سبب إلزامي + إشعار
+  قبل الاعتماد: مؤشر «يتضمن سجلات قيد المراجعة»
+```
+
+## 14.3 الشحنة — الاستلام الأعمى
+
+```
+POST /shipments                     (supervisor|vet بفئته)
+  [معاملة] → التحقق من رصيد المخزن → شحن صادر → handover_code يظهر للمُرسِل وحده
+
+GET /shipments/:id                  (farmer) → الاستجابة بلا sent_quantity
+
+POST /shipments/:id/receive         (farmer)
+  → counted_quantity + handover_code
+  → 3 محاولات خاطئة ← bypass مع تسجيل وتنبيه
+  [معاملة] → شحن وارد بالكمية المعدودة
+  → variance = counted − sent
+      مطابق · ≤ tolerance → فرق مسجّل (ملاحظة إلزامية) · > 10% أو تلف → نزاع
+  → المادة تبقى مستلمة بالكمية المعدودة في كل الحالات
+```
+
+## 14.4 النزاع
+
+```
+PATCH /shipments/:id/dispute  (owner) → outcome + تعليل → يُقفل [معاملة+audit]
+```
+
+## 14.5 المهمة الصحية
+
+```
+POST /health-tasks/:id/execute (farmer) [معاملة] → حركة تنفيذ علاج
+```
+
+## 14.6 دورة العنبر
+
+```
+تصفية (owner): قفل → جرد إلزامي → تحذير فترة السحب →
+  [معاملة] → إغلاق + status='تحت الإخلاء' + إنشاء دورة تجهيز
+
+PATCH /prep-steps/:id/complete
+  قفل (شرط completed_at IS NULL) → الخطوة → حركة استهلاك
+  [معاملة] → عند اكتمال الإلزامية: انتقال تلقائي لـ'في فترة الراحة'
+
+PATCH /houses/:id/status
+  قفل → إعادة قراءة الحالة والحرّاس داخل المعاملة →
+  [معاملة] → مسار الانتقال → houses+history+min_rest_days → إغلاق الدورة
+  → انتقال غير صالح ← 422 بسبب واضح
+  → بدء دفعة في عنبر غير جاهز: مسموح بسبب + housed_before_ready=true + audit + تنبيه
+```
+
+## 14.7 إعادة الفتح
+
+```
+POST /batches/:batchId/reopen (owner): قفل · سبب ≥5 أحرف · audit [معاملة]
+  يُرفض إن: دفعة نشطة أخرى · أو تقدّمت دورة التجهيز
+
+PATCH /batches/:id لأي دور: 'منتهية'→'نشطة' مباشرة ← 409 (يجب المسار المخصص أعلاه)
+```
+
+---
+
+# 15 · المعادلات
+
+```
+avg_weight_g       = sampled_weight_kg / sampled_birds × 1000
+feed_kg            = bags × bag_weight_kg
+water_liters       = tanks × tank_capacity_l
+current_birds      = initial_bird_count − Σ mortality
+mortality_pct      = Σ mortality / initial_bird_count × 100
+
+FCR = Σ feed_kg / ((current_birds × avg_weight_g/1000) − (initial_count × chick_weight_kg))
+      chick_weight من breed_standards — لا ثابت في الكود
+
+daily_consumption  = متوسط آخر 3 أيام
+coverage_days      = balance / daily_consumption          (مقرَّب لأسفل)
+water_feed_ratio   = water_liters / feed_kg
+EPEF               = (الوزن كجم × % البقاء) / (FCR × العمر) × 100
+```
+
+**العرض:** الأكياس والخزانات منزلة واحدة · الأعداد صحيحة بفاصل آلاف · النسب والـ FCR منزلتان · أيام التغطية صحيحة · لا شرطة صامتة · كل مؤشر بجانبه المعياري ليوم الدفعة.
+
+---
+
+# 16 · المهام المجدولة والإشعارات
+
+ثلاثة مستويات: **urgent** (جرس+push) · **action** (جرس) · **info** (ملخص يومي).
+
+**العاجل — قائمة مغلقة:**
+- المربي: مهمة عاجلة · شحنة بانتظاره · رد المشرف
+- الطبيب: بلاغ شديد · تعذّر علاج · نفوق ضعف المعدل
+- المشرف: نزاع · عنبر لم يُسجَّل أمس · تغطية أقل من يومين
+- المالك: نزاع · بلاغ شديد بلا رد ساعتين · تصفية · رصيد سالب
+
+**التصعيد (cron ساعي):** بلاغ شديد >ساعتين · ملاحظة >48 ساعة · شحنة >48 ساعة · نزاع >72 ساعة · عنبر بلا تسجيل يومين ← كلها للمالك.
+
+**قواعد:** لا إشعار لمن نفّذ · لا تنبيه على عنبر بلا دفعة نشطة · ساعات هدوء 10م–5ص عدا العاجل · تجميع المتشابه · الدفع بعد الالتزام فقط.
+
+---
+---
+
+# الجزء الرابع — الواجهة البرمجية
+
+---
+
+# 17 · نقاط الـ API
+
+كلها تبدأ بـ `/api` وتمر بـ `requireAuth + requireTenant + enforceEntityAccess` ما لم يُذكر خلاف ذلك.
+
+**المصادقة**
+```
+POST /auth/login · POST /auth/platform-login          (بلا مصادقة)
+GET /auth/me · POST /auth/change-password · POST /auth/register-push-token
+```
+
+**المزارع والعنابر والدفعات**
+```
+GET/POST /farms · PATCH/DELETE /farms/:farmId
+GET/POST /farms/:farmId/houses · PATCH /houses/:houseId
+PATCH /houses/:houseId/status · GET /houses/:houseId/history
+GET /houses/:houseId/batches · POST /batches
+GET /batches/:batchId · GET /batches/:batchId/summary
+GET /batches/:batchId/close-preview · POST /batches/:batchId/close
+POST /batches/:batchId/reopen
+```
+
+**السجلات**
+```
+GET /batches/:batchId/daily-logs · POST /daily-logs
+GET /daily-logs/:logId · POST/GET /daily-logs/:logId/notes
+POST /daily-logs/:logId/review · GET /reviews/pending
+```
+
+**الشحنات**
+```
+GET/POST /shipments · GET /shipments/:id
+POST /shipments/:id/receive · POST /shipments/:id/unregistered
+DELETE /shipments/:id · POST/PATCH /shipments/:id/dispute
+GET /shipments/:id/audit-log · POST /shipments/:id/notes
+```
+
+**المخزون**
+```
+GET /inventory/balance · GET /inventory/movements · GET /inventory/low-stock
+POST /inventory/warehouse-receipt · POST /inventory/transfer
+POST /inventory/stocktake · POST /inventory/wastage
+GET /inventory/coverage-alerts
+```
+
+**الكتالوج**
+```
+GET/POST /products · PATCH/DELETE /products/:id
+```
+
+**الصحة**
+```
+GET/POST /health-tasks · POST /health-tasks/bulk · PATCH /health-tasks/:id
+POST /health-tasks/:id/execute · POST /health-tasks/:id/fail
+GET/POST /health-observations · POST /health-observations/:id/respond
+POST /batches/:batchId/diagnoses
+```
+
+**التجهيز**
+```
+GET /houses/:houseId/prep-cycle · PATCH /prep-steps/:stepId/complete
+GET /prep-protocol
+```
+
+**التقارير** (owner)
+```
+GET /reports/batch-performance · /house-comparison · /loss · /health · /compliance
+GET /export?format=pdf|xlsx
+```
+
+**المستخدمون والإعدادات** (owner)
+```
+GET/POST /users · PATCH /users/:id
+POST/DELETE /users/:id/assignments
+POST /users/:id/deactivate · POST /users/:id/reset-password
+GET/PATCH /settings · GET/PUT /breed-standards
+```
+
+**المنصة** (platform_admin)
+```
+GET /platform/overview · /tenants · /usage · /audit-log
+POST /platform/tenants · PATCH /platform/tenants/:id/subscription
+```
+
+---
+
+# 18 · العقود
+
+- OpenAPI 3.1 مصدر الحقيقة · منه تُولَّد hooks العميل
+- فاحص تغطية يفشل البناء عند مسار غير موثّق
+- خطأ موحّد: `{ code, message, details? }` — الرسالة عربية جاهزة للعرض
+- ترقيم: `?limit&cursor` · الافتراضي 20
+- التواريخ ISO 8601 بـ UTC · التحويل لتوقيت المستأجر في العرض
+
+---
+
+# 19 · رموز الأخطاء
+
+| الرمز | الاستخدام |
+|---|---|
+| 400 | بيانات غير صالحة · تجاوز رصيد · سبب مفقود |
+| 401 | غير مصادَق · رمز منتهٍ |
+| 403 | مصادَق وغير مخوَّل (موجود وغير مُسند) |
+| 404 | غير موجود أو خارج المستأجر |
+| 409 | تكرار · حالة لا تسمح · سباق |
+| 422 | انتقال حالة غير صالح · شرط عمل غير مستوفٍ |
+| 429 | تجاوز المحاولات |
+
+---
+---
+
+# الجزء الخامس — الجودة والتشغيل
+
+---
+
+# 20 · الاختبارات
+
+**البنية:** `supertest` على قاعدة اختبار منفصلة · حارس `fail-closed` من جهة الخادم يتحقق عبر `current_database()` ووجود جدول علامة — لا يثق بالرابط · تشغيل متسلسل.
+
+**التغطية الإلزامية:**
+
+| المجال | المطلوب |
+|---|---|
+| الصلاحيات | كل دور × كل نقطة: allow + deny-403 + cross-tenant-404 |
+| العزل | كل دور × كل كيان في مستأجر آخر |
+| الدفتر | تأكيد الثابت بعد كل عملية |
+| التزامن | سجلان · خطوتا تجهيز · تصحيح مع إغلاق · تحويلان على نفس الرصيد |
+| الأخطاء | اختبار لكل ثغرة يفشل قبل الإصلاح وينجح بعده |
+
+حالات النجاح تتحقق من محتوى الاستجابة — لا نجاح فارغ.
+**البيانات التجريبية:** `seed:demo` عبر الـ API بحارس بيئة · كل شيء بصلاحيات الدور — ممنوع الإدراج المباشر.
+
+---
+
+# 21 · الفحوص الآلية
+
+تفشل البناء — لا تحذيرات:
+
+| الفاحص | يمنع |
+|---|---|
+| المسارات المكررة | تسجيل نفس (method, path) مرتين |
+| تغطية OpenAPI | نقطة غير موثّقة |
+| رموز التصميم | لون حرفي · رمادي أفتح من `#4A4A4A` · إيموجي · قيمة خارج المقياس |
+| تغطية التنقل | شاشة خارج مكدّس تبويب وبلا زر رجوع |
+| صحة enum | قيمة بلا مسار يكتبها |
+| typecheck | `tsc --noEmit` نظيف |
+
+---
+
+# 22 · الأداء والحدود
+
+| المؤشر | الهدف |
+|---|---|
+| حفظ سجل يومي | < 500 مللي ثانية |
+| تحميل الشاشة الرئيسية | < 1 ثانية |
+| تقرير أداء دفعة | < 3 ثواني |
+| كشف حركة صنف (1000 حركة) | < 2 ثانية |
+| مستخدمون متزامنون | 200+ بلا تدهور |
+
+**قواعد:** كل استعلام قائمة مرقّم · كل استعلام على `inventory_movements` يستخدم الفهرس المركّب · التقارير الثقيلة تُحسب على الخادم لا العميل.
+
+---
+
+# 23 · الأمان
+
+- كل مدخلات المستخدم عبر zod قبل أي معالجة
+- استعلامات معلَّمة حصريًا — لا بناء SQL بسلاسل نصية
+- تنقية أسماء الملفات المرفوعة · حد حجم · نوع MIME مقيَّد
+- تعقيم CSV ضد حقن الصيغ عند التصدير
+- لا معرّف داخلي في أي استجابة يراها المستخدم النهائي
+- helmet · CORS مقيَّد · تحديد معدل
+- مراجعة أمنية إلزامية قبل أول عميل حقيقي
+
+---
+
+# 24 · المراقبة
+
+- pino بمعرّف طلب لكل عملية
+- تسجيل كل 403 و409 — تكرارها مؤشر ثغرة أو خلل تصميم
+- `GET /health` · `GET /ready`
+- تنبيه عند: أخطاء 5xx > 1% · زمن استجابة p95 > الهدف · فشل مهمة cron
+- لا تسجيل لكلمات المرور ولا الرموز ولا أرقام الجوال كاملة
+
+---
+
+# 25 · النشر
+
+- الترحيلات خطوة صريحة قبل نشر الكود
+- نسخة احتياطية قبل كل ترحيل على الإنتاج
+- نشر تدريجي مع إمكانية التراجع
+- لا سكربت يمسح أو يعيد بناء يعمل دون كتابة اسم البيئة يدويًا
+- Expo OTA للتحديثات غير الجذرية · EAS Build للجذرية
+
+---
+
+# 26 · معايير القبول
+
+**الأمان**
+- [ ] لا كلمة مرور كنص عادي في القاعدة أو السجلات
+- [ ] `tenant_id` من JWT حصريًا — طلب بقيمة مزيّفة يُتجاهل
+- [ ] كل نقطة تستقبل معرّف كيان تمر بالفحص المركزي
+- [ ] كل معرّف مشتق يُجلب بدالة مفحوصة
+- [ ] الوجود قبل التعيين (404 قبل 403)
+- [ ] مصفوفة الصلاحيات كاملة وخضراء
+
+**سلامة البيانات**
+- [ ] ثابت الدفتر يمر بعد كل عملية على المستويين
+- [ ] لا رصيد سالب
+- [ ] قيد `CHECK` على `inventory_movements` يعمل
+- [ ] كل الفهارس الفريدة مطبَّقة والتزامن مختبَر
+- [ ] لا حذف لأي حركة أو سجل تدقيق
+
+**الاكتمال**
+- [ ] كل قيمة enum لها مسار يكتبها
+- [ ] كل عمود له مسار يملؤه
+- [ ] `breed_standards` معبّأ للسلالات الثلاث من اليوم 1 إلى 45
+- [ ] كل شاشة في الوثيقة الشاملة لها نقاط API تخدمها
+- [ ] كل مؤشر بجانبه المعياري
+
+**العمليات**
+- [ ] Drizzle Kit — لا `push` — لا ترحيل عند الإقلاع
+- [ ] الفحوص الستة تعمل وتفشل البناء
+- [ ] `seed:demo` عبر الـ API
+- [ ] نسخة احتياطية مُختبَرة الاستعادة
+- [ ] `docs/decisions.md` محدَّث
+
+---
+
+# الملحق أ — سجل القرارات ومبرراتها
+
+**انظر `docs/decisions.md`** — النسخة الحيّة والمرجعية لهذا الملحق. القاعدة الدائمة: أي قرار تشغيلي جديد يُضاف إلى ذلك الملف في نفس المهمة التي تنفّذه؛ مهمة تغيّر سلوكًا ولا تحدّثه تُعد ناقصة.
+
+---
+
+# الملحق ب — قائمة الحزم
+
+**apps/mobile**
+```
+expo · expo-router · react-native · react
+@tanstack/react-query · axios
+expo-secure-store · @react-native-async-storage/async-storage
+expo-notifications · expo-image-picker · expo-camera
+expo-av · expo-image-manipulator · expo-font
+lucide-react-native · react-native-svg
+date-fns · react-hook-form · zod · @hookform/resolvers
+typescript · eslint · prettier
+```
+
+**apps/api**
+```
+express · cors · helmet · express-rate-limit
+drizzle-orm · pg
+zod · jose · bcryptjs · pino · pino-http
+node-cron · multer · @aws-sdk/client-s3
+typescript · esbuild · tsx
+supertest · vitest (أو node:test)
+```
+
+**packages/db**
+```
+drizzle-orm · drizzle-kit · pg
+```
+
+---
+
+# الملحق ج — متغيرات البيئة
+
+| المتغير | ملاحظات |
+|---|---|
+| `NODE_ENV` | `development \| test \| production` |
+| `PORT` | |
+| `DATABASE_URL` | تحقنه المنصة — لا يُكتب في ملف منسوخ |
+| `JWT_SECRET` | |
+| `JWT_EXPIRES_IN` | افتراضي 30d |
+| `BCRYPT_ROUNDS` | افتراضي 10 |
+| `S3_ENDPOINT` · `S3_BUCKET` · `S3_ACCESS_KEY` · `S3_SECRET_KEY` | |
+| `EXPO_ACCESS_TOKEN` | لإرسال الإشعارات |
+| `LOG_LEVEL` | `info \| debug` |
+| `DEFAULT_COUNTRY_CODE` | افتراضي `+967` |
+| `EXPO_PUBLIC_API_URL` | (التطبيق) — يجب أن يشير للخادم المنشور لا `localhost` |
+| `EXPO_PUBLIC_ENV` | لمؤشر البيئة المرئي |
+
+> **تنبيه:** أشهر خطأ في النشر هو بناء التطبيق وهو يشير إلى `localhost` — فينجح البناء ويفشل الدخول على الجهاز بلا سبب واضح.
+
+---
+
+**نهاية الوثيقة**
