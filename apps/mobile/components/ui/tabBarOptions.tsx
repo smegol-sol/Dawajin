@@ -19,7 +19,7 @@ export const tabBarScreenOptions: BottomTabNavigationOptions = {
   },
   tabBarLabelStyle: {
     fontSize: font.size.tabLabel,
-    fontFamily: font.family,
+    fontFamily: font.familyRegular,
   },
 };
 

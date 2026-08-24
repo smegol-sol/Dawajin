@@ -1,5 +1,6 @@
 import "@/lib/rtl"; // يجب أن يبقى أول استيراد — انظر تعليق الملف نفسه
 
+import { Tajawal_500Medium, Tajawal_700Bold } from "@expo-google-fonts/tajawal";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import * as Font from "expo-font";
 import { Stack } from "expo-router";
@@ -23,8 +24,10 @@ export default function RootLayout() {
   useEffect(() => {
     bestEffort(
       Font.loadAsync({
-        // TODO: إضافة ملفات Tajawal الفعلية (وزن 500 و700 فقط) في المرحلة 1
-        // — انظر docs/app-complete-spec.md §7.2: "لا وزن أخف من 500".
+        // الوزنان المسموحان فقط (docs/app-complete-spec.md §7.2: "لا وزن أخف من 500") —
+        // لا Tajawal_400Regular ولا أي وزن أخف، رغم توفّره في الحزمة نفسها.
+        Tajawal_500Medium,
+        Tajawal_700Bold,
       }).finally(() => {
         // يعمل في كلتا الحالتين — الخط الافتراضي مقبول مؤقتًا، والشاشة
         // يجب ألا تبقى معلّقة على فشل تحميل خط

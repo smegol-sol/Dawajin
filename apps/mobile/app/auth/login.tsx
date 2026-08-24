@@ -25,7 +25,7 @@ const styles = StyleSheet.create({
     backgroundColor: color.surfacePage,
     alignItems: "center",
     justifyContent: "center",
-    padding: spacing[6] ?? 24,
+    padding: spacing.xxl,
   },
   card: {
     width: "100%",
@@ -34,9 +34,9 @@ const styles = StyleSheet.create({
     borderRadius: radius.screen,
     borderWidth: 1,
     borderColor: color.borderSubtle,
-    padding: spacing[6] ?? 24,
+    padding: spacing.xxl,
     alignItems: "center",
-    gap: spacing[3] ?? 12,
+    gap: spacing.md,
   },
   title: {
     fontSize: font.size.screenTitle,

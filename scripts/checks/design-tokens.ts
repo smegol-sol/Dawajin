@@ -5,7 +5,8 @@ import tokens from "../../apps/mobile/constants/tokens.json" with { type: "json"
 
 /**
  * فاحص رموز التصميم — يمنع لونًا حرفيًا · رماديًا أفتح من #4A4A4A · إيموجي ·
- * نصف قطر خارج المقياس (backend-technical-spec.md §21 · app-complete-spec.md §12).
+ * نصف قطر خارج المقياس · وزن/عائلة خط خارج المسموح (backend-technical-spec.md
+ * §21 · app-complete-spec.md §7.2 و§12: "لا وزن أخف من 500").
  */
 
 const MOBILE_DIR = join(process.cwd(), "apps/mobile");
@@ -16,6 +17,24 @@ const HEX_COLOR = /#[0-9a-fA-F]{3,8}\b/g;
 // نطاقات الإيموجي الشائعة (لا تلتقط علامات RTL أو رموز نصية عادية)
 const EMOJI = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{1F1E6}-\u{1F1FF}]/gu;
 const BORDER_RADIUS_LITERAL = /borderRadius:\s*(-?\d+(?:\.\d+)?)/g;
+const FONT_WEIGHT_ASSIGNMENT = /fontWeight:\s*([^,\n}]+)/g;
+const FONT_FAMILY_ASSIGNMENT = /fontFamily:\s*([^,\n}]+)/g;
+const ALLOWED_FONT_WEIGHTS = new Set(["500", "700"]);
+const ALLOWED_FONT_FAMILIES = new Set(["Tajawal_500Medium", "Tajawal_700Bold"]);
+
+/**
+ * يستخرج القيمة الحرفية من تعبير fontWeight/fontFamily، أو null إن كان
+ * التعبير مشتقًا من `font.weight*`/`font.family*` (موثوق مركزيًا عبر
+ * theme.ts، لا حاجة لفحصه حرفيًا هنا).
+ */
+function extractFontLiteral(rawExpression: string): string | null {
+  const trimmed = rawExpression.trim();
+  if (trimmed.includes("font.weight") || trimmed.includes("font.family")) return null;
+  const quoted = trimmed.match(/^["']([^"']+)["']/);
+  if (quoted) return quoted[1] ?? null;
+  const bare = trimmed.match(/^([A-Za-z0-9_]+)/);
+  return bare ? (bare[1] ?? null) : null;
+}
 
 function collectAllowedHexColors(): Set<string> {
   const allowed = new Set<string>();
@@ -90,6 +109,22 @@ export function checkDesignTokens(): { ok: boolean; message: string } {
       const value = Number(match[1]);
       if (!allowedRadii.has(value)) {
         violations.push(`${relPath}: borderRadius=${value} خارج المقياس الخمسي`);
+      }
+    }
+
+    for (const match of content.matchAll(FONT_WEIGHT_ASSIGNMENT)) {
+      const literal = extractFontLiteral(match[1] ?? "");
+      if (literal !== null && !ALLOWED_FONT_WEIGHTS.has(literal)) {
+        violations.push(`${relPath}: fontWeight="${literal}" — لا وزن أخف من 500، فقط 500 أو 700`);
+      }
+    }
+
+    for (const match of content.matchAll(FONT_FAMILY_ASSIGNMENT)) {
+      const literal = extractFontLiteral(match[1] ?? "");
+      if (literal !== null && !ALLOWED_FONT_FAMILIES.has(literal)) {
+        violations.push(
+          `${relPath}: fontFamily="${literal}" — استخدم font.familyRegular أو font.familyBold`
+        );
       }
     }
   }
