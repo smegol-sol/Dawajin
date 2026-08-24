@@ -1,10 +1,10 @@
 import { randomInt } from "node:crypto";
 
 import {
+  HttpError,
   TEMP_PASSWORD_ALPHABET,
   TEMP_PASSWORD_LENGTH,
   TEMP_PASSWORD_NOT_GENERATED_MESSAGE,
-  HttpError,
   isGeneratedTemporaryPassword,
 } from "@dawajin/shared";
 
@@ -14,7 +14,7 @@ import {
  * لماذا هنا لا في `@dawajin/shared` رغم أن السياسة هناك: الحزمة المشتركة
  * تُستهلَك **كمصدر TypeScript خام** (`main: "./src/index.ts"`) ويحزمها Metro
  * داخل تطبيق الموبايل. أي `import "node:crypto"` فيها يدخل حزمة React Native
- * ويكسر البناء. فالسياسة والتحقق من الشكل (نقيّان) يبقيان في المشترك، والتوليد
+ * ويكسر البناء. فالسياسة والتحقق من الشكل (نقيّان) يبقيان في `packages/shared/src/tempPassword.ts`، والتوليد
  * (يحتاج مولّد عشوائية آمنًا) يعيش هنا. الموبايل لا يولّد كلمات مؤقتة إطلاقًا.
  *
  * `randomInt` من `node:crypto` لا `Math.random`: الثاني مولّد شبه‑عشوائي
