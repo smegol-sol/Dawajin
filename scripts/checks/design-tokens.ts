@@ -11,6 +11,13 @@ import tokens from "../../apps/mobile/constants/tokens.json" with { type: "json"
  *
  * القيم المسموحة كلها تُقرأ من tokens.json/theme.ts — لا تُكرَّر كثوابت هنا،
  * فتعديل الرمز المركزي يكفي لتحديث الفاحص بلا تعارض بينهما.
+ *
+ * **فحص اللون وحده يجري على الكود بلا تعليقات** (القرار #107): مرجع قرار
+ * ثلاثي الخانات مثل `#106` هو لون سداسي مختصر صالح شكلًا، فكان الفاحص يبلّغ
+ * عن كل إشارة إلى قرار في تعليق. الحدّ الصحيح أن "اللون الحرفي" قيمة في
+ * الكود لا إشارة في نثر. وتُستثنى معها صيغة «القرار #NNN» أينما وردت، لأنها
+ * تظهر في عناوين الاختبارات وهي نصوص لا تعليقات. بقية الفحوص (الإيموجي
+ * خصوصًا) تبقى على النص كاملًا: الإيموجي ممنوع في التعليقات أيضًا.
  */
 
 const MOBILE_DIR = join(process.cwd(), "apps/mobile");
@@ -18,6 +25,13 @@ const EXEMPT_FILES = new Set(["constants/tokens.json", "constants/theme.ts"]);
 const SKIP_DIRS = new Set(["node_modules", ".expo", "dist", "assets"]);
 
 const HEX_COLOR = /#[0-9a-fA-F]{3,8}\b/g;
+// `//` تبدأ تعليقًا إلا إن سبقتها نقطتان (`https://`) — الاستثناء الوحيد
+// الموجود فعلًا في كود الموبايل، ولو زال يبقى النمط صحيحًا
+const LINE_COMMENT = /(?<!:)\/\/[^\n]*/g;
+const BLOCK_COMMENT = /\/\*[\s\S]*?\*\//g;
+// إشارة قرار داخل نص ظاهر (عنوان اختبار مثلًا) — ليست تعليقًا فلا يكفي
+// حذف التعليقات، و"القرار" قبلها تجعلها لا تلتبس بلون قط
+const DECISION_REFERENCE = /القرار(?:ان|ين|ات)?\s*#\d+(?:\s*(?:،|و)\s*#\d+)*/g;
 // نطاقات الإيموجي الشائعة (لا تلتقط علامات RTL أو رموز نصية عادية)
 const EMOJI = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{1F1E6}-\u{1F1FF}]/gu;
 const BORDER_RADIUS_LITERAL = /borderRadius:\s*(-?\d+(?:\.\d+)?)/g;
@@ -58,6 +72,17 @@ function extractFontLiteral(rawExpression: string): string | null {
   if (quoted) return quoted[1] ?? null;
   const bare = trimmed.match(/^([A-Za-z0-9_]+)/);
   return bare ? (bare[1] ?? null) : null;
+}
+
+/**
+ * النص الذي يُفحَص بحثًا عن لون حرفي: الكود بلا تعليقات وبلا إشارات القرارات
+ * (القرار #107). لا يُستعمل لبقية الفحوص — الإيموجي ممنوع في التعليقات أيضًا.
+ */
+function colorScannableText(content: string): string {
+  return content
+    .replaceAll(BLOCK_COMMENT, "")
+    .replaceAll(LINE_COMMENT, "")
+    .replaceAll(DECISION_REFERENCE, "");
 }
 
 function collectAllowedHexColors(): Set<string> {
@@ -114,8 +139,7 @@ export function checkDesignTokens(): { ok: boolean; message: string } {
     if (EXEMPT_FILES.has(relPath)) continue;
 
     const content = readFileSync(file, "utf8");
-
-    for (const match of content.matchAll(HEX_COLOR)) {
+    for (const match of colorScannableText(content).matchAll(HEX_COLOR)) {
       const hex = match[0].toLowerCase();
       if (!allowedHex.has(hex)) {
         const reason = isGrayscaleLighterThanBody(hex)
