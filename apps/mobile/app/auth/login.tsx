@@ -102,21 +102,25 @@ function LoginFields({
 
   return (
     <View style={styles.form}>
-      <FormField
-        label="رقم الجوال"
-        type="text"
-        value={phone}
-        onChangeText={onPhoneChange}
-        keyboardType="phone-pad"
-        autoComplete="tel"
-        placeholder="77xxxxxxx"
-        testID="login-phone"
-        error={errorFor("phone")}
-      />
-      {/* تحت حقل الجوال مباشرة لا في نهاية النموذج — يخصّه وحده */}
-      <Text style={styles.hint} testID="login-phone-hint">
-        بصفر بادئ أو بدونه، وبرمز الدولة أو بدونه — النظام يوحّد الصيغ
-      </Text>
+      {/* الحقل وسطره التوضيحي مجموعة واحدة بمسافة أضيق (xxs) — بلا ذلك
+          يقع السطر في منتصف المسافة بين الحقلين فيُقرأ كأنه يخصّ الحقل
+          التالي لا السابق */}
+      <View style={styles.fieldWithHint}>
+        <FormField
+          label="رقم الجوال"
+          type="text"
+          value={phone}
+          onChangeText={onPhoneChange}
+          keyboardType="phone-pad"
+          autoComplete="tel"
+          placeholder="77xxxxxxx"
+          testID="login-phone"
+          error={errorFor("phone")}
+        />
+        <Text style={styles.hint} testID="login-phone-hint">
+          بصفر بادئ أو بدونه، وبرمز الدولة أو بدونه — النظام يوحّد الصيغ
+        </Text>
+      </View>
 
       <FormField
         label="كلمة المرور"
@@ -219,12 +223,15 @@ const styles = StyleSheet.create({
     writingDirection: "rtl",
   },
   form: {
-    gap: spacing.md,
+    gap: spacing.lg,
     backgroundColor: color.surfaceRaised,
     borderRadius: radius.card,
     borderWidth: 1,
     borderColor: color.borderSubtle,
     padding: spacing.lg,
+  },
+  fieldWithHint: {
+    gap: spacing.xxs,
   },
   hint: {
     // حجم المحتوى لا technicalRef (11px): هذا نص يقرؤه المربي تحت شمس
