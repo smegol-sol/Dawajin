@@ -279,7 +279,13 @@ function ChipSection() {
       <View style={styles.chipGrid}>
         {causes.map((cause) => (
           <View key={cause} style={styles.chipGridItem}>
-            <Chip label={cause} selected={selected === cause} onPress={() => { setSelected(cause); }} />
+            <Chip
+              label={cause}
+              selected={selected === cause}
+              onPress={() => {
+                setSelected(cause);
+              }}
+            />
           </View>
         ))}
       </View>
@@ -309,8 +315,20 @@ function BottomSheetSection() {
   const [visible, setVisible] = useState(false);
   return (
     <Section title="Bottom Sheet" count={1}>
-      <Button label="فتح مبدّل العنبر" variant="secondary" onPress={() => { setVisible(true); }} />
-      <BottomSheet visible={visible} onClose={() => { setVisible(false); }} title="اختر العنبر">
+      <Button
+        label="فتح مبدّل العنبر"
+        variant="secondary"
+        onPress={() => {
+          setVisible(true);
+        }}
+      />
+      <BottomSheet
+        visible={visible}
+        onClose={() => {
+          setVisible(false);
+        }}
+        title="اختر العنبر"
+      >
         <Text style={styles.groupLabel}>عنبر 1 · عنبر 2 · عنبر 3</Text>
       </BottomSheet>
     </Section>

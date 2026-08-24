@@ -1,4 +1,4 @@
-import { users, type Database } from "@dawajin/db";
+import { tenants, users, type Database } from "@dawajin/db";
 import { HttpError, normalizePhoneE164, type UserRole } from "@dawajin/shared";
 import bcrypt from "bcryptjs";
 import { and, eq } from "drizzle-orm";
@@ -22,12 +22,24 @@ export interface AuthenticatedUserProfile {
   mustChangePassword: boolean;
 }
 
+/**
+ * حساب مرشَّح للاختيار عند تعدّد الحسابات لنفس الجوال. `tenantName` **يُعرَض**
+ * على الشاشة و`tenantId` **يُرسَل ولا يُعرَض أبدًا** — §12 من الوثيقة الشاملة
+ * تمنع أي معرّف داخلي على الشاشة، والاسم+الدور وحدهما لا يميّزان طبيبًا
+ * مستقلًا بنفس الدور لدى مالكَين (القرار #84).
+ */
+export interface SelectableAccount {
+  tenantId: number | null;
+  tenantName: string;
+  fullName: string;
+  role: UserRole;
+}
+
 export type LoginOutcome =
   | { kind: "invalid" }
-  | {
-      kind: "needsTenantSelection";
-      accounts: { tenantId: number | null; fullName: string; role: UserRole }[];
-    }
+  /** الجوال وكلمة المرور صحيحان، وكل الحسابات المطابقة معطَّلة (القرار #84). */
+  | { kind: "disabled" }
+  | { kind: "needsTenantSelection"; accounts: SelectableAccount[] }
   | { kind: "success"; token: string; user: AuthenticatedUserProfile };
 
 export interface LoginInput {
@@ -42,8 +54,14 @@ export interface LoginInput {
  * يبحث عن كل الحسابات المطابقة للجوال (عبر كل المستأجرين إن لم يُحدَّد
  * tenantId) ويقارن كلمة المرور مع كل مطابقة — القرار #57: نفس الجوال قد
  * يخصّ عدة مستأجرين (طبيب مستقل)، فحسم الحساب يحتاج مقارنة الكل لا صفًا
- * واحدًا. لا يكشف أبدًا أي الحقلين خاطئ ولا حالة الحساب (backend-technical-
- * spec.md §11) — حساب معطَّل يُعامَل كأنه غير موجود.
+ * واحدًا.
+ *
+ * **لا يكشف أبدًا أي الحقلين خاطئ** (backend-technical-spec.md §11). حالة
+ * "معطَّل" تُميَّز **بعد مطابقة كلمة المرور حصريًا** (القرار #84): من لا
+ * يعرف كلمة المرور يحصل على نفس رفض `invalid` العام تمامًا كما قبل، فلا
+ * تعداد (enumeration) ممكن؛ ومن يعرفها ليس مهاجمًا، وحجب السبب عنه يجعله
+ * يظن أنه نسي كلمة مروره. الفلترة على `isActive` **بعد** المقارنة لا داخل
+ * الاستعلام — الترتيب هو الضمانة الأمنية نفسها.
  */
 export async function loginWithPhonePassword(
   db: Database,
@@ -53,36 +71,51 @@ export async function loginWithPhonePassword(
   const phoneE164 = normalizePhoneE164(input.phone, env.DEFAULT_COUNTRY_CODE);
 
   const whereClause = input.tenantId
-    ? and(
-        eq(users.phoneE164, phoneE164),
-        eq(users.tenantId, input.tenantId),
-        eq(users.isActive, true)
-      )
-    : and(eq(users.phoneE164, phoneE164), eq(users.isActive, true));
+    ? and(eq(users.phoneE164, phoneE164), eq(users.tenantId, input.tenantId))
+    : eq(users.phoneE164, phoneE164);
+
+  // join على tenants لاسم المستأجر المعروض في شاشة اختيار الحساب (القرار #84)
+  // — بديل إرسال tenantId للعرض، وهو معرّف داخلي تمنعه §12.
+  const rows = await db
+    .select({ user: users, tenantName: tenants.name })
+    .from(users)
+    .leftJoin(tenants, eq(users.tenantId, tenants.id))
+    .where(whereClause);
 
   // مسار مدير المنصة منفصل (platform-login) — لاحقًا، فيُستبعَد هنا صراحة
-  const candidates = (await db.select().from(users).where(whereClause)).filter(
-    (u) => u.tenantId !== null
-  );
+  const candidates = rows.filter((r) => r.user.tenantId !== null);
 
   const matches = [];
   for (const candidate of candidates) {
-    if (await bcrypt.compare(input.password, candidate.passwordHash)) {
+    if (await bcrypt.compare(input.password, candidate.user.passwordHash)) {
       matches.push(candidate);
     }
   }
 
+  // الترتيب أمني: الرفض العام أولًا لكل من لم تُطابَق كلمة مروره
   if (matches.length === 0) return { kind: "invalid" };
 
-  if (matches.length > 1) {
+  // كلمة المرور صحيحة هنا يقينًا — التمييز بعدها وحدها لا قبلها
+  const active = matches.filter((m) => m.user.isActive);
+  if (active.length === 0) return { kind: "disabled" };
+
+  if (active.length > 1) {
     return {
       kind: "needsTenantSelection",
-      accounts: matches.map((m) => ({ tenantId: m.tenantId, fullName: m.fullName, role: m.role })),
+      accounts: active.map((m) => ({
+        tenantId: m.user.tenantId,
+        // `leftJoin` يجعل الاسم قابلًا لـnull نوعيًا، لكن كل صف هنا مرَّ
+        // بفلتر `tenantId !== null` وقيد المفتاح الأجنبي يضمن وجود المستأجر
+        tenantName: m.tenantName ?? "",
+        fullName: m.user.fullName,
+        role: m.user.role,
+      })),
     };
   }
 
-  const [user] = matches;
-  if (!user) return { kind: "invalid" }; // غير قابل للوصول عمليًا — matches.length === 1 هنا
+  const [match] = active;
+  if (!match) return { kind: "invalid" }; // غير قابل للوصول عمليًا — active.length === 1 هنا
+  const user = match.user;
 
   const token = await signAccessToken(
     { sub: String(user.id), tenantId: user.tenantId, role: user.role },

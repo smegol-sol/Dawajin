@@ -33,7 +33,7 @@ interface LoginErrorBody {
 interface LoginNeedsTenantSelectionBody {
   needsTenantSelection: true;
   token?: string;
-  accounts: { tenantId: number | null }[];
+  accounts: { tenantId: number | null; tenantName: string; fullName: string; role: string }[];
 }
 
 type Pool = ReturnType<typeof createDbClient>["pool"];
@@ -41,6 +41,13 @@ type Pool = ReturnType<typeof createDbClient>["pool"];
 let db: Database;
 let pool: Pool;
 let app: ReturnType<typeof createApp>;
+/**
+ * تطبيق ثانٍ بعدّاد محاولات مستقل — مجموعة "الحساب المعطَّل" تحتاج طلبين
+ * إضافيين، ولو شاركت `app` لابتلعهما حدّ الـ5 وصار الاختبار يفحص 429 بدل
+ * ما كُتب له. (العدّاد صار لكل تطبيق لا على مستوى الوحدة — انظر
+ * `createLoginRateLimit` في authPublic.ts.)
+ */
+let disabledApp: ReturnType<typeof createApp>;
 let tenantAId: number;
 let tenantBId: number;
 
@@ -52,21 +59,22 @@ function firstRow<T>(rows: T[]): T {
   return row;
 }
 
-beforeAll(async () => {
-  const testUrl = process.env.TEST_DATABASE_URL;
-  if (!testUrl) throw new Error("TEST_DATABASE_URL غير معرَّف");
-  const client = createDbClient(testUrl);
-  db = client.db;
-  pool = client.pool;
-  await assertIsTestDatabase(db);
-
-  const env = loadEnv();
+/**
+ * يزرع مستأجرَين وأربعة حسابات تغطي كل مسارات الدخول: تطبيع الجوال · كلمة
+ * مرور خاطئة · حساب معطَّل (القرار #84) · نفس الجوال في مستأجرين (#57).
+ * مفصولة عن `beforeAll` لتبقى كل دالة تحت حدّ الـ60 سطرًا (القرار #61).
+ */
+async function seedLoginFixtures(env: ReturnType<typeof loadEnv>): Promise<void> {
   const passwordHash = await bcrypt.hash(PASSWORD, env.BCRYPT_ROUNDS);
 
   const tenantA = firstRow(
     await db
       .insert(tenants)
-      .values({ name: "Login Test Tenant A", timezone: "Asia/Aden", feedBagWeightKg: "50" })
+      .values({
+        name: `مزرعة الاختبار أ ${RUN_SUFFIX}`,
+        timezone: "Asia/Aden",
+        feedBagWeightKg: "50",
+      })
       .returning({ id: tenants.id })
   );
   tenantAId = tenantA.id;
@@ -74,7 +82,11 @@ beforeAll(async () => {
   const tenantB = firstRow(
     await db
       .insert(tenants)
-      .values({ name: "Login Test Tenant B", timezone: "Asia/Aden", feedBagWeightKg: "50" })
+      .values({
+        name: `مزرعة الاختبار ب ${RUN_SUFFIX}`,
+        timezone: "Asia/Aden",
+        feedBagWeightKg: "50",
+      })
       .returning({ id: tenants.id })
   );
   tenantBId = tenantB.id;
@@ -89,7 +101,7 @@ beforeAll(async () => {
     passwordHash,
   });
 
-  // معطَّل — يجب أن يُرفض كأنه غير موجود (رسالة رفض عامة)
+  // معطَّل — كلمة مرور صحيحة ← 403 مميَّز؛ كلمة مرور خاطئة ← 401 عام (القرار #84)
   await db.insert(users).values({
     tenantId: tenantAId,
     fullName: "مستخدم معطَّل",
@@ -117,8 +129,21 @@ beforeAll(async () => {
     phoneE164: normalizePhoneE164(`077${RUN_SUFFIX}3`, "+967"),
     passwordHash,
   });
+}
+
+beforeAll(async () => {
+  const testUrl = process.env.TEST_DATABASE_URL;
+  if (!testUrl) throw new Error("TEST_DATABASE_URL غير معرَّف");
+  const client = createDbClient(testUrl);
+  db = client.db;
+  pool = client.pool;
+  await assertIsTestDatabase(db);
+
+  const env = loadEnv();
+  await seedLoginFixtures(env);
 
   app = createApp(db, env, pino({ level: "silent" }));
+  disabledApp = createApp(db, env, pino({ level: "silent" }));
 });
 
 afterAll(async () => {
@@ -147,13 +172,13 @@ describe("POST /api/auth/login", () => {
     expect((res.body as LoginErrorBody).code).toBe("invalid_credentials");
   });
 
-  it("طلب 3: حساب معطَّل ← 401 بنفس رسالة الرفض العامة (لا يكشف حالة الحساب)", async () => {
+  it("طلب 3: حساب معطَّل بكلمة مرور صحيحة ← 403 account_disabled (القرار #84)", async () => {
     const res = await request(app)
       .post("/api/auth/login")
       .send({ phone: `077${RUN_SUFFIX}2`, password: PASSWORD });
 
-    expect(res.status).toBe(401);
-    expect((res.body as LoginErrorBody).code).toBe("invalid_credentials");
+    expect(res.status).toBe(403);
+    expect((res.body as LoginErrorBody).code).toBe("account_disabled");
   });
 
   it("طلب 4: نفس الجوال في مستأجرين ← needsTenantSelection بلا توكن", async () => {
@@ -167,6 +192,12 @@ describe("POST /api/auth/login", () => {
     expect(body.token).toBeUndefined();
     expect(body.accounts).toHaveLength(2);
     expect(body.accounts.map((a) => a.tenantId).sort()).toEqual([tenantAId, tenantBId].sort());
+    // اسم المستأجر هو ما يميّز البطاقتين على الشاشة — tenantId يُرسَل ولا
+    // يُعرَض (§12 و القرار #84). بلا هذا الحقل تصير الشاشة بطاقتين متطابقتين.
+    expect(body.accounts.map((a) => a.tenantName).sort()).toEqual(
+      [`مزرعة الاختبار أ ${RUN_SUFFIX}`, `مزرعة الاختبار ب ${RUN_SUFFIX}`].sort()
+    );
+    expect(body.accounts.every((a) => a.tenantName.length > 0)).toBe(true);
   });
 
   it("طلب 5: نفس الجوال مع tenantId يحسم الحساب ويُصدر توكن", async () => {
@@ -186,5 +217,34 @@ describe("POST /api/auth/login", () => {
       .send({ phone: `077${RUN_SUFFIX}1`, password: PASSWORD });
 
     expect(res.status).toBe(429);
+  });
+});
+
+/**
+ * الاختباران التاليان هما **إثبات عدم التسريب** للقرار #84 مجتمعَين، لا كل
+ * واحد وحده: التمييز يحدث بعد مطابقة كلمة المرور حصرًا، فمن لا يعرفها لا
+ * يستطيع التفريق بين "غير موجود" و"موجود ومعطَّل" — وهو بالضبط ما تحميه
+ * قاعدة الرفض العام في §11. الأول وحده يثبت التمييز، والثاني وحده يثبت
+ * الرفض العام؛ اجتماعهما هو ما يثبت أن الترتيب صحيح.
+ *
+ * على `disabledApp` لا `app` — عدّاد محاولات مستقل (انظر تعريفه أعلاه).
+ */
+describe("POST /api/auth/login — حدّ التمييز في الحساب المعطَّل", () => {
+  it("كلمة مرور خاطئة لحساب معطَّل ← 401 العامة نفسها (لا تسريب لوجود الرقم)", async () => {
+    const res = await request(disabledApp)
+      .post("/api/auth/login")
+      .send({ phone: `077${RUN_SUFFIX}2`, password: "wrong-password" });
+
+    expect(res.status).toBe(401);
+    expect((res.body as LoginErrorBody).code).toBe("invalid_credentials");
+  });
+
+  it("رقم غير موجود إطلاقًا ← نفس 401 ونفس الرمز (لا فرق يُبنى عليه تعداد)", async () => {
+    const res = await request(disabledApp)
+      .post("/api/auth/login")
+      .send({ phone: `077${RUN_SUFFIX}9`, password: "wrong-password" });
+
+    expect(res.status).toBe(401);
+    expect((res.body as LoginErrorBody).code).toBe("invalid_credentials");
   });
 });

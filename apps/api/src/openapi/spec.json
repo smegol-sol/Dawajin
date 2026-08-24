@@ -50,6 +50,16 @@
               }
             }
           },
+          "403": {
+            "description": "كلمة المرور صحيحة والحساب معطَّل — يُميَّز بعد المطابقة حصرًا (decisions.md #84)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
           "429": {
             "description": "محاولات كثيرة — حاول بعد دقيقة"
           }
@@ -279,7 +289,12 @@
               "type": "object",
               "properties": {
                 "tenantId": {
-                  "type": "integer"
+                  "type": "integer",
+                  "description": "معرّف داخلي — يُرسَل في طلب الحسم ولا يُعرَض على الشاشة أبدًا (app-complete-spec.md §12)"
+                },
+                "tenantName": {
+                  "type": "string",
+                  "description": "اسم المستأجر المعروض للتمييز بين حسابات نفس الجوال (decisions.md #84)"
                 },
                 "fullName": {
                   "type": "string"
@@ -287,7 +302,8 @@
                 "role": {
                   "type": "string"
                 }
-              }
+              },
+              "required": ["tenantId", "tenantName", "fullName", "role"]
             }
           }
         }

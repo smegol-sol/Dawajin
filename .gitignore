@@ -52,3 +52,7 @@ google-services.json
 
 # تقارير التغطية — تُولَّد محليًا وفي CI، لا تُلتزم
 coverage/
+
+# تأكيدات التخطيط — مخرَج ونتائج مولَّدة
+test-results/
+playwright-report/

@@ -9,6 +9,7 @@
     "scripts/**/*.ts",
     "apps/*/vitest*.config.ts",
     "packages/*/vitest*.config.ts",
-    "apps/api/src/types/**/*.d.ts"
+    "apps/api/src/types/**/*.d.ts",
+    "playwright.config.ts"
   ]
 }

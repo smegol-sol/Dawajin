@@ -7,7 +7,18 @@ import { spawnSync } from "node:child_process";
 export function checkEslint(): { ok: boolean; message: string } {
   const result = spawnSync(
     "npx",
-    ["eslint", "apps/api/src", "packages/db/src", "packages/shared/src"],
+    [
+      "eslint",
+      "apps/api/src",
+      "packages/db/src",
+      "packages/shared/src",
+      // أُضيفت مع أول شاشة حقيقية: كود الموبايل كان خارج البوابة رغم أن
+      // ESLint يمرّ عليه نظيفًا أصلًا — بوابة لا تشمل الكود لا تحرسه
+      // (`scripts/` نفسها ما زالت خارجها — دَين مُسجَّل في work-plan.md §7-ب).
+      "apps/mobile",
+      "layout-tests",
+      "playwright.config.ts",
+    ],
     { encoding: "utf8", stdio: "pipe" }
   );
 

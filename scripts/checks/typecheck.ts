@@ -32,5 +32,22 @@ export function checkTypecheck(): { ok: boolean; message: string } {
     };
   }
 
-  return { ok: true, message: "typecheck نظيف في كل الحزم وفي أدوات المستودع (scripts/)" };
+  // مشروع منفصل: تأكيدات التخطيط وحدها تحتاج lib DOM (كود يُقيَّم داخل
+  // المتصفح عبر page.evaluate) — إضافتها للمشروع الجذري كانت ستمنح كل
+  // سكربتات Node أنواع متصفح لا وجود لها عندها وقت التشغيل.
+  const layout = spawnSync("npx", ["tsc", "--noEmit", "-p", "layout-tests/tsconfig.json"], {
+    encoding: "utf8",
+    stdio: "pipe",
+  });
+  if (layout.status !== 0) {
+    return {
+      ok: false,
+      message: `tsc --noEmit فشل في تأكيدات التخطيط:\n${layout.stdout}\n${layout.stderr}`,
+    };
+  }
+
+  return {
+    ok: true,
+    message: "typecheck نظيف في كل الحزم وفي أدوات المستودع (scripts/ وlayout-tests/)",
+  };
 }

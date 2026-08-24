@@ -42,6 +42,12 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      # تأكيدات التخطيط (القرار #81) تحتاج متصفحًا حقيقيًا — Chromium وحده،
+      # لا كل المتصفحات. تبعية مشروع لا تثبيت عالمي: النسخة مثبَّتة في
+      # pnpm-lock.yaml فلا ينحرف سلوك CI عن المحلي بترقية صامتة.
+      - name: تثبيت متصفح تأكيدات التخطيط
+        run: npx playwright install --with-deps chromium
+
       # يُفحص نطاق الـPR فقط — رسائل ما قبل تبنّي القاعدة لا تُعاد كتابتها (القرار #64)
       - name: صيغة رسائل commit (conventional commits)
         if: github.event_name == 'pull_request'
@@ -56,7 +62,9 @@ jobs:
       # check:all يشمل typecheck وESLint وPrettier والتغطية (القرار #61 و#63)
       # — التغطية تشغّل الاختبارات نفسها، فالخطوتان التاليتان تبقيان لعزل
       # سبب الفشل بوضوح في سجل CI لا لتكرار عمل ضروري.
-      - name: الفحوص الآلية (typecheck · ESLint · Prettier · تغطية · بنيوية)
+      # check:all يشمل الآن الفاحص العاشر (تأكيدات تخطيط RTL) الذي يبني
+      # مخرَج الويب ويشغّل Playwright — لا خطوة منفصلة له.
+      - name: الفحوص الآلية (typecheck · ESLint · Prettier · تغطية · تخطيط · بنيوية)
         run: pnpm run check:all
 
       - name: اختبارات الوحدة

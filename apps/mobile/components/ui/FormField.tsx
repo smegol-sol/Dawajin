@@ -1,6 +1,13 @@
 import { Calendar, ChevronDown } from "lucide-react-native";
 import { useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import {
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+  type KeyboardTypeOptions,
+} from "react-native";
 
 import { color, component, font, radius, spacing } from "@/constants/theme";
 
@@ -12,11 +19,31 @@ interface FormFieldProps {
   value?: string;
   onChangeText?: (text: string) => void;
   onPress?: () => void;
-  /** رسالة الخطأ — تحت الحقل مباشرة (§8.11). وجودها يفعّل حالة الخطأ. */
-  error?: string;
+  /**
+   * رسالة الخطأ — تحت الحقل مباشرة (§8.11). وجودها يفعّل حالة الخطأ.
+   * `| undefined` صريح: `exactOptionalPropertyTypes` يفرّق بين "غائبة"
+   * و"موجودة بقيمة undefined"، والشاشات تمرّرها محسوبة لا شرطية.
+   */
+  error?: string | undefined;
   disabled?: boolean;
   /** يفرض مظهر التركيز بلا تفاعل فعلي — لصفحة عرض نظام التصميم فقط. */
   forceFocusedStyle?: boolean;
+  /**
+   * إخفاء المحرَف المُدخَل — حقول كلمة المرور. الحقل يبقى نفس المكوّن بنفس
+   * الحالات الأربع؛ "كلمة المرور" ليست نوع حقل خامسًا بل خاصية عرض على
+   * حقل النص (§8.11 تعدّ أربعة أنواع لا خمسة).
+   */
+  secureTextEntry?: boolean;
+  /**
+   * لوحة المفاتيح المطلوبة — `phone-pad` لرقم الجوال. الأرقام تبقى لاتينية
+   * دائمًا (§10 قاعدة 2 و§12)، ولوحة الأرقام تمنع الأرقام العربية-الهندية
+   * من المصدر لا بالتصحيح بعد الإدخال.
+   */
+  keyboardType?: KeyboardTypeOptions;
+  /** تلميح الإكمال التلقائي لمدير كلمات المرور على الجهاز. */
+  autoComplete?: "tel" | "current-password" | "new-password" | "off";
+  /** معرّف الاختبار — يُمرَّر لحقل الإدخال نفسه لا للحاوية. */
+  testID?: string;
 }
 
 /**
@@ -33,6 +60,10 @@ export function FormField({
   error,
   disabled = false,
   forceFocusedStyle = false,
+  secureTextEntry = false,
+  keyboardType,
+  autoComplete,
+  testID,
 }: FormFieldProps) {
   const [isFocused, setIsFocused] = useState(false);
   const focused = forceFocusedStyle || isFocused;
@@ -55,28 +86,30 @@ export function FormField({
           fieldColors={fieldColors}
         />
       ) : (
-        <TextInput
+        <TextField
+          label={label}
+          long={type === "longText"}
           value={value}
           onChangeText={onChangeText}
-          editable={!disabled}
-          multiline={type === "longText"}
-          onFocus={() => {
-            setIsFocused(true);
-          }}
-          onBlur={() => {
-            setIsFocused(false);
-          }}
-          style={[
-            styles.field,
-            styles.textInput,
-            type === "longText" && styles.textInputLong,
-            fieldColors,
-          ]}
-          textAlign="right"
+          disabled={disabled}
+          secureTextEntry={secureTextEntry}
+          keyboardType={keyboardType}
+          autoComplete={autoComplete}
+          testID={testID}
+          fieldColors={fieldColors}
+          onFocusChange={setIsFocused}
         />
       )}
 
-      {hasError ? <Text style={styles.error}>{error}</Text> : null}
+      {hasError ? (
+        <Text
+          style={styles.error}
+          testID={testID === undefined ? undefined : `${testID}-error`}
+          accessibilityRole="alert"
+        >
+          {error}
+        </Text>
+      ) : null}
     </View>
   );
 }
@@ -94,6 +127,69 @@ function borderColorFor({
   if (hasError) return color.statusCritical;
   if (focused) return color.accentSuccess;
   return color.borderSubtle;
+}
+
+/**
+ * حقل الإدخال النصي — مفصول عن `FormField` كي يبقى كلاهما تحت حدّي الطول
+ * والتعقيد (القرار #61)، بنفس نمط `PickerField` الموجود أصلًا.
+ */
+function TextField({
+  label,
+  long,
+  value,
+  onChangeText,
+  disabled,
+  secureTextEntry,
+  keyboardType,
+  autoComplete,
+  testID,
+  fieldColors,
+  onFocusChange,
+}: {
+  label: string;
+  long: boolean;
+  value?: string | undefined;
+  onChangeText?: ((text: string) => void) | undefined;
+  disabled: boolean;
+  secureTextEntry: boolean;
+  keyboardType?: KeyboardTypeOptions | undefined;
+  autoComplete?: FormFieldProps["autoComplete"];
+  testID?: string | undefined;
+  fieldColors: { borderColor: string; backgroundColor: string };
+  onFocusChange: (focused: boolean) => void;
+}) {
+  // الأرقام لاتينية بـdirection: ltr (§10 قاعدة 2) — على حقل الجوال وحده،
+  // لا على حقول النص العربي
+  const isNumeric = keyboardType === "phone-pad";
+
+  return (
+    <TextInput
+      value={value}
+      onChangeText={onChangeText}
+      editable={!disabled}
+      multiline={long}
+      secureTextEntry={secureTextEntry}
+      keyboardType={keyboardType}
+      autoComplete={autoComplete}
+      autoCapitalize="none"
+      testID={testID}
+      accessibilityLabel={label}
+      onFocus={() => {
+        onFocusChange(true);
+      }}
+      onBlur={() => {
+        onFocusChange(false);
+      }}
+      style={[
+        styles.field,
+        styles.textInput,
+        long && styles.textInputLong,
+        isNumeric && styles.ltrInput,
+        fieldColors,
+      ]}
+      textAlign={isNumeric ? "left" : "right"}
+    />
+  );
 }
 
 function PickerField({
@@ -153,6 +249,10 @@ const styles = StyleSheet.create({
     color: color.brandPrimary,
     paddingVertical: spacing.sm,
     writingDirection: "rtl",
+  },
+  ltrInput: {
+    direction: "ltr",
+    writingDirection: "ltr",
   },
   textInputLong: {
     minHeight: 96,

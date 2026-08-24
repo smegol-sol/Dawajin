@@ -1,4 +1,4 @@
-import { I18nManager } from "react-native";
+import { I18nManager, Platform } from "react-native";
 
 /**
  * يجب أن يكون هذا أول استيراد في app/_layout.tsx — التطبيق عربي بالكامل
@@ -13,4 +13,23 @@ import { I18nManager } from "react-native";
 if (!I18nManager.isRTL) {
   I18nManager.allowRTL(true);
   I18nManager.forceRTL(true);
+}
+
+/**
+ * **سبب جذري مقيس، لا إصلاح أعمى** (§7-ب البند 6، القرار #85):
+ * `I18nManager.forceRTL` على `react-native-web` **لا يضبط اتجاه المستند**.
+ * واتجاه المستند هو ما يقرأه المتصفح فعليًا ليعكس `flexDirection: "row"`،
+ * فبقي `direction: ltr` وظهر سهم الرجوع أقصى يسار الرأس الفرعي — عكس §10
+ * قاعدة 1 — بينما اختبار jest ينجح دائمًا لأنه يفحص نوع الأيقونة لا موضعها.
+ *
+ * قِيس فعليًا بـ`boundingBox()`: قبل ضبط `dir` كان السهم عند x=16 والجرس
+ * عند x=350؛ بعده انعكسا تمامًا (350 و16). لا تغيير في أي مكوّن — المكوّنات
+ * كانت صحيحة، والبيئة وحدها لم تُخبَر أن المستند عربي.
+ *
+ * على iOS/أندرويد لا أثر لهذا الفرع إطلاقًا (`I18nManager` وحده يحكم هناك)،
+ * فلا خطر انعكاس مزدوج.
+ */
+if (Platform.OS === "web" && typeof document !== "undefined") {
+  document.documentElement.setAttribute("dir", "rtl");
+  document.documentElement.setAttribute("lang", "ar");
 }

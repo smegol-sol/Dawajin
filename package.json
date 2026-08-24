@@ -15,6 +15,7 @@
     "dev": "pnpm --filter @dawajin/api run dev",
     "test": "pnpm -r run test",
     "test:integration": "pnpm --filter @dawajin/api run test:integration",
+    "test:layout": "playwright test",
     "typecheck": "pnpm -r run typecheck",
     "check:all": "tsx scripts/check-all.ts",
     "api:generate": "pnpm --filter @dawajin/api run api:generate"
@@ -22,6 +23,7 @@
   "devDependencies": {
     "@dawajin/db": "workspace:^",
     "@eslint/js": "^9.15.0",
+    "@playwright/test": "^1.62.1",
     "@types/node": "^22.10.1",
     "eslint": "^9.15.0",
     "eslint-config-prettier": "^10.1.8",
