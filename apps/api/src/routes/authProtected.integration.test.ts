@@ -98,7 +98,7 @@ afterAll(async () => {
   await pool.end();
 });
 
-describe("مصفوفة الصلاحيات — مسارات /api/auth/* الذاتية", () => {
+describe("مصفوفة الصلاحيات — GET /api/auth/me", () => {
   it("GET /api/auth/me — 401 بلا توكن", async () => {
     const res = await request(app).get("/api/auth/me");
     expect(res.status).toBe(401);
@@ -115,7 +115,9 @@ describe("مصفوفة الصلاحيات — مسارات /api/auth/* الذا�
       expect(body.role).toBe(role);
     });
   }
+});
 
+describe("مصفوفة الصلاحيات — POST /api/auth/change-password", () => {
   it("POST /api/auth/change-password — 401 بلا توكن", async () => {
     const res = await request(app)
       .post("/api/auth/change-password")
@@ -144,7 +146,9 @@ describe("مصفوفة الصلاحيات — مسارات /api/auth/* الذا�
     expect(updated.mustChangePassword).toBe(false);
     expect(await bcrypt.compare("NewPassw0rd!23", updated.passwordHash)).toBe(true);
   });
+});
 
+describe("مصفوفة الصلاحيات — POST /api/auth/register-push-token", () => {
   it("POST /api/auth/register-push-token — 401 بلا توكن", async () => {
     const res = await request(app)
       .post("/api/auth/register-push-token")

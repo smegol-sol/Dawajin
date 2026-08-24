@@ -1,5 +1,6 @@
 import { Tabs } from "expo-router";
 import { Home, ClipboardList, HeartPulse, PackageCheck, FileText } from "lucide-react-native";
+
 import { tabBarScreenOptions, tabIcon } from "@/components/ui/tabBarOptions";
 
 /**

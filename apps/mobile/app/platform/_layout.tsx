@@ -1,5 +1,6 @@
 import { Tabs } from "expo-router";
 import { LayoutDashboard, Building, CreditCard, Activity, History } from "lucide-react-native";
+
 import { tabBarScreenOptions, tabIcon } from "@/components/ui/tabBarOptions";
 
 /**
@@ -9,14 +10,26 @@ import { tabBarScreenOptions, tabIcon } from "@/components/ui/tabBarOptions";
 export default function PlatformLayout() {
   return (
     <Tabs screenOptions={tabBarScreenOptions}>
-      <Tabs.Screen name="index" options={{ title: "نظرة عامة", tabBarIcon: tabIcon(LayoutDashboard) }} />
-      <Tabs.Screen name="tenants" options={{ title: "المستأجرون", tabBarIcon: tabIcon(Building) }} />
+      <Tabs.Screen
+        name="index"
+        options={{ title: "نظرة عامة", tabBarIcon: tabIcon(LayoutDashboard) }}
+      />
+      <Tabs.Screen
+        name="tenants"
+        options={{ title: "المستأجرون", tabBarIcon: tabIcon(Building) }}
+      />
       <Tabs.Screen
         name="subscriptions"
         options={{ title: "الاشتراكات", tabBarIcon: tabIcon(CreditCard) }}
       />
-      <Tabs.Screen name="usage" options={{ title: "الأداء والاستخدام", tabBarIcon: tabIcon(Activity) }} />
-      <Tabs.Screen name="audit-log" options={{ title: "سجل التدقيق", tabBarIcon: tabIcon(History) }} />
+      <Tabs.Screen
+        name="usage"
+        options={{ title: "الأداء والاستخدام", tabBarIcon: tabIcon(Activity) }}
+      />
+      <Tabs.Screen
+        name="audit-log"
+        options={{ title: "سجل التدقيق", tabBarIcon: tabIcon(History) }}
+      />
     </Tabs>
   );
 }

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import { createDbClient, type Database, tenants, users, settingsAuditLog } from "@dawajin/db";
-import { normalizePhoneE164 } from "@dawajin/shared";
+import { normalizePhoneE164, type UserRole } from "@dawajin/shared";
 import { eq } from "drizzle-orm";
 import pino from "pino";
 import request from "supertest";
@@ -13,6 +13,12 @@ import { signAccessToken } from "../lib/jwt";
 import { assertIsTestDatabase } from "../lib/testGuard";
 
 type Pool = ReturnType<typeof createDbClient>["pool"];
+
+// قيم إدخال اختبار مُسمّاة — ليست إعدادًا مُدمَجًا في كود التطبيق (الإعداد
+// الفعلي يبقى في عمود tenants)، والتسمية تجعل كل حالة اختبار مقروءة بذاتها.
+const REST_DAYS_FIRST_UPDATE = 21;
+const REST_DAYS_SECOND_UPDATE = 9;
+const REST_DAYS_DENIED_ATTEMPT = 5;
 
 let db: Database;
 let pool: Pool;
@@ -27,6 +33,29 @@ function firstRow<T>(rows: T[]): T {
   const row = rows[0];
   if (!row) throw new Error("expected at least one returned row in test fixture");
   return row;
+}
+
+/** يُنشئ مستخدمًا بدور محدَّد ويُصدر له توكنًا — أربعة أدوار بنفس الشكل. */
+async function createUserWithToken(
+  role: UserRole,
+  fullName: string,
+  phone: string,
+  jwtSecret: string
+): Promise<string> {
+  const user = firstRow(
+    await db
+      .insert(users)
+      .values({
+        tenantId,
+        fullName,
+        role,
+        phone,
+        phoneE164: normalizePhoneE164(phone, "+967"),
+        passwordHash: "x",
+      })
+      .returning({ id: users.id })
+  );
+  return signAccessToken({ sub: String(user.id), tenantId, role }, jwtSecret, "1h");
 }
 
 beforeAll(async () => {
@@ -45,81 +74,18 @@ beforeAll(async () => {
   );
   tenantId = tenant.id;
 
-  const owner = firstRow(
-    await db
-      .insert(users)
-      .values({
-        tenantId,
-        fullName: "مالك اختبار الإعدادات",
-        role: "owner",
-        phone: "0779000001",
-        phoneE164: normalizePhoneE164("0779000001", "+967"),
-        passwordHash: "x",
-      })
-      .returning({ id: users.id })
-  );
-  const farmer = firstRow(
-    await db
-      .insert(users)
-      .values({
-        tenantId,
-        fullName: "مربي اختبار الإعدادات",
-        role: "farmer",
-        phone: "0779000002",
-        phoneE164: normalizePhoneE164("0779000002", "+967"),
-        passwordHash: "x",
-      })
-      .returning({ id: users.id })
-  );
-
-  const supervisor = firstRow(
-    await db
-      .insert(users)
-      .values({
-        tenantId,
-        fullName: "مشرف اختبار الإعدادات",
-        role: "supervisor",
-        phone: "0779000003",
-        phoneE164: normalizePhoneE164("0779000003", "+967"),
-        passwordHash: "x",
-      })
-      .returning({ id: users.id })
-  );
-  const vet = firstRow(
-    await db
-      .insert(users)
-      .values({
-        tenantId,
-        fullName: "طبيب اختبار الإعدادات",
-        role: "vet",
-        phone: "0779000004",
-        phoneE164: normalizePhoneE164("0779000004", "+967"),
-        passwordHash: "x",
-      })
-      .returning({ id: users.id })
-  );
-
   const env = loadEnv();
-  ownerToken = await signAccessToken(
-    { sub: String(owner.id), tenantId, role: "owner" },
-    env.JWT_SECRET,
-    "1h"
+  const secret = env.JWT_SECRET;
+  ownerToken = await createUserWithToken("owner", "مالك اختبار الإعدادات", "0779000001", secret);
+  farmerToken = await createUserWithToken("farmer", "مربي اختبار الإعدادات", "0779000002", secret);
+  supervisorToken = await createUserWithToken(
+    "supervisor",
+    "مشرف اختبار الإعدادات",
+    "0779000003",
+    secret
   );
-  farmerToken = await signAccessToken(
-    { sub: String(farmer.id), tenantId, role: "farmer" },
-    env.JWT_SECRET,
-    "1h"
-  );
-  supervisorToken = await signAccessToken(
-    { sub: String(supervisor.id), tenantId, role: "supervisor" },
-    env.JWT_SECRET,
-    "1h"
-  );
-  vetToken = await signAccessToken(
-    { sub: String(vet.id), tenantId, role: "vet" },
-    env.JWT_SECRET,
-    "1h"
-  );
+  vetToken = await createUserWithToken("vet", "طبيب اختبار الإعدادات", "0779000004", secret);
+
   app = createApp(db, env, pino({ level: "silent" }));
 });
 
@@ -132,10 +98,10 @@ describe("PATCH /api/settings — request_id يربط سجل التدقيق با
     const res = await request(app)
       .patch("/api/settings")
       .set("Authorization", `Bearer ${ownerToken}`)
-      .send({ minRestDays: 21 });
+      .send({ minRestDays: REST_DAYS_FIRST_UPDATE });
 
     expect(res.status).toBe(200);
-    expect((res.body as { minRestDays: number }).minRestDays).toBe(21);
+    expect((res.body as { minRestDays: number }).minRestDays).toBe(REST_DAYS_FIRST_UPDATE);
 
     const returnedRequestId: string | undefined = res.headers["x-request-id"];
     expect(returnedRequestId).toBeTruthy();
@@ -150,7 +116,9 @@ describe("PATCH /api/settings — request_id يربط سجل التدقيق با
     expect(auditRows[0]?.tenantId).toBe(tenantId);
     expect(auditRows[0]?.entityType).toBe("setting");
     expect(auditRows[0]?.action).toBe("update");
-    expect((auditRows[0]?.after as { minRestDays: number }).minRestDays).toBe(21);
+    expect((auditRows[0]?.after as { minRestDays: number }).minRestDays).toBe(
+      REST_DAYS_FIRST_UPDATE
+    );
   });
 
   it("يعيد استخدام X-Request-Id المُرسَل من العميل بدل توليد واحد جديد", async () => {
@@ -162,7 +130,7 @@ describe("PATCH /api/settings — request_id يربط سجل التدقيق با
       .patch("/api/settings")
       .set("Authorization", `Bearer ${ownerToken}`)
       .set("X-Request-Id", suppliedRequestId)
-      .send({ minRestDays: 9 });
+      .send({ minRestDays: REST_DAYS_SECOND_UPDATE });
 
     expect(res.status).toBe(200);
     expect(res.headers["x-request-id"]).toBe(suppliedRequestId);
@@ -173,7 +141,9 @@ describe("PATCH /api/settings — request_id يربط سجل التدقيق با
       .where(eq(settingsAuditLog.requestId, suppliedRequestId));
     expect(auditRows).toHaveLength(1);
   });
+});
 
+describe("مصفوفة صلاحيات /api/settings", () => {
   it("GET /api/settings — بلا توكن ← 401", async () => {
     const res = await request(app).get("/api/settings");
     expect(res.status).toBe(401);
@@ -187,7 +157,7 @@ describe("PATCH /api/settings — request_id يربط سجل التدقيق با
     const res = await request(app)
       .patch("/api/settings")
       .set("Authorization", `Bearer ${getToken()}`)
-      .send({ minRestDays: 5 });
+      .send({ minRestDays: REST_DAYS_DENIED_ATTEMPT });
 
     expect(res.status).toBe(403);
   });

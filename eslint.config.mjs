@@ -2,12 +2,15 @@
 // للقواعد" ولا "هذا أداة لا تطبيق". القواعد المخصصة (Drizzle/tx/رسائل
 // الخطأ/أعمدة float) خادمية بطبيعتها فلن تُطلق على كود الموبايل، لكنها
 // مُفعَّلة عليه أيضًا لا مستثناة منه.
-import js from "@eslint/js";
-import tseslint from "typescript-eslint";
-import importX from "eslint-plugin-import-x";
-import prettierConfig from "eslint-config-prettier";
-import { fileURLToPath } from "node:url";
 import { dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+
+import js from "@eslint/js";
+import prettierConfig from "eslint-config-prettier";
+import importX from "eslint-plugin-import-x";
+import globals from "globals";
+import tseslint from "typescript-eslint";
+
 import projectRules from "./eslint-rules/index.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -119,5 +122,31 @@ export default tseslint.config(
     // (قيد تقني لا تخفيف: لا توجد أنواع لتُفحَص). بقية القواعد فعّالة عليها.
     files: ["**/*.mjs", "**/*.js"],
     extends: [tseslint.configs.disableTypeChecked],
+  },
+  {
+    // ملفات إعداد الموبايل (metro/babel/eslint) بصيغة CommonJS تحت Node —
+    // تستخدم module/require/__dirname. غيابها من globals نقصُ إعدادٍ عندي
+    // لا مخالفة كود (القرار #65-ج).
+    files: ["apps/mobile/*.config.js", "*.config.js"],
+    languageOptions: {
+      globals: globals.node,
+      sourceType: "commonjs",
+    },
+    rules: {
+      "@typescript-eslint/no-require-imports": "off",
+    },
+  },
+  {
+    // أدوات سطر أوامر مخرجاتها للإنسان في الطرفية — pino (سجل JSON منظَّم
+    // لخادم يخدم طلبات) ليس البديل الصحيح لها (القرار #65-ب).
+    files: [
+      "scripts/**/*.ts",
+      "packages/db/src/migrate.ts",
+      "packages/db/src/setup-test-db.ts",
+      "apps/api/src/scripts/**/*.ts",
+    ],
+    rules: {
+      "no-console": "off",
+    },
   }
 );

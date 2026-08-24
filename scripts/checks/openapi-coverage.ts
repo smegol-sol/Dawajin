@@ -1,5 +1,6 @@
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
+
 import { introspectRoutes } from "../lib/introspectRoutes";
 
 /**
@@ -37,7 +38,7 @@ export async function checkOpenApiCoverage(): Promise<{ ok: boolean; message: st
     return { ok: false, message: `عقد OpenAPI غير موجود في ${SPEC_PATH}` };
   }
 
-  const spec = JSON.parse(readFileSync(SPEC_PATH, "utf8"));
+  const spec: unknown = JSON.parse(readFileSync(SPEC_PATH, "utf8"));
   const expressRoutes = (await introspectRoutes()).filter((r) => !EXEMPT_PATHS.has(r.path));
   const specRoutes = collectSpecPaths(spec);
 

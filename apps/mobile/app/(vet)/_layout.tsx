@@ -1,5 +1,6 @@
 import { Tabs } from "expo-router";
 import { Home, AlertTriangle, Pill, BarChart3, MoreHorizontal } from "lucide-react-native";
+
 import { tabBarScreenOptions, tabIcon } from "@/components/ui/tabBarOptions";
 
 /** تخطيط الطبيب — 5 تبويبات. */

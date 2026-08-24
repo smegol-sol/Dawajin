@@ -1,5 +1,6 @@
 import { Tabs } from "expo-router";
 import { Home, Building2, Truck, Boxes, ClipboardCheck } from "lucide-react-native";
+
 import { tabBarScreenOptions, tabIcon } from "@/components/ui/tabBarOptions";
 
 /** تخطيط المشرف — 5 تبويبات. لا تبويب تقارير (صلاحية المالك وحده). */

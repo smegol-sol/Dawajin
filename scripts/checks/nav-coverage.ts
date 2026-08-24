@@ -1,5 +1,5 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
-import { join, relative } from "node:path";
+import { join } from "node:path";
 
 /**
  * فاحص تغطية التنقّل — يمنع شاشة خارج مكدّس تبويب وبلا زر رجوع

@@ -3,20 +3,23 @@
  * تُشغَّل محليًا وفي CI على كل PR بدءًا من المرحلة 0 (docs/work-plan.md §2).
  * ستة أصلية + ثلاثة أضيفت لاحقًا (ESLint، Prettier، التغطية — القرار #61/#63).
  */
-import { checkDuplicateRoutes } from "./checks/duplicate-routes";
-import { checkOpenApiCoverage } from "./checks/openapi-coverage";
-import { checkDesignTokens } from "./checks/design-tokens";
-import { checkNavCoverage } from "./checks/nav-coverage";
-import { checkEnumUsage } from "./checks/enum-usage";
-import { checkTypecheck } from "./checks/typecheck";
-import { checkEslint } from "./checks/eslint";
-import { checkPrettier } from "./checks/prettier";
 import { checkCoverage } from "./checks/coverage";
+import { checkDesignTokens } from "./checks/design-tokens";
+import { checkDuplicateRoutes } from "./checks/duplicate-routes";
+import { checkEnumUsage } from "./checks/enum-usage";
+import { checkEslint } from "./checks/eslint";
+import { checkNavCoverage } from "./checks/nav-coverage";
+import { checkOpenApiCoverage } from "./checks/openapi-coverage";
+import { checkPrettier } from "./checks/prettier";
+import { checkTypecheck } from "./checks/typecheck";
 
-type CheckResult = { ok: boolean; message: string };
+interface CheckResult {
+  ok: boolean;
+  message: string;
+}
 type CheckFn = () => CheckResult | Promise<CheckResult>;
 
-const checks: Array<{ name: string; run: CheckFn }> = [
+const checks: { name: string; run: CheckFn }[] = [
   { name: "المسارات المكررة", run: checkDuplicateRoutes },
   { name: "تغطية OpenAPI", run: checkOpenApiCoverage },
   { name: "رموز التصميم", run: checkDesignTokens },
@@ -43,4 +46,9 @@ async function main() {
   process.exit(allOk ? 0 : 1);
 }
 
-main();
+// خطأ غير متوقَّع داخل أي فاحص يجب أن يُفشل البناء بوضوح لا أن يمر
+// كوعد مرفوض صامت (unhandled rejection)
+main().catch((error: unknown) => {
+  console.error("فشل غير متوقَّع أثناء تشغيل الفحوص:", error);
+  process.exit(1);
+});

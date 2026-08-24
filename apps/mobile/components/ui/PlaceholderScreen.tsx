@@ -1,4 +1,5 @@
 import { View, Text, StyleSheet } from "react-native";
+
 import { color, font, spacing } from "@/constants/theme";
 
 /**

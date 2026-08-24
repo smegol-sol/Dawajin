@@ -12,7 +12,8 @@ export default {
     docs: { description: "لا real()/doublePrecision() في مخطط قاعدة البيانات" },
     schema: [],
     messages: {
-      floatColumn: '"{{fn}}()" يستخدم float لعمود — استخدم numeric() من drizzle-orm/pg-core (المبدأ #3)',
+      floatColumn:
+        '"{{fn}}()" يستخدم float لعمود — استخدم numeric() من drizzle-orm/pg-core (المبدأ #3)',
     },
   },
   create(context) {

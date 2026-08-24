@@ -36,14 +36,8 @@ function firstRow<T>(rows: T[]): T {
   return row;
 }
 
-beforeAll(async () => {
-  const testUrl = process.env.TEST_DATABASE_URL;
-  if (!testUrl) throw new Error("TEST_DATABASE_URL غير معرَّف");
-  const client = createDbClient(testUrl);
-  db = client.db;
-  pool = client.pool;
-  await assertIsTestDatabase(db);
-
+/** مستأجر ومزرعة وعنبران ومنتج علف — الكيانات التي تُنسب إليها الحركات. */
+async function seedLedgerEntities(): Promise<void> {
   const tenant = firstRow(
     await db
       .insert(tenants)
@@ -86,27 +80,39 @@ beforeAll(async () => {
   // المخزن نفسه ليس صفًا في warehouses هنا فقط — قيد CHECK يفرض
   // location_type='warehouse' ⇒ house_id/farm_id كلاهما NULL، بلا صف مرجعي إضافي مطلوب.
   warehouseLocationId = 1; // location_id اصطلاحي ثابت لمخزن هذا المستأجر (decisions.md #14)
+}
 
-  async function movement(input: {
-    locationType: "warehouse" | "house";
-    locationId: number;
-    houseId: number | null;
-    quantity: string;
-    movementType: (typeof inventoryMovements.$inferInsert)["movementType"];
-  }) {
-    await db.insert(inventoryMovements).values({
-      tenantId,
-      locationType: input.locationType,
-      locationId: input.locationId,
-      houseId: input.houseId,
-      productId,
-      movementType: input.movementType,
-      quantity: input.quantity,
-      unit: "كيس",
-      sourceType: "test_fixture",
-      sourceUuid: randomUUID(),
-    });
-  }
+/** يُدرج حركة مخزون واحدة في الدفتر. */
+async function movement(input: {
+  locationType: "warehouse" | "house";
+  locationId: number;
+  houseId: number | null;
+  quantity: string;
+  movementType: (typeof inventoryMovements.$inferInsert)["movementType"];
+}): Promise<void> {
+  await db.insert(inventoryMovements).values({
+    tenantId,
+    locationType: input.locationType,
+    locationId: input.locationId,
+    houseId: input.houseId,
+    productId,
+    movementType: input.movementType,
+    quantity: input.quantity,
+    unit: "كيس",
+    sourceType: "test_fixture",
+    sourceUuid: randomUUID(),
+  });
+}
+
+beforeAll(async () => {
+  const testUrl = process.env.TEST_DATABASE_URL;
+  if (!testUrl) throw new Error("TEST_DATABASE_URL غير معرَّف");
+  const client = createDbClient(testUrl);
+  db = client.db;
+  pool = client.pool;
+  await assertIsTestDatabase(db);
+
+  await seedLedgerEntities();
 
   // مخزن: +100 استلام، -30 شحن صادر (تحوّل لاحقًا لعنبر أ) ⇒ رصيد المخزن = 70
   await movement({

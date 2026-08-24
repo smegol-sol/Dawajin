@@ -1,6 +1,8 @@
 import pino from "pino";
-import type { Env } from "../../apps/api/src/lib/env";
+
 import type { Database } from "@dawajin/db";
+
+import type { Env } from "../../apps/api/src/lib/env";
 
 /**
  * يبني تطبيق Express الحقيقي (createApp) ويفحص شجرة توجيهه الداخلية

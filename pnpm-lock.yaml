@@ -8,6 +8,9 @@ importers:
 
   .:
     devDependencies:
+      '@dawajin/db':
+        specifier: workspace:^
+        version: link:packages/db
       '@eslint/js':
         specifier: ^9.15.0
         version: 9.39.5
@@ -26,6 +29,12 @@ importers:
       eslint-plugin-import-x:
         specifier: ^4.17.1
         version: 4.17.1(@typescript-eslint/utils@8.67.0(eslint@9.39.5)(typescript@5.9.3))(eslint-import-resolver-node@0.3.10)(eslint@9.39.5)
+      globals:
+        specifier: ^17.11.0
+        version: 17.11.0
+      pino:
+        specifier: ^9.5.0
+        version: 9.14.0
       prettier:
         specifier: ^3.9.6
         version: 3.9.6
@@ -4189,6 +4198,10 @@ packages:
 
   globals@16.5.0:
     resolution: {integrity: sha512-c/c15i26VrJ4IRt5Z89DnIzCGDn9EcebibhAOjw5ibqEHsE1wLUgkPn9RDmNcUKyU87GeaL633nyJ+pplFR2ZQ==}
+    engines: {node: '>=18'}
+
+  globals@17.11.0:
+    resolution: {integrity: sha512-Z2I8hM+PbJDXQDq3Icgpzv+mPdwr68iZUU9d5WW4FuXfDUQfkZaZuvjMv42/5crNyw154+9+VWXbYrUgDXbxNw==}
     engines: {node: '>=18'}
 
   globalthis@1.0.4:
@@ -10784,6 +10797,8 @@ snapshots:
   globals@14.0.0: {}
 
   globals@16.5.0: {}
+
+  globals@17.11.0: {}
 
   globalthis@1.0.4:
     dependencies:

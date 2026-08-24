@@ -5,3 +5,5 @@ pnpm-lock.yaml
 packages/db/migrations
 apps/mobile/constants/tokens.json
 docs/backend-technical-spec.pdf
+README.md
+docs/

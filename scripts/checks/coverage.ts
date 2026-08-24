@@ -17,13 +17,18 @@ export function checkCoverage(): { ok: boolean; message: string } {
   const message = [`apps/api: ${api.summary}`, `packages/shared: ${shared.summary}`].join("\n");
 
   if (!ok) {
-    const failures = [!api.ok ? api.errors : "", !shared.ok ? shared.errors : ""].filter(Boolean).join("\n");
+    const failures = [!api.ok ? api.errors : "", !shared.ok ? shared.errors : ""]
+      .filter(Boolean)
+      .join("\n");
     return { ok: false, message: `التغطية دون الحد المطلوب:\n${message}\n${failures}` };
   }
   return { ok: true, message };
 }
 
-function runCoverage(cwd: string, config: string): { ok: boolean; summary: string; errors: string } {
+function runCoverage(
+  cwd: string,
+  config: string
+): { ok: boolean; summary: string; errors: string } {
   const result = spawnSync("npx", ["vitest", "run", "--config", config, "--coverage"], {
     cwd,
     encoding: "utf8",
@@ -33,9 +38,17 @@ function runCoverage(cwd: string, config: string): { ok: boolean; summary: strin
   const summaryPath = join(cwd, "coverage", "coverage-summary.json");
   let summary = "(لا تقرير — تحقق من تشغيل الاختبارات)";
   if (existsSync(summaryPath)) {
-    const data = JSON.parse(readFileSync(summaryPath, "utf8")) as { total: Record<string, { pct: number }> };
+    // noUncheckedIndexedAccess يجعل كل مفتاح في Record قابلًا لـundefined —
+    // تقرير مبتور أو بصيغة أخرى يجب أن يُبلَّغ لا أن ينهار بـTypeError
+    const data = JSON.parse(readFileSync(summaryPath, "utf8")) as {
+      total?: Record<string, { pct: number } | undefined>;
+    };
     const t = data.total;
-    summary = `أسطر ${t.lines.pct}% · عبارات ${t.statements.pct}% · دوال ${t.functions.pct}% · فروع ${t.branches.pct}%`;
+    const pct = (key: string): string => {
+      const value = t?.[key]?.pct;
+      return typeof value === "number" ? `${value}%` : "؟";
+    };
+    summary = `أسطر ${pct("lines")} · عبارات ${pct("statements")} · دوال ${pct("functions")} · فروع ${pct("branches")}`;
   }
 
   const errors = result.stdout

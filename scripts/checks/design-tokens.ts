@@ -1,5 +1,6 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
+
 import tokens from "../../apps/mobile/constants/tokens.json" with { type: "json" };
 
 /**

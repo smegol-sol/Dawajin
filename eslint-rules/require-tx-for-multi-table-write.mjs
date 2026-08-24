@@ -3,9 +3,19 @@
  * db.transaction()) لا db مباشرة — وإلا فالعمليتان غير ذريتين معًا
  * (المبدأ #2، القرار #61). لا يفحص استخدام tx نفسه — استخدام tx صحيح دائمًا
  * هنا؛ الفحص فقط على db.insert/update/delete عبر أكثر من جدول في نفس الدالة.
+ *
+ * النيّة: **مسار كتابة إنتاجي** لا أي كود يكتب في جدولين. ملفات الاختبار
+ * (`*.test.ts`) مستثناة صراحةً في المُطابِق أدناه: تركيب بيانات الاختبار
+ * (fixtures) ليس عملية أعمال ذرّية — صفوف تجريبية مستقلة في جداول مختلفة،
+ * وفشل أحدها يُفشل الاختبار كله أصلًا فلا معنى لذرّية معاملاتية بينها.
+ * المبدأ #2 يخص عمليات الإنتاج متعددة الجداول.
  */
 const WRITE_METHODS = new Set(["insert", "update", "delete"]);
-const FUNCTION_TYPES = new Set(["FunctionDeclaration", "FunctionExpression", "ArrowFunctionExpression"]);
+const FUNCTION_TYPES = new Set([
+  "FunctionDeclaration",
+  "FunctionExpression",
+  "ArrowFunctionExpression",
+]);
 
 export default {
   meta: {
@@ -20,6 +30,9 @@ export default {
     },
   },
   create(context) {
+    const filename = (context.filename ?? context.getFilename()).replace(/\\/g, "/");
+    if (/\.test\.ts$/.test(filename)) return {};
+
     const scopeStack = [{ node: null, tables: new Map() }];
 
     function enterFunction(node) {
@@ -43,7 +56,8 @@ export default {
         const callee = node.callee;
         if (callee.type !== "MemberExpression") return;
         if (callee.object.type !== "Identifier" || callee.object.name !== "db") return;
-        if (callee.property.type !== "Identifier" || !WRITE_METHODS.has(callee.property.name)) return;
+        if (callee.property.type !== "Identifier" || !WRITE_METHODS.has(callee.property.name))
+          return;
 
         const firstArg = node.arguments[0];
         if (!firstArg || firstArg.type !== "Identifier") return; // جدول ديناميكي — لا يمكن تتبعه ثابتًا

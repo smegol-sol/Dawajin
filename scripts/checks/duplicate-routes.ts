@@ -23,5 +23,8 @@ export async function checkDuplicateRoutes(): Promise<{ ok: boolean; message: st
   if (duplicates.length > 0) {
     return { ok: false, message: `مسارات مكررة:\n  - ${duplicates.join("\n  - ")}` };
   }
-  return { ok: true, message: `لا تكرار — ${seen.size} مسار مفحوص (فحص برمجي لشجرة Express الفعلية)` };
+  return {
+    ok: true,
+    message: `لا تكرار — ${seen.size} مسار مفحوص (فحص برمجي لشجرة Express الفعلية)`,
+  };
 }

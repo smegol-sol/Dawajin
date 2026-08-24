@@ -40,7 +40,12 @@ export default {
     return {
       Property(node) {
         if (node.computed) return;
-        const keyName = node.key.type === "Identifier" ? node.key.name : node.key.type === "Literal" ? String(node.key.value) : null;
+        const keyName =
+          node.key.type === "Identifier"
+            ? node.key.name
+            : node.key.type === "Literal"
+              ? String(node.key.value)
+              : null;
         if (!keyName || !CONFIG_KEYS.has(keyName)) return;
         if (node.value.type !== "Literal" || typeof node.value.value !== "number") return;
         if (EXEMPT_VALUES.has(node.value.value)) return;

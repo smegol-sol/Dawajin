@@ -38,7 +38,11 @@ function walk(dir: string, files: string[] = []): string[] {
 
 export function checkEnumUsage(): { ok: boolean; message: string } {
   const enumsSource = readFileSync(SHARED_ENUMS_FILE, "utf8");
-  const enumNames = [...enumsSource.matchAll(/export const ([A-Z_]+) = \[/g)].map((m) => m[1]);
+  // مجموعة الالتقاط الأولى مضمونة بنمط regex نفسه، لكن نوعها string|undefined
+  // — نُرشِّح صراحةً بدل تأكيد غير آمن
+  const enumNames = [...enumsSource.matchAll(/export const ([A-Z_]+) = \[/g)]
+    .map((m) => m[1])
+    .filter((name): name is string => name !== undefined);
 
   const apiSource = existsSync(API_DIR)
     ? walk(API_DIR)

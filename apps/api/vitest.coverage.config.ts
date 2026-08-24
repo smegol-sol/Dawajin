@@ -45,11 +45,26 @@ export default defineConfig({
         // طبقة الصلاحيات — الفرض المركزي الثلاثي (المبدأ #1 و#7)
         "src/middleware/auth.ts": { lines: 100, statements: 100, functions: 100, branches: 100 },
         "src/middleware/tenant.ts": { lines: 100, statements: 100, functions: 100, branches: 100 },
-        "src/middleware/entityAccess.ts": { lines: 100, statements: 100, functions: 100, branches: 100 },
-        "src/middleware/requireRole.ts": { lines: 100, statements: 100, functions: 100, branches: 100 },
+        "src/middleware/entityAccess.ts": {
+          lines: 100,
+          statements: 100,
+          functions: 100,
+          branches: 100,
+        },
+        "src/middleware/requireRole.ts": {
+          lines: 100,
+          statements: 100,
+          functions: 100,
+          branches: 100,
+        },
         "src/lib/authContext.ts": { lines: 100, statements: 100, functions: 100, branches: 100 },
         // حسابات دفتر المخزون — الرصيد = SUM حيّة (القرار #14)
-        "src/lib/inventoryBalance.ts": { lines: 100, statements: 100, functions: 100, branches: 100 },
+        "src/lib/inventoryBalance.ts": {
+          lines: 100,
+          statements: 100,
+          functions: 100,
+          branches: 100,
+        },
       },
     },
   },

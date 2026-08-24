@@ -134,14 +134,8 @@ function buildProbeApp() {
   return app;
 }
 
-beforeAll(async () => {
-  const testUrl = process.env.TEST_DATABASE_URL;
-  if (!testUrl) throw new Error("TEST_DATABASE_URL غير معرَّف");
-  const client = createDbClient(testUrl);
-  db = client.db;
-  pool = client.pool;
-  await assertIsTestDatabase(db);
-
+/** مستأجران منفصلان — أساس كل اختبارات العزل في هذا الملف. */
+async function seedTenants(): Promise<void> {
   const tenantA = firstRow(
     await db
       .insert(tenants)
@@ -156,7 +150,10 @@ beforeAll(async () => {
   );
   tenantAId = tenantA.id;
   tenantBId = tenantB.id;
+}
 
+/** عنبر في المستأجر B — هدف محاولة الوصول العابرة للمستأجر (يجب أن تُرجع 404). */
+async function seedHouseInTenantB(): Promise<void> {
   const farmB = firstRow(
     await db
       .insert(farms)
@@ -170,7 +167,10 @@ beforeAll(async () => {
       .returning({ id: houses.id })
   );
   houseInTenantBId = houseB.id;
+}
 
+/** مربٍّ في المستأجر A — صاحب التوكن في كل اختبارات الوصول. */
+async function seedFarmerInTenantA(): Promise<void> {
   const farmerA = firstRow(
     await db
       .insert(users)
@@ -185,40 +185,31 @@ beforeAll(async () => {
       .returning({ id: users.id })
   );
   farmerInTenantAId = farmerA.id;
+}
 
-  const farmA = firstRow(
-    await db
-      .insert(farms)
-      .values({ tenantId: tenantAId, name: "مزرعة A للدفعات" })
-      .returning({ id: farms.id })
-  );
-  const houseAForBatch = firstRow(
-    await db
-      .insert(houses)
-      .values({ tenantId: tenantAId, farmId: farmA.id, name: "عنبر دفعة مُسندة" })
-      .returning({ id: houses.id })
-  );
-  assignedHouseInTenantAId = houseAForBatch.id;
+/** دفعتان: واحدة في عنبر مُسند للمربي، وأخرى في مستأجر آخر — لفحص اشتقاق houseId من batchId. */
+async function seedBatches(): Promise<void> {
+  assignedHouseInTenantAId = await createHouseInTenantA("مزرعة A للدفعات", "عنبر دفعة مُسندة");
   await db.insert(userAssignments).values({
     userId: farmerInTenantAId,
-    houseId: houseAForBatch.id,
+    houseId: assignedHouseInTenantAId,
     tenantId: tenantAId,
   });
-  const assignedBatchInTenantA = firstRow(
+  const assigned = firstRow(
     await db
       .insert(batches)
       .values({
         tenantId: tenantAId,
-        houseId: houseAForBatch.id,
+        houseId: assignedHouseInTenantAId,
         breed: "Ross 308",
         startDate: "2026-01-01",
         initialBirdCount: 1000,
       })
       .returning({ id: batches.id })
   );
-  assignedBatchInTenantAId = assignedBatchInTenantA.id;
+  assignedBatchInTenantAId = assigned.id;
 
-  const unassignedBatchInTenantB = firstRow(
+  const unassigned = firstRow(
     await db
       .insert(batches)
       .values({
@@ -230,7 +221,21 @@ beforeAll(async () => {
       })
       .returning({ id: batches.id })
   );
-  unassignedBatchInTenantBId = unassignedBatchInTenantB.id;
+  unassignedBatchInTenantBId = unassigned.id;
+}
+
+beforeAll(async () => {
+  const testUrl = process.env.TEST_DATABASE_URL;
+  if (!testUrl) throw new Error("TEST_DATABASE_URL غير معرَّف");
+  const client = createDbClient(testUrl);
+  db = client.db;
+  pool = client.pool;
+  await assertIsTestDatabase(db);
+
+  await seedTenants();
+  await seedHouseInTenantB();
+  await seedFarmerInTenantA();
+  await seedBatches();
 
   farmerInTenantAToken = await signAccessToken(
     { sub: String(farmerInTenantAId), tenantId: tenantAId, role: "farmer" },
@@ -290,6 +295,23 @@ describe("١) تطبيع الجوال + رفض التكرار بـ 409 (decision
   });
 });
 
+/** يُنشئ مزرعة وعنبرًا في المستأجر A ويُعيد معرّف العنبر — تجهيز مكرر. */
+async function createHouseInTenantA(farmName: string, houseName: string): Promise<number> {
+  const farm = firstRow(
+    await db
+      .insert(farms)
+      .values({ tenantId: tenantAId, name: farmName })
+      .returning({ id: farms.id })
+  );
+  const house = firstRow(
+    await db
+      .insert(houses)
+      .values({ tenantId: tenantAId, farmId: farm.id, name: houseName })
+      .returning({ id: houses.id })
+  );
+  return house.id;
+}
+
 describe("٢) العزل: الوجود قبل التعيين — 404 لا 403 عبر المستأجرين (decisions.md #22)", () => {
   it("مستخدم من المستأجر A يطلب عنبرًا من المستأجر B ← 404", async () => {
     const res = await request(app)
@@ -309,21 +331,10 @@ describe("٢) العزل: الوجود قبل التعيين — 404 لا 403 ع
   });
 
   it("عنبر موجود في نفس المستأجر لكن غير مُسند للمربي ← 403 (بعد التأكد من الوجود)", async () => {
-    const farmA = firstRow(
-      await db
-        .insert(farms)
-        .values({ tenantId: tenantAId, name: "مزرعة A أخرى" })
-        .returning({ id: farms.id })
-    );
-    const houseA = firstRow(
-      await db
-        .insert(houses)
-        .values({ tenantId: tenantAId, farmId: farmA.id, name: "عنبر غير مُسند" })
-        .returning({ id: houses.id })
-    );
+    const houseAId = await createHouseInTenantA("مزرعة A أخرى", "عنبر غير مُسند");
 
     const res = await request(app)
-      .get(`/_probe/houses/${houseA.id}`)
+      .get(`/_probe/houses/${houseAId}`)
       .set("Authorization", `Bearer ${farmerInTenantAToken}`);
 
     expect(res.status).toBe(403);
@@ -331,32 +342,23 @@ describe("٢) العزل: الوجود قبل التعيين — 404 لا 403 ع
   });
 
   it("عنبر مُسند فعليًا للمربي ← 200", async () => {
-    const farmA = firstRow(
-      await db
-        .insert(farms)
-        .values({ tenantId: tenantAId, name: "مزرعة A ثالثة" })
-        .returning({ id: farms.id })
-    );
-    const houseA = firstRow(
-      await db
-        .insert(houses)
-        .values({ tenantId: tenantAId, farmId: farmA.id, name: "عنبر مُسند" })
-        .returning({ id: houses.id })
-    );
+    const houseAId = await createHouseInTenantA("مزرعة A ثالثة", "عنبر مُسند");
     await db.insert(userAssignments).values({
       userId: farmerInTenantAId,
-      houseId: houseA.id,
+      houseId: houseAId,
       tenantId: tenantAId,
     });
 
     const res = await request(app)
-      .get(`/_probe/houses/${houseA.id}`)
+      .get(`/_probe/houses/${houseAId}`)
       .set("Authorization", `Bearer ${farmerInTenantAToken}`);
 
     expect(res.status).toBe(200);
     expect((res.body as ProbeHouseResponseBody).ok).toBe(true);
   });
+});
 
+describe("٢-ب) المصادقة قبل أي فحص عزل — 401", () => {
   it("بلا رمز دخول إطلاقًا ← 401 (قبل أي فحص عزل)", async () => {
     const res = await request(app).get(`/_probe/houses/${houseInTenantBId}`);
     expect(res.status).toBe(401);
