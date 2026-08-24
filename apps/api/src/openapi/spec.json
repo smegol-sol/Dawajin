@@ -6,6 +6,156 @@
     "description": "المصدر الوحيد لعقد الـ API (backend-technical-spec.md §18). كل مسار تحت /api يجب أن يُوثَّق هنا — الفاحص الآلي (scripts/checks/openapi-coverage.ts) يفشل البناء عند أي فرق."
   },
   "paths": {
+    "/api/auth/login": {
+      "post": {
+        "summary": "تسجيل الدخول برقم الجوال وكلمة المرور — بلا مصادقة مسبقة",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "توكن ناجح، أو طلب اختيار مستأجر عند تعدّد الحسابات لنفس الجوال",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/LoginSuccess"
+                    },
+                    {
+                      "$ref": "#/components/schemas/LoginNeedsTenantSelection"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "description": "رقم الجوال أو كلمة المرور غير صحيحة",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "محاولات كثيرة — حاول بعد دقيقة"
+          }
+        }
+      }
+    },
+    "/api/auth/me": {
+      "get": {
+        "summary": "بيانات المستخدم الحالي",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "بيانات المستخدم",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurrentUser"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/api/auth/change-password": {
+      "post": {
+        "summary": "تغيير كلمة مرور المستخدم الحالي",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangePasswordRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "تم التغيير"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "description": "غير مصادَق، أو كلمة المرور الحالية غير صحيحة",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/api/auth/register-push-token": {
+      "post": {
+        "summary": "تسجيل رمز الإشعارات (Expo push token) للمستخدم الحالي",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterPushTokenRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "تم التسجيل"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
     "/api/settings": {
       "get": {
         "summary": "قراءة إعدادات المستأجر التشغيلية",
@@ -86,6 +236,127 @@
       }
     },
     "schemas": {
+      "LoginRequest": {
+        "type": "object",
+        "required": [
+          "phone",
+          "password"
+        ],
+        "properties": {
+          "phone": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          },
+          "tenantId": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "description": "لحسم حساب واحد عند تعدّد المستأجرين لنفس الجوال (decisions.md #57)"
+          }
+        }
+      },
+      "LoginSuccess": {
+        "type": "object",
+        "required": [
+          "token",
+          "user"
+        ],
+        "properties": {
+          "token": {
+            "type": "string"
+          },
+          "user": {
+            "$ref": "#/components/schemas/CurrentUser"
+          }
+        }
+      },
+      "LoginNeedsTenantSelection": {
+        "type": "object",
+        "description": "الجوال وكلمة المرور يطابقان حسابات في أكثر من مستأجر — أعد الطلب مع tenantId (decisions.md #57)",
+        "required": [
+          "needsTenantSelection",
+          "accounts"
+        ],
+        "properties": {
+          "needsTenantSelection": {
+            "const": true
+          },
+          "accounts": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "tenantId": {
+                  "type": "integer"
+                },
+                "fullName": {
+                  "type": "string"
+                },
+                "role": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "CurrentUser": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "tenantId": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "fullName": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string"
+          },
+          "isActive": {
+            "type": "boolean"
+          },
+          "mustChangePassword": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ChangePasswordRequest": {
+        "type": "object",
+        "required": [
+          "currentPassword",
+          "newPassword"
+        ],
+        "properties": {
+          "currentPassword": {
+            "type": "string"
+          },
+          "newPassword": {
+            "type": "string",
+            "minLength": 8
+          }
+        }
+      },
+      "RegisterPushTokenRequest": {
+        "type": "object",
+        "required": [
+          "expoPushToken"
+        ],
+        "properties": {
+          "expoPushToken": {
+            "type": "string"
+          }
+        }
+      },
       "TenantSettings": {
         "type": "object",
         "properties": {

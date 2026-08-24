@@ -42,7 +42,7 @@ function pickSettings(row: Record<string, unknown>): Record<string, unknown> {
 export function settingsRouter(db: Database): Router {
   const router = Router();
 
-  router.get("/settings", requireRole("owner"), async (req, res, next) => {
+  router.get("/api/settings", requireRole("owner"), async (req, res, next) => {
     try {
       const [tenant] = await db
         .select()
@@ -56,7 +56,7 @@ export function settingsRouter(db: Database): Router {
     }
   });
 
-  router.patch("/settings", requireRole("owner"), async (req, res, next) => {
+  router.patch("/api/settings", requireRole("owner"), async (req, res, next) => {
     try {
       const input = updateSettingsSchema.parse(req.body);
       const tenantId = req.user!.tenantId!;

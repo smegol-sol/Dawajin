@@ -18,6 +18,8 @@ let app: ReturnType<typeof createApp>;
 let tenantId: number;
 let ownerToken: string;
 let farmerToken: string;
+let supervisorToken: string;
+let vetToken: string;
 
 function firstRow<T>(rows: T[]): T {
   const row = rows[0];
@@ -68,9 +70,42 @@ beforeAll(async () => {
       .returning({ id: users.id })
   );
 
+  const supervisor = firstRow(
+    await db
+      .insert(users)
+      .values({
+        tenantId,
+        fullName: "مشرف اختبار الإعدادات",
+        role: "supervisor",
+        phone: "0779000003",
+        phoneE164: normalizePhoneE164("0779000003", "+967"),
+        passwordHash: "x",
+      })
+      .returning({ id: users.id })
+  );
+  const vet = firstRow(
+    await db
+      .insert(users)
+      .values({
+        tenantId,
+        fullName: "طبيب اختبار الإعدادات",
+        role: "vet",
+        phone: "0779000004",
+        phoneE164: normalizePhoneE164("0779000004", "+967"),
+        passwordHash: "x",
+      })
+      .returning({ id: users.id })
+  );
+
   const env = loadEnv();
   ownerToken = await signAccessToken({ sub: String(owner.id), tenantId, role: "owner" }, env.JWT_SECRET, "1h");
   farmerToken = await signAccessToken({ sub: String(farmer.id), tenantId, role: "farmer" }, env.JWT_SECRET, "1h");
+  supervisorToken = await signAccessToken(
+    { sub: String(supervisor.id), tenantId, role: "supervisor" },
+    env.JWT_SECRET,
+    "1h"
+  );
+  vetToken = await signAccessToken({ sub: String(vet.id), tenantId, role: "vet" }, env.JWT_SECRET, "1h");
   app = createApp(db, env, pino({ level: "silent" }));
 });
 
@@ -125,12 +160,30 @@ describe("PATCH /api/settings — request_id يربط سجل التدقيق با
     expect(auditRows).toHaveLength(1);
   });
 
-  it("يرفض غير المالك — 403 بلا أي كتابة تدقيق", async () => {
+  it("GET /api/settings — بلا توكن ← 401", async () => {
+    const res = await request(app).get("/api/settings");
+    expect(res.status).toBe(401);
+  });
+
+  it.each([
+    ["farmer", () => farmerToken],
+    ["supervisor", () => supervisorToken],
+    ["vet", () => vetToken],
+  ])("يرفض غير المالك (%s) — 403 بلا أي كتابة تدقيق", async (_role, getToken) => {
     const res = await request(app)
       .patch("/api/settings")
-      .set("Authorization", `Bearer ${farmerToken}`)
+      .set("Authorization", `Bearer ${getToken()}`)
       .send({ minRestDays: 5 });
 
+    expect(res.status).toBe(403);
+  });
+
+  it.each([
+    ["farmer", () => farmerToken],
+    ["supervisor", () => supervisorToken],
+    ["vet", () => vetToken],
+  ])("GET /api/settings يرفض غير المالك (%s) — 403", async (_role, getToken) => {
+    const res = await request(app).get("/api/settings").set("Authorization", `Bearer ${getToken()}`);
     expect(res.status).toBe(403);
   });
 });

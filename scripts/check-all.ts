@@ -2,14 +2,17 @@
  * الفحوص الآلية الستة — تفشل البناء، لا تحذيرات (backend-technical-spec.md §21).
  * تُشغَّل محليًا وفي CI على كل PR بدءًا من المرحلة 0 (docs/work-plan.md §2).
  */
-import { checkDuplicateRoutes } from "./checks/duplicate-routes.js";
-import { checkOpenApiCoverage } from "./checks/openapi-coverage.js";
-import { checkDesignTokens } from "./checks/design-tokens.js";
-import { checkNavCoverage } from "./checks/nav-coverage.js";
-import { checkEnumUsage } from "./checks/enum-usage.js";
-import { checkTypecheck } from "./checks/typecheck.js";
+import { checkDuplicateRoutes } from "./checks/duplicate-routes";
+import { checkOpenApiCoverage } from "./checks/openapi-coverage";
+import { checkDesignTokens } from "./checks/design-tokens";
+import { checkNavCoverage } from "./checks/nav-coverage";
+import { checkEnumUsage } from "./checks/enum-usage";
+import { checkTypecheck } from "./checks/typecheck";
 
-const checks: Array<{ name: string; run: () => { ok: boolean; message: string } }> = [
+type CheckResult = { ok: boolean; message: string };
+type CheckFn = () => CheckResult | Promise<CheckResult>;
+
+const checks: Array<{ name: string; run: CheckFn }> = [
   { name: "المسارات المكررة", run: checkDuplicateRoutes },
   { name: "تغطية OpenAPI", run: checkOpenApiCoverage },
   { name: "رموز التصميم", run: checkDesignTokens },
@@ -18,15 +21,19 @@ const checks: Array<{ name: string; run: () => { ok: boolean; message: string } 
   { name: "typecheck", run: checkTypecheck },
 ];
 
-let allOk = true;
+async function main() {
+  let allOk = true;
 
-for (const check of checks) {
-  const result = check.run();
-  const icon = result.ok ? "✓" : "✗";
-  console.log(`\n${icon} ${check.name}`);
-  console.log(`  ${result.message.replaceAll("\n", "\n  ")}`);
-  if (!result.ok) allOk = false;
+  for (const check of checks) {
+    const result = await check.run();
+    const icon = result.ok ? "✓" : "✗";
+    console.log(`\n${icon} ${check.name}`);
+    console.log(`  ${result.message.replaceAll("\n", "\n  ")}`);
+    if (!result.ok) allOk = false;
+  }
+
+  console.log(`\n${allOk ? "✓ كل الفحوص الستة نجحت" : "✗ فشل فحص واحد أو أكثر"}`);
+  process.exit(allOk ? 0 : 1);
 }
 
-console.log(`\n${allOk ? "✓ كل الفحوص الستة نجحت" : "✗ فشل فحص واحد أو أكثر"}`);
-process.exit(allOk ? 0 : 1);
+main();

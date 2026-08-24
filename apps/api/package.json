@@ -16,7 +16,7 @@
   "dependencies": {
     "@dawajin/db": "workspace:*",
     "@dawajin/shared": "workspace:*",
-    "bcryptjs": "^2.4.3",
+    "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
     "drizzle-orm": "^0.36.4",
     "express": "^4.21.1",
