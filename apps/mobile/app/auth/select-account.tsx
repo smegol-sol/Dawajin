@@ -1,7 +1,8 @@
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 
+import { AuthScreen } from "@/components/ui/AuthScreen";
 import { Card } from "@/components/ui/Card";
 import { color, font, spacing } from "@/constants/theme";
 import { LoginRequestError, login } from "@/lib/api";
@@ -62,15 +63,18 @@ export default function SelectAccountScreen() {
   }
 
   return (
-    <View style={styles.flex}>
-      <View style={styles.header}>
-        <Text style={styles.title} testID="select-account-title">
-          اختر الحساب
-        </Text>
-        <Text style={styles.subtitle}>نفس رقم الجوال مسجَّل لدى أكثر من مالك</Text>
-      </View>
-
-      <ScrollView contentContainerStyle={styles.scroll}>
+    <AuthScreen
+      testID="select-account-screen"
+      header={
+        <View style={styles.headerBlock}>
+          <Text style={styles.title} testID="select-account-title">
+            اختر الحساب
+          </Text>
+          <Text style={styles.subtitle}>نفس رقم الجوال مسجَّل لدى أكثر من مالك</Text>
+        </View>
+      }
+    >
+      <View style={styles.list}>
         <AccountList accounts={pending?.accounts ?? null} onChoose={chooseAccount} />
 
         {error !== null ? (
@@ -78,8 +82,8 @@ export default function SelectAccountScreen() {
             {error.message}
           </Text>
         ) : null}
-      </ScrollView>
-    </View>
+      </View>
+    </AuthScreen>
   );
 }
 
@@ -169,15 +173,12 @@ async function resolveAccount(args: {
 }
 
 const styles = StyleSheet.create({
-  flex: {
-    flex: 1,
-    backgroundColor: color.surfacePage,
-  },
-  header: {
+  headerBlock: {
     gap: spacing.xxs,
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.xxl,
-    paddingBottom: spacing.md,
+  },
+  list: {
+    // flex + gap فقط — لا مسافة ثابتة على البطاقات (§10 قاعدة 5)
+    gap: spacing.md,
   },
   title: {
     fontSize: font.size.screenTitle,
@@ -193,11 +194,6 @@ const styles = StyleSheet.create({
     color: color.textBody,
     writingDirection: "rtl",
     textAlign: "right",
-  },
-  scroll: {
-    padding: spacing.lg,
-    // flex + gap فقط — لا مسافة ثابتة على البطاقات (§10 قاعدة 5)
-    gap: spacing.md,
   },
   emptyState: {
     fontSize: font.size.content,

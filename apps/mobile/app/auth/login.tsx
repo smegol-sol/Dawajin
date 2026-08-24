@@ -1,7 +1,8 @@
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 
+import { AuthScreen } from "@/components/ui/AuthScreen";
 import { Button } from "@/components/ui/Button";
 import { FormField } from "@/components/ui/FormField";
 import { color, font, radius, spacing } from "@/constants/theme";
@@ -49,37 +50,34 @@ export default function LoginScreen() {
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.flex}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+    <AuthScreen
+      testID="login-screen"
+      header={
         <View style={styles.brand}>
           <Text style={styles.appName}>دواجن</Text>
           <Text style={styles.tagline}>نظام إدارة مزارع دواجن التسمين</Text>
         </View>
-
-        <LoginFields
-          phone={phone}
-          password={password}
-          error={error}
-          onPhoneChange={setPhone}
-          onPasswordChange={setPassword}
+      }
+      footer={
+        <Button
+          label={submitting ? "جارٍ تسجيل الدخول" : "تسجيل الدخول"}
+          variant="primary"
+          formSize
+          onPress={() => {
+            void handleSubmit();
+          }}
+          {...(submitting ? { disabledReason: "جارٍ إرسال الطلب — انتظر لحظة" } : {})}
         />
-
-        <View style={styles.actions}>
-          <Button
-            label={submitting ? "جارٍ تسجيل الدخول" : "تسجيل الدخول"}
-            variant="primary"
-            formSize
-            onPress={() => {
-              void handleSubmit();
-            }}
-            {...(submitting ? { disabledReason: "جارٍ إرسال الطلب — انتظر لحظة" } : {})}
-          />
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+      }
+    >
+      <LoginFields
+        phone={phone}
+        password={password}
+        error={error}
+        onPhoneChange={setPhone}
+        onPasswordChange={setPassword}
+      />
+    </AuthScreen>
   );
 }
 
@@ -189,19 +187,6 @@ function failureView(caught: unknown): LoginErrorView {
 }
 
 const styles = StyleSheet.create({
-  flex: {
-    flex: 1,
-    backgroundColor: color.surfacePage,
-  },
-  scroll: {
-    flexGrow: 1,
-    padding: spacing.xxl,
-    // تدفّق من الأعلى بمسافات المقياس، لا `space-between` الذي كان يمطّ
-    // الكتلة فيبدأ النموذج قرب منتصف الشاشة والزر ملتصقًا بالأسفل.
-    // الزر يبقى بعد النموذج مباشرة — أقرب للإبهام على الشاشات الصغيرة
-    // فعليًا مما كان عليه وهو مثبَّت في القاع على شاشة طويلة.
-    gap: spacing.xl,
-  },
   brand: {
     alignItems: "center",
     gap: spacing.xs,
@@ -248,8 +233,5 @@ const styles = StyleSheet.create({
     color: color.statusCritical,
     writingDirection: "rtl",
     textAlign: "right",
-  },
-  actions: {
-    gap: spacing.md,
   },
 });

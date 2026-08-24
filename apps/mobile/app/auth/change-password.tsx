@@ -1,7 +1,9 @@
+import { MIN_PASSWORD_LENGTH, PASSWORD_REQUIREMENTS_HINT } from "@dawajin/shared";
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 
+import { AuthScreen } from "@/components/ui/AuthScreen";
 import { Button } from "@/components/ui/Button";
 import { FormField } from "@/components/ui/FormField";
 import { color, font, radius, spacing } from "@/constants/theme";
@@ -19,11 +21,11 @@ import { clearToken, readToken } from "@/lib/session";
  * تُستخدم `AppHeader variant="main"` بلا `onBackPress`، ويُعترَض زر الرجوع
  * في أندرويد صراحةً — الاثنان معًا، لأن أحدهما وحده يترك ثغرة تجاوز.
  *
- * الحد الأدنى للطول 8 محارف: كلمة مؤقتة يضعها المشرف تُستبدل بكلمة يختارها
- * المستخدم؛ حدّ الـ12 محرفًا في §11 خاصّ بمدير المنصة وحده لا بمستخدمي
- * المستأجر (القرار #86).
+ * الحد الأدنى للطول من `@dawajin/shared` — **نفس الثابت الذي يفرضه مخطط zod
+ * في الخادم** (`authProtected.ts`)، فلا يعرض هذا النموذج شرطًا يخالف ما
+ * يُطبَّق فعليًا (القرار #95). حدّ الـ12 محرفًا في §11 خاصّ بمدير المنصة
+ * وحده لا بمستخدمي المستأجر (القرار #86).
  */
-const MIN_PASSWORD_LENGTH = 8;
 
 type FieldName = "current" | "next" | "confirm" | "form";
 
@@ -57,36 +59,31 @@ export default function ChangePasswordScreen() {
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.flex}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        <ForcedChangeIntro />
-
-        <PasswordFields
-          values={{ currentPassword, nextPassword, confirmPassword }}
-          error={error}
-          onChange={{
-            current: setCurrentPassword,
-            next: setNextPassword,
-            confirm: setConfirmPassword,
+    <AuthScreen
+      testID="change-password-screen"
+      header={<ForcedChangeIntro />}
+      footer={
+        <Button
+          label={submitting ? "جارٍ الحفظ" : "حفظ كلمة المرور"}
+          variant="primary"
+          formSize
+          onPress={() => {
+            void handleSubmit();
           }}
+          {...(submitting ? { disabledReason: "جارٍ إرسال الطلب — انتظر لحظة" } : {})}
         />
-
-        <View style={styles.actions}>
-          <Button
-            label={submitting ? "جارٍ الحفظ" : "حفظ كلمة المرور"}
-            variant="primary"
-            formSize
-            onPress={() => {
-              void handleSubmit();
-            }}
-            {...(submitting ? { disabledReason: "جارٍ إرسال الطلب — انتظر لحظة" } : {})}
-          />
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+      }
+    >
+      <PasswordFields
+        values={{ currentPassword, nextPassword, confirmPassword }}
+        error={error}
+        onChange={{
+          current: setCurrentPassword,
+          next: setNextPassword,
+          confirm: setConfirmPassword,
+        }}
+      />
+    </AuthScreen>
   );
 }
 
@@ -126,22 +123,35 @@ function PasswordFields({
         value={values.currentPassword}
         onChangeText={onChange.current}
         autoComplete="current-password"
+        placeholder="الكلمة المؤقتة التي سلّمها لك المشرف"
         testID="change-current"
         error={errorFor("current")}
       />
-      <PasswordField
-        label="كلمة المرور الجديدة"
-        value={values.nextPassword}
-        onChangeText={onChange.next}
-        autoComplete="new-password"
-        testID="change-next"
-        error={errorFor("next")}
-      />
+
+      {/* الحقل وسطر شروطه مجموعة واحدة — الشرط يُعرض **قبل** الضغط لا
+          يُكتشَف برسالة خطأ بعده. نصّه من @dawajin/shared، نفس المصدر الذي
+          يفرضه مخطط zod في الخادم (القرار #95) */}
+      <View style={styles.fieldWithHint}>
+        <PasswordField
+          label="كلمة المرور الجديدة"
+          value={values.nextPassword}
+          onChangeText={onChange.next}
+          autoComplete="new-password"
+          placeholder={`${String(MIN_PASSWORD_LENGTH)} محارف أو أكثر`}
+          testID="change-next"
+          error={errorFor("next")}
+        />
+        <Text style={styles.hint} testID="change-next-hint">
+          {PASSWORD_REQUIREMENTS_HINT}
+        </Text>
+      </View>
+
       <PasswordField
         label="تأكيد كلمة المرور الجديدة"
         value={values.confirmPassword}
         onChangeText={onChange.confirm}
         autoComplete="new-password"
+        placeholder="أعد كتابة كلمة المرور الجديدة"
         testID="change-confirm"
         error={errorFor("confirm")}
       />
@@ -161,6 +171,7 @@ function PasswordField({
   value,
   onChangeText,
   autoComplete,
+  placeholder,
   testID,
   error,
 }: {
@@ -168,6 +179,7 @@ function PasswordField({
   value: string;
   onChangeText: (next: string) => void;
   autoComplete: "current-password" | "new-password";
+  placeholder: string;
   testID: string;
   error: string | undefined;
 }) {
@@ -179,6 +191,7 @@ function PasswordField({
       onChangeText={onChangeText}
       secureTextEntry
       autoComplete={autoComplete}
+      placeholder={placeholder}
       testID={testID}
       error={error}
     />
@@ -254,19 +267,8 @@ function changePasswordErrorMessage(caught: unknown): string {
 }
 
 const styles = StyleSheet.create({
-  flex: {
-    flex: 1,
-    backgroundColor: color.surfacePage,
-  },
-  scroll: {
-    flexGrow: 1,
-    padding: spacing.xxl,
-    gap: spacing.xxl,
-    justifyContent: "space-between",
-  },
   intro: {
     gap: spacing.xs,
-    paddingTop: spacing.xxl,
   },
   title: {
     fontSize: font.size.screenTitle,
@@ -290,14 +292,21 @@ const styles = StyleSheet.create({
     borderColor: color.borderSubtle,
     padding: spacing.lg,
   },
+  fieldWithHint: {
+    gap: spacing.xxs,
+  },
+  hint: {
+    fontSize: font.size.content,
+    fontFamily: font.familyRegular,
+    color: color.textBody,
+    writingDirection: "rtl",
+    textAlign: "right",
+  },
   formError: {
     fontSize: font.size.content,
     fontFamily: font.familyRegular,
     color: color.statusCritical,
     writingDirection: "rtl",
     textAlign: "right",
-  },
-  actions: {
-    gap: spacing.md,
   },
 });

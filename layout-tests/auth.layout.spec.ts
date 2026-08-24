@@ -133,47 +133,105 @@ test.describe("قواعد §10 الموضعية — مسار تسجيل الدخ
 });
 
 /**
- * **الشاشة الطويلة هي موضع الخلل لا القصيرة.** المحاولة الأولى وضعت هذين
- * التأكيدين على 360×640 فمرّا حتى مع `justifyContent: "space-between"`
- * القديم — لأن المحتوى يملأ الشاشة القصيرة فلا تبقى مساحة فائضة تُوزَّع،
- * فالتخطيطان متطابقان هناك. التمديد لا يظهر إلا حيث توجد مساحة فائضة.
- * تأكيد يمرّ في الحالتين لا يحرس شيئًا (القرار #69) — فنُقلا إلى 390×844.
+ * **الشاشة الطويلة هي موضع الخلل لا القصيرة.** المحاولة الأولى وضعت تأكيدَي
+ * التمديد على 360×640 فمرّا حتى مع `justifyContent: "space-between"` القديم —
+ * لأن المحتوى يملأ الشاشة القصيرة فلا تبقى مساحة فائضة تُوزَّع، فالتخطيطان
+ * متطابقان هناك. تأكيد يمرّ في الحالتين لا يحرس شيئًا (القرار #94).
+ *
+ * **وتُطبَّق على شاشات المصادقة الثلاث لا على شاشة الدخول وحدها** (القرار
+ * #96): أُصلح التمديد في `login` وحدها أول مرة وبقي في `change-password`،
+ * لأن التأكيد كان يعرف شاشة واحدة. المِرساتان `auth-header`/`auth-content`
+ * من `AuthScreen` تجعلان التأكيد عامًّا بلا معرفة ببنية أي شاشة.
  */
-test.describe("تخطيط شاشة الدخول — الشاشة الطويلة (موضع التمديد)", () => {
-  test("المسافة بين آخر حقل والزر ليست فراغًا ممطوطًا", async ({ page }) => {
-    await page.goto("/auth/login");
+interface AuthScreenCase {
+  name: string;
+  /**
+   * حاوية الشاشة نفسها. **الحصر بها إلزامي**: `router.push` يُبقي الشاشة
+   * السابقة مركَّبة في المكدّس، فـ`auth-header` يطابق عنصرين على شاشة
+   * اختيار الحساب (واحد مخفي من شاشة الدخول). قياس بلا حصر يقرأ الشاشة
+   * الخطأ أو يفشل بلا سبب مفهوم.
+   */
+  screenTestID: string;
+  hasFooter: boolean;
+  open: (page: Page) => Promise<void>;
+}
 
-    const password = await boxOf(page, "login-password");
-    const buttonBox = await page.getByRole("button", { name: "تسجيل الدخول" }).boundingBox();
-    if (buttonBox === null) throw new Error("زر الدخول غير مرئي");
+/** صندوق مِرساة داخل شاشة بعينها — لا على مستوى الصفحة (انظر `screenTestID`). */
+async function anchorBox(page: Page, screenTestID: string, anchor: string) {
+  const box = await page.getByTestId(screenTestID).getByTestId(anchor).boundingBox();
+  if (box === null) throw new Error(`المِرساة ${anchor} غير مرئية داخل ${screenTestID}`);
+  return box;
+}
 
-    // فجوة من مقياس المسافات لا تمديد `space-between` (كان ~250px على 844)
-    const gap = buttonBox.y - (password.y + password.height);
-    expect(gap).toBeLessThan(120);
-    expect(gap).toBeGreaterThan(0);
-  });
+const AUTH_SCREENS: AuthScreenCase[] = [
+  {
+    name: "تسجيل الدخول",
+    screenTestID: "login-screen",
+    hasFooter: true,
+    open: async (page) => {
+      await page.goto("/auth/login");
+      await page.getByTestId("login-screen").getByTestId("auth-content").waitFor();
+    },
+  },
+  {
+    name: "اختيار الحساب",
+    screenTestID: "select-account-screen",
+    hasFooter: false,
+    open: reachSelectAccount,
+  },
+  {
+    name: "تغيير كلمة المرور",
+    screenTestID: "change-password-screen",
+    hasFooter: true,
+    open: async (page) => {
+      await page.goto("/auth/change-password");
+      await page.getByTestId("change-password-screen").getByTestId("auth-content").waitFor();
+    },
+  },
+];
 
-  test("النموذج يبدأ في الثلث الأعلى لا قرب منتصف الشاشة", async ({ page }) => {
-    await page.goto("/auth/login");
+test.describe("تخطيط شاشات المصادقة — الشاشة الطويلة (موضع التمديد)", () => {
+  for (const screen of AUTH_SCREENS) {
+    test(`${screen.name}: المحتوى يبدأ في الثلث الأعلى لا قرب المنتصف`, async ({ page }) => {
+      await screen.open(page);
 
-    const phone = await boxOf(page, "login-phone");
-    // كان يبدأ عند ~365px من 844 (قرب المنتصف) — الشكوى البصرية نفسها
-    expect(phone.y).toBeLessThan(844 / 3);
-  });
+      const header = await anchorBox(page, screen.screenTestID, "auth-header");
+      const content = await anchorBox(page, screen.screenTestID, "auth-content");
+
+      // كتلة العنوان في أعلى الشاشة، والمحتوى بعدها مباشرة — لا مدفوعًا
+      // للمنتصف بتوزيع المساحة الفائضة (كان المحتوى عند ~339 من 844)
+      expect(header.y).toBeLessThan(844 / 6);
+      expect(content.y).toBeLessThan(844 / 3);
+    });
+
+    if (screen.hasFooter) {
+      test(`${screen.name}: الفجوة بين المحتوى والإجراء ليست ممطوطة`, async ({ page }) => {
+        await screen.open(page);
+
+        const content = await anchorBox(page, screen.screenTestID, "auth-content");
+        const footer = await anchorBox(page, screen.screenTestID, "auth-footer");
+
+        // فجوة من مقياس المسافات لا تمديد `space-between` (كان ~220px)
+        const gap = footer.y - (content.y + content.height);
+        expect(gap).toBeGreaterThan(0);
+        expect(gap).toBeLessThan(120);
+      });
+    }
+  }
 });
 
-test.describe("تخطيط شاشة الدخول على شاشة صغيرة", () => {
-  // أصغر مقاس شائع فعليًا (iPhone SE) — هنا السؤال مختلف: هل يبقى الزر
+test.describe("تخطيط شاشات المصادقة على شاشة صغيرة", () => {
+  // أصغر مقاس شائع فعليًا (iPhone SE) — السؤال هنا مختلف: هل يبقى الإجراء
   // في متناول الإبهام بلا تمرير حين يضيق الارتفاع؟
   test.use({ viewport: { width: 360, height: 640 } });
 
-  test("الزر مرئي كاملًا بلا تمرير", async ({ page }) => {
-    await page.goto("/auth/login");
-
-    const buttonBox = await page.getByRole("button", { name: "تسجيل الدخول" }).boundingBox();
-    if (buttonBox === null) throw new Error("زر الدخول غير مرئي");
-    expect(buttonBox.y + buttonBox.height).toBeLessThanOrEqual(640);
-  });
+  for (const screen of AUTH_SCREENS.filter((s) => s.hasFooter)) {
+    test(`${screen.name}: الإجراء مرئي كاملًا بلا تمرير`, async ({ page }) => {
+      await screen.open(page);
+      const footer = await anchorBox(page, screen.screenTestID, "auth-footer");
+      expect(footer.y + footer.height).toBeLessThanOrEqual(640);
+    });
+  }
 });
 
 test.describe("رسائل الخطأ تحت الحقل لا أعلى الشاشة (§8.11)", () => {

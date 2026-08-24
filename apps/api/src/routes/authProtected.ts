@@ -1,4 +1,5 @@
 import type { Database } from "@dawajin/db";
+import { MIN_PASSWORD_LENGTH, PASSWORD_TOO_SHORT_MESSAGE } from "@dawajin/shared";
 import { Router } from "express";
 import { z } from "zod";
 
@@ -17,7 +18,9 @@ import { changeUserPassword, getUserProfile, registerPushToken } from "../servic
 
 const changePasswordSchema = z.object({
   currentPassword: z.string().min(1),
-  newPassword: z.string().min(8, "كلمة المرور الجديدة يجب ألا تقل عن 8 محارف"),
+  // الحد والرسالة من @dawajin/shared — نفس المصدر الذي تقرأ منه الشاشة
+  // سطر الشروط المعروض للمستخدم، فلا ينحرف أحدهما عن الآخر (القرار #95)
+  newPassword: z.string().min(MIN_PASSWORD_LENGTH, PASSWORD_TOO_SHORT_MESSAGE),
 });
 
 const registerPushTokenSchema = z.object({
