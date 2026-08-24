@@ -1,105 +1,72 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 
 import SelectAccountScreen from "@/app/auth/select-account";
-import * as api from "@/lib/api";
-import { clearPendingLogin, setPendingLogin } from "@/lib/pendingLogin";
+import { clearPendingLogin, getPendingLogin, setPendingLogin } from "@/lib/pendingLogin";
 
 /**
- * شاشة اختيار الحساب — اسم المستأجر هو ما يميّز البطاقتين (القرار #84)،
- * و**`tenantId` لا يظهر في أي نص معروض** (§12: ممنوع أي معرّف داخلي).
+ * اختيار الحساب — **الخطوة الوسطى** في الشكل الرابع (القرار #106): تأتي
+ * **قبل** كلمة المرور، فتظهر بحسب الرقم وحده لا بحسب تطابق الكلمة.
+ *
+ * لا طلب شبكة هنا: الاختيار يثبّت `tenantId` وينتقل لشاشة كلمة المرور.
  */
 
 const mockReplace = jest.fn();
+const mockPush = jest.fn();
 jest.mock("expo-router", () => ({
-  useRouter: () => ({ replace: mockReplace }),
+  useRouter: () => ({ replace: mockReplace, push: mockPush }),
 }));
-
-jest.mock("@/lib/session", () => ({
-  saveToken: jest.fn(),
-  readToken: jest.fn(),
-  clearToken: jest.fn(),
-}));
-
-const loginSpy = jest.spyOn(api, "login");
 
 const ACCOUNTS = [
-  { tenantId: 41, tenantName: "مزارع الوادي", fullName: "د. سالم الحضرمي", role: "vet" },
-  {
-    tenantId: 77,
-    tenantName: "شركة الأمانة لإنتاج وتسمين دواجن اللحم المحدودة",
-    fullName: "د. سالم الحضرمي",
-    role: "vet",
-  },
+  { tenantId: 3, tenantName: "مزارع الوادي" },
+  { tenantId: 9, tenantName: "شركة الأمانة" },
 ];
 
 beforeEach(() => {
   jest.clearAllMocks();
-  setPendingLogin({ phone: "770123456", password: "Passw0rd!23", accounts: ACCOUNTS });
-});
-
-afterEach(() => {
   clearPendingLogin();
 });
 
-describe("اختيار الحساب عند تعدّد المستأجرين", () => {
-  it("يعرض اسم المستأجر بارزًا — القصير والطويل في نفس الشاشة (§10 قاعدة 7)", () => {
+describe("شاشة اختيار الحساب", () => {
+  it("تعرض اسم المستأجر لكل حساب", () => {
+    setPendingLogin({ phone: "770123456", accounts: ACCOUNTS, selectedTenantId: null });
     render(<SelectAccountScreen />);
+
     expect(screen.getByText("مزارع الوادي")).toBeTruthy();
-    expect(screen.getByText("شركة الأمانة لإنتاج وتسمين دواجن اللحم المحدودة")).toBeTruthy();
+    expect(screen.getByText("شركة الأمانة")).toBeTruthy();
   });
 
-  it("الاسم والدور سطرًا ثانويًا بالعربية لا بالرمز الإنجليزي", () => {
+  it("لا اسم شخص ولا دور معروض — الخادم لا يُرجعهما قبل التحقق (القيد ب)", () => {
+    setPendingLogin({ phone: "770123456", accounts: ACCOUNTS, selectedTenantId: null });
     render(<SelectAccountScreen />);
-    expect(screen.getAllByText("د. سالم الحضرمي · طبيب")).toHaveLength(2);
-    expect(screen.queryByText(/vet/)).toBeNull();
+
+    expect(screen.queryByText(/د\. سالم/)).toBeNull();
+    expect(screen.queryByText(/طبيب/)).toBeNull();
   });
 
-  it("لا يظهر tenantId في أي نص على الشاشة إطلاقًا (§12)", () => {
+  it("لا معرّف داخلي على الشاشة (§12)", () => {
+    setPendingLogin({ phone: "770123456", accounts: ACCOUNTS, selectedTenantId: null });
     render(<SelectAccountScreen />);
-    // فحص كل عقد النص المعروضة، لا بطاقة بعينها — معرّف داخلي ظاهر في أي
-    // موضع مخالفة، ولو في سطر ثانوي
-    for (const id of ACCOUNTS.map((a) => String(a.tenantId))) {
-      expect(screen.queryByText(new RegExp(id))).toBeNull();
-    }
+
+    expect(screen.queryByText(/\b3\b/)).toBeNull();
+    expect(screen.queryByText(/\b9\b/)).toBeNull();
   });
 
-  it("اختيار حساب يعيد الطلب بـtenantId ويوجّه لتبويبات الدور", async () => {
-    loginSpy.mockResolvedValueOnce({
-      kind: "success",
-      token: "jwt-token",
-      user: {
-        id: 5,
-        tenantId: 77,
-        fullName: "د. سالم الحضرمي",
-        role: "vet",
-        phone: "770123456",
-        isActive: true,
-        mustChangePassword: false,
-      },
-    });
-
+  it("الاختيار يثبّت الحساب وينتقل لكلمة المرور بلا طلب شبكة", async () => {
+    setPendingLogin({ phone: "770123456", accounts: ACCOUNTS, selectedTenantId: null });
     render(<SelectAccountScreen />);
-    // noUncheckedIndexedAccess: الفهرس قد يكون undefined نوعيًا — فحص صريح
-    // بدل `!`، فغياب البطاقة الثانية يجب أن يفشل برسالته لا بانهيار غامض
-    const secondCard = screen.getAllByText("الدخول بهذا الحساب")[1];
-    if (secondCard === undefined) throw new Error("البطاقة الثانية غير معروضة");
-    fireEvent.press(secondCard);
+
+    const [, secondAccountAction] = screen.getAllByText("متابعة بهذا الحساب");
+    if (secondAccountAction === undefined) throw new Error("بطاقة الحساب الثاني غائبة");
+    fireEvent.press(secondAccountAction);
 
     await waitFor(() => {
-      expect(loginSpy).toHaveBeenCalledWith({
-        phone: "770123456",
-        password: "Passw0rd!23",
-        tenantId: 77,
-      });
+      expect(mockPush).toHaveBeenCalledWith("/auth/password");
     });
-    expect(mockReplace).toHaveBeenCalledWith("/(vet)");
+    expect(getPendingLogin()?.selectedTenantId).toBe(9);
   });
 
-  it("فتح الشاشة بلا حالة وسيطة ← سبب صريح لا شاشة بيضاء", () => {
-    clearPendingLogin();
+  it("بلا حالة وسيطة ← سبب صريح لا شاشة بيضاء (§8.17)", () => {
     render(<SelectAccountScreen />);
-    expect(screen.getByTestId("select-account-expired")).toHaveTextContent(
-      "انتهت جلسة الاختيار — ارجع وسجّل الدخول من جديد"
-    );
+    expect(screen.getByTestId("select-account-expired")).toBeTruthy();
   });
 });

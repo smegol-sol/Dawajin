@@ -74,4 +74,11 @@ export function loginErrorView(failure: LoginFailure): LoginErrorView {
 export const LOGIN_VALIDATION = {
   phoneRequired: "أدخل رقم الجوال",
   passwordRequired: "أدخل كلمة المرور",
+  /**
+   * لا حساب لهذا الرقم. يكشف أن الرقم غير مسجَّل — تسريب مقبول صراحةً في
+   * القرار #106 وموازنته: أخفّ بمراتب من الاستيلاء الكامل الذي كان ممكنًا،
+   * والبديل (رسالة غامضة ثم شاشة كلمة مرور لحساب غير موجود) يترك المستخدم
+   * يجرّب كلمات مرور لرقم خاطئ بلا سبب مفهوم.
+   */
+  phoneNotRegistered: "لا يوجد حساب بهذا الرقم — راجع المشرف",
 } as const;

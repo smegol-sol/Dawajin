@@ -1,6 +1,13 @@
 import { AxiosHeaders } from "axios";
 
-import { LoginRequestError, apiClient, changePassword, fetchCurrentUser, login } from "@/lib/api";
+import {
+  LoginRequestError,
+  apiClient,
+  changePassword,
+  fetchAccountsForPhone,
+  fetchCurrentUser,
+  login,
+} from "@/lib/api";
 
 /**
  * `login()` — تفسير جسم الاستجابة. الحالة الحرجة هي **200 بجسم ناقص**:
@@ -37,35 +44,34 @@ describe("تفسير استجابة POST /auth/login", () => {
     };
     postSpy.mockResolvedValueOnce(ok({ token: "jwt", user }));
 
-    await expect(login({ phone: "770123456", password: "x" })).resolves.toEqual({
-      kind: "success",
+    await expect(login({ phone: "770123456", password: "x", tenantId: 3 })).resolves.toEqual({
       token: "jwt",
       user,
     });
   });
 
-  it("needsTenantSelection ← قائمة الحسابات بلا توكن", async () => {
-    const accounts = [
-      { tenantId: 3, tenantName: "مزارع الوادي", fullName: "د. سالم", role: "vet" },
-    ];
-    postSpy.mockResolvedValueOnce(ok({ needsTenantSelection: true, accounts }));
+  it("fetchAccountsForPhone ← قائمة المستأجرين بلا اسم ولا دور (القيد ب، القرار #106)", async () => {
+    const accounts = [{ tenantId: 3, tenantName: "مزارع الوادي" }];
+    postSpy.mockResolvedValueOnce(ok({ accounts }));
 
-    await expect(login({ phone: "770123456", password: "x" })).resolves.toEqual({
-      kind: "needsTenantSelection",
-      accounts,
-    });
+    await expect(fetchAccountsForPhone("770123456")).resolves.toEqual(accounts);
+  });
+
+  it("fetchAccountsForPhone ← قائمة فارغة حين لا حساب", async () => {
+    postSpy.mockResolvedValueOnce(ok({}));
+    await expect(fetchAccountsForPhone("770123456")).resolves.toEqual([]);
   });
 
   it("200 بجسم ناقص (لا توكن ولا مستخدم) ← فشل صريح لا نجاح ناقص", async () => {
     postSpy.mockResolvedValueOnce(ok({}));
-    await expect(login({ phone: "770123456", password: "x" })).rejects.toBeInstanceOf(
+    await expect(login({ phone: "770123456", password: "x", tenantId: 3 })).rejects.toBeInstanceOf(
       LoginRequestError
     );
   });
 
   it("فشل الطلب ← LoginRequestError لا خطأ axios خام", async () => {
     postSpy.mockRejectedValueOnce(new Error("boom"));
-    await expect(login({ phone: "770123456", password: "x" })).rejects.toBeInstanceOf(
+    await expect(login({ phone: "770123456", password: "x", tenantId: 3 })).rejects.toBeInstanceOf(
       LoginRequestError
     );
   });

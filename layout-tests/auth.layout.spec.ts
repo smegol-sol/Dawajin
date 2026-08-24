@@ -13,49 +13,56 @@ import { expect, test, type Page } from "@playwright/test";
  * بقاعدة بيانات يجعل فشلها غامضًا بين تخطيط وبيانات.
  */
 
-const ACCOUNTS = [
-  {
-    tenantId: 41,
-    // اسم قصير واسم طويل عمدًا في نفس الشاشة — §10 قاعدة 7
-    tenantName: "مزارع الوادي",
-    fullName: "د. سالم الحضرمي",
-    role: "vet",
-  },
-  {
-    tenantId: 77,
-    tenantName: "شركة الأمانة لإنتاج وتسمين دواجن اللحم المحدودة",
-    fullName: "د. سالم الحضرمي",
-    role: "vet",
-  },
-];
+// اسم قصير واسم طويل عمدًا في نفس الشاشة — §10 قاعدة 7
+const SHORT_NAME_ACCOUNT = { tenantId: 41, tenantName: "مزارع الوادي" };
+const LONG_NAME_ACCOUNT = {
+  tenantId: 77,
+  tenantName: "شركة الأمانة لإنتاج وتسمين دواجن اللحم المحدودة",
+};
+const ACCOUNTS = [SHORT_NAME_ACCOUNT, LONG_NAME_ACCOUNT];
 
 /**
- * يستبدل استجابة تسجيل الدخول بطلب اختيار حساب — بلا خادم ولا قاعدة.
+ * يستبدل استجابة **تعداد حسابات الرقم** — لا استجابة الدخول: منذ الشكل الرابع
+ * (القرار #106) شاشة الاختيار تُبنى من `POST /api/auth/accounts` قبل أن تُطلب
+ * كلمة المرور، فالمسار المستبدَل تغيّر معها.
  *
- * النمط يجب أن يتضمّن بادئة `/api` لا أن ينتهي بـ`/auth/login` وحده: الأخير
- * يطابق **تنقّل الصفحة نفسه** (`/auth/login`) فيُستبدَل مستند HTML بـJSON
- * ولا يُقلَع التطبيق أصلًا — كلّف هذا خمس محاولات فاشلة قبل تشخيصه.
+ * النمط يجب أن يتضمّن بادئة `/api` لا أن ينتهي بالمسار وحده: الأخير يطابق
+ * **تنقّل الصفحة نفسه** فيُستبدَل مستند HTML بـJSON ولا يُقلَع التطبيق أصلًا —
+ * كلّف هذا خمس محاولات فاشلة قبل تشخيصه.
  */
-async function stubTenantSelection(page: Page): Promise<void> {
-  await page.route("**/api/auth/login", async (route) => {
+async function stubAccounts(page: Page, accounts: typeof ACCOUNTS): Promise<void> {
+  await page.route("**/api/auth/accounts", async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({ needsTenantSelection: true, accounts: ACCOUNTS }),
+      body: JSON.stringify({ accounts }),
     });
   });
 }
 
 /** يمرّ بشاشة الدخول فعليًا حتى شاشة اختيار الحساب — لا انتقال مباشر بالرابط. */
 async function reachSelectAccount(page: Page): Promise<void> {
-  await stubTenantSelection(page);
+  await stubAccounts(page, ACCOUNTS);
   await page.goto("/auth/login");
 
   await page.getByTestId("login-phone").fill("770000000");
-  await page.getByTestId("login-password").fill("Passw0rd!23");
-  await page.getByRole("button", { name: "تسجيل الدخول" }).click();
+  await page.getByRole("button", { name: "متابعة" }).click();
 
   await expect(page.getByTestId("account-card-0")).toBeVisible();
+}
+
+/**
+ * يمرّ حتى شاشة كلمة المرور عبر مسار **الحساب الواحد** — شاشة الاختيار
+ * تُتخطّى، وهو المسار الشائع في الميدان (مربٍّ لدى مالك واحد).
+ */
+async function reachPassword(page: Page): Promise<void> {
+  await stubAccounts(page, [SHORT_NAME_ACCOUNT]);
+  await page.goto("/auth/login");
+
+  await page.getByTestId("login-phone").fill("770000000");
+  await page.getByRole("button", { name: "متابعة" }).click();
+
+  await expect(page.getByTestId("password-field")).toBeVisible();
 }
 
 /**
@@ -180,6 +187,12 @@ const AUTH_SCREENS: AuthScreenCase[] = [
     open: reachSelectAccount,
   },
   {
+    name: "كلمة المرور",
+    screenTestID: "password-screen",
+    hasFooter: true,
+    open: reachPassword,
+  },
+  {
     name: "تغيير كلمة المرور",
     screenTestID: "change-password-screen",
     hasFooter: true,
@@ -244,15 +257,15 @@ test.describe("رسائل الخطأ تحت الحقل لا أعلى الشاش�
       });
     });
 
-    await page.goto("/auth/login");
-    await page.getByTestId("login-phone").fill("770000000");
-    await page.getByTestId("login-password").fill("wrong");
+    // كلمة المرور صارت على شاشتها الخاصة (القرار #106)، فالرسالة تُقاس هناك
+    await reachPassword(page);
+    await page.getByTestId("password-field").fill("wrong");
     await page.getByRole("button", { name: "تسجيل الدخول" }).click();
 
-    const message = page.getByTestId("login-password-error");
+    const message = page.getByTestId("password-field-error");
     await expect(message).toBeVisible();
 
-    const field = await boxOf(page, "login-password");
+    const field = await boxOf(page, "password-field");
     const messageBox = await message.boundingBox();
     if (messageBox === null) throw new Error("رسالة الخطأ غير مرئية");
 
@@ -260,14 +273,25 @@ test.describe("رسائل الخطأ تحت الحقل لا أعلى الشاش�
     expect(messageBox.y).toBeGreaterThanOrEqual(field.y + field.height);
   });
 
-  test("النص الإرشادي لصيغة الجوال تحت حقله مباشرة وفوق حقل كلمة المرور", async ({ page }) => {
+  /**
+   * كان هذا التأكيد يقيس «فوق حقل كلمة المرور»، وقد زال ذلك الحقل من شاشة
+   * الدخول مع الشكل الرابع. المقياس البديل هو ما كانت القاعدة تحرسه فعلًا
+   * (§8.11): السطر يخصّ الحقل **الذي فوقه** لا ما يليه — فيلتصق بأسفل الحقل
+   * ويبقى ضمن كتلة النموذج، لا مدفوعًا لأسفل الشاشة عند الإجراء.
+   */
+  test("النص الإرشادي لصيغة الجوال ملتصق بحقله لا بالإجراء الذي يليه", async ({ page }) => {
     await page.goto("/auth/login");
 
     const phone = await boxOf(page, "login-phone");
     const hint = await boxOf(page, "login-phone-hint");
-    const password = await boxOf(page, "login-password");
+    const footer = await anchorBox(page, "login-screen", "auth-footer");
 
-    expect(hint.y).toBeGreaterThanOrEqual(phone.y + phone.height);
-    expect(hint.y).toBeLessThan(password.y);
+    const gapAbove = hint.y - (phone.y + phone.height);
+    const gapBelow = footer.y - (hint.y + hint.height);
+
+    expect(gapAbove).toBeGreaterThanOrEqual(0);
+    expect(hint.y + hint.height).toBeLessThan(footer.y);
+    // أقرب لحقله من الإجراء التالي — وهو ما يجعله يُقرأ كسطر توضيحي له
+    expect(gapAbove).toBeLessThan(gapBelow);
   });
 });

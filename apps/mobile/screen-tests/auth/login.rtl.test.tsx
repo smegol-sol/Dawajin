@@ -2,15 +2,16 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react-nativ
 
 import LoginScreen from "@/app/auth/login";
 import * as api from "@/lib/api";
+import { getPendingLogin } from "@/lib/pendingLogin";
 import * as session from "@/lib/session";
 import { textStyleOf } from "@/test-utils/rtl";
 
 /**
- * شاشة الدخول — كل رسالة خطأ **تظهر فعليًا على الشاشة**، والرمز يُحفظ في
- * `expo-secure-store` حصريًا، والتوجيه يقع للوجهة الصحيحة.
+ * شاشة الدخول — **الخطوة الأولى** في الشكل الرابع (القرار #106): الرقم وحده،
+ * بلا كلمة مرور. تُختبر ثلاث نهايات: لا حساب · حساب واحد (تُتخطّى شاشة
+ * الاختيار) · أكثر من حساب.
  *
- * `login` و`saveToken` مُستبدلان: الاختبار على سلوك الشاشة لا على الشبكة.
- * الشاشة تُصيَّر بمكوّنات حقيقية (لا نسخ وهمية عنها) فما يُفحص هو ما يُعرض.
+ * `fetchAccountsForPhone` مُستبدَلة: الاختبار على سلوك الشاشة لا على الشبكة.
  */
 
 const mockReplace = jest.fn();
@@ -25,136 +26,96 @@ jest.mock("@/lib/session", () => ({
   clearToken: jest.fn(),
 }));
 
-const loginSpy = jest.spyOn(api, "login");
+const accountsSpy = jest.spyOn(api, "fetchAccountsForPhone");
 const saveTokenSpy = session.saveToken as jest.Mock;
 
-function fillAndSubmit(phone = "770123456", password = "Passw0rd!23"): void {
+function submit(phone = "770123456"): void {
   fireEvent.changeText(screen.getByTestId("login-phone"), phone);
-  fireEvent.changeText(screen.getByTestId("login-password"), password);
-  fireEvent.press(screen.getByText("تسجيل الدخول"));
-}
-
-function rejectWith(status: number | null, code: string | null): void {
-  loginSpy.mockRejectedValueOnce(new api.LoginRequestError({ status, code }));
+  fireEvent.press(screen.getByText("متابعة"));
 }
 
 beforeEach(() => {
   jest.clearAllMocks();
 });
 
-describe("شاشة تسجيل الدخول — رسائل الخطأ الأربع تحت الحقل", () => {
-  it.each([
-    [401, "invalid_credentials", "login-password-error", "رقم الجوال أو كلمة المرور غير صحيحة"],
-    [403, "account_disabled", "login-form-error", "حسابك معطّل — راجع المشرف"],
-    [429, "too_many_attempts", "login-form-error", "محاولات كثيرة — انتظر دقيقة ثم أعد المحاولة"],
-    [
-      null,
-      null,
-      "login-form-error",
-      "تعذّر الاتصال بالخادم — تحقّق من الشبكة في العنبر ثم أعد المحاولة",
-    ],
-  ])("حالة %s/%s تعرض الرسالة في %s", async (status, code, testId, message) => {
-    rejectWith(status, code);
+describe("شاشة الدخول — الرقم وحده لا كلمة مرور (القرار #106)", () => {
+  it("لا حقل كلمة مرور على هذه الشاشة إطلاقًا", () => {
     render(<LoginScreen />);
-    fillAndSubmit();
-
-    await waitFor(() => {
-      expect(screen.getByTestId(testId)).toHaveTextContent(message);
-    });
+    expect(screen.queryByTestId("login-password")).toBeNull();
   });
 
-  it("حقل فارغ ← رسالة تحت الحقل نفسه بلا أي طلب شبكة", async () => {
+  it("رقم فارغ ← رسالة تحت الحقل بلا أي طلب شبكة", async () => {
     render(<LoginScreen />);
-    fireEvent.press(screen.getByText("تسجيل الدخول"));
+    fireEvent.press(screen.getByText("متابعة"));
 
     await waitFor(() => {
       expect(screen.getByTestId("login-phone-error")).toHaveTextContent("أدخل رقم الجوال");
     });
-    expect(loginSpy).not.toHaveBeenCalled();
+    expect(accountsSpy).not.toHaveBeenCalled();
   });
 
-  it("رسالة الخطأ محاذاة يمينًا باتجاه rtl (§10 قاعدة 4)", async () => {
-    rejectWith(401, "invalid_credentials");
+  it("لا حساب بهذا الرقم ← رسالة صريحة تحت الحقل", async () => {
+    accountsSpy.mockResolvedValueOnce([]);
     render(<LoginScreen />);
-    fillAndSubmit();
-
-    const message = await screen.findByTestId("login-password-error");
-    const style = textStyleOf(message);
-    expect(style.textAlign).toBe("right");
-    expect(style.writingDirection).toBe("rtl");
-  });
-});
-
-describe("شاشة تسجيل الدخول — التوجيه بعد النجاح", () => {
-  it.each([
-    ["farmer", "/(farmer)"],
-    ["supervisor", "/(supervisor)"],
-    ["vet", "/(vet)"],
-    ["owner", "/(owner)"],
-  ])("الدور %s ← %s، والرمز محفوظ في المخزن الآمن", async (role, expected) => {
-    loginSpy.mockResolvedValueOnce({
-      kind: "success",
-      token: "jwt-token",
-      user: {
-        id: 1,
-        tenantId: 3,
-        fullName: "اسم المستخدم",
-        role,
-        phone: "770123456",
-        isActive: true,
-        mustChangePassword: false,
-      },
-    });
-    render(<LoginScreen />);
-    fillAndSubmit();
+    submit();
 
     await waitFor(() => {
-      expect(mockReplace).toHaveBeenCalledWith(expected);
+      expect(screen.getByTestId("login-phone-error")).toHaveTextContent(
+        "لا يوجد حساب بهذا الرقم — راجع المشرف"
+      );
     });
-    // expo-secure-store حصريًا للرمز (§11) — لا مخزن آخر
-    expect(saveTokenSpy).toHaveBeenCalledWith("jwt-token");
+    expect(mockPush).not.toHaveBeenCalled();
   });
-});
 
-describe("شاشة تسجيل الدخول — المسارات غير المباشرة", () => {
-  it("must_change_password ← شاشة تغيير كلمة المرور لا تبويبات الدور", async () => {
-    loginSpy.mockResolvedValueOnce({
-      kind: "success",
-      token: "jwt-token",
-      user: {
-        id: 1,
-        tenantId: 3,
-        fullName: "مربي جديد",
-        role: "farmer",
-        phone: "770123456",
-        isActive: true,
-        mustChangePassword: true,
-      },
-    });
+  it("حساب واحد ← شاشة كلمة المرور مباشرة (تُتخطّى شاشة الاختيار)", async () => {
+    accountsSpy.mockResolvedValueOnce([{ tenantId: 3, tenantName: "مزارع الوادي" }]);
     render(<LoginScreen />);
-    fillAndSubmit();
+    submit();
 
     await waitFor(() => {
-      expect(mockReplace).toHaveBeenCalledWith("/auth/change-password");
+      expect(mockPush).toHaveBeenCalledWith("/auth/password");
     });
-    expect(mockReplace).not.toHaveBeenCalledWith("/(farmer)");
+    expect(getPendingLogin()?.selectedTenantId).toBe(3);
+    expect(saveTokenSpy).not.toHaveBeenCalled();
   });
 
-  it("needsTenantSelection ← شاشة اختيار الحساب بلا حفظ أي رمز", async () => {
-    loginSpy.mockResolvedValueOnce({
-      kind: "needsTenantSelection",
-      accounts: [
-        { tenantId: 3, tenantName: "مزارع الوادي", fullName: "د. سالم", role: "vet" },
-        { tenantId: 9, tenantName: "شركة الأمانة", fullName: "د. سالم", role: "vet" },
-      ],
-    });
+  it("أكثر من حساب ← شاشة الاختيار بلا حساب مثبَّت", async () => {
+    accountsSpy.mockResolvedValueOnce([
+      { tenantId: 3, tenantName: "مزارع الوادي" },
+      { tenantId: 9, tenantName: "شركة الأمانة" },
+    ]);
     render(<LoginScreen />);
-    fillAndSubmit();
+    submit();
 
     await waitFor(() => {
       expect(mockPush).toHaveBeenCalledWith("/auth/select-account");
     });
-    // لا توكن في هذه الاستجابة — أي حفظ هنا يعني جلسة بحساب غير محسوم
+    expect(getPendingLogin()?.selectedTenantId).toBeNull();
     expect(saveTokenSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe("شاشة الدخول — الفشل يقول سببه (§8.17)", () => {
+  it("انقطاع الشبكة ← رسالة سببها لا شاشة معلّقة", async () => {
+    accountsSpy.mockRejectedValueOnce(new api.LoginRequestError({ status: null, code: null }));
+    render(<LoginScreen />);
+    submit();
+
+    await waitFor(() => {
+      expect(screen.getByTestId("login-form-error")).toHaveTextContent(
+        "تعذّر الاتصال بالخادم — تحقّق من الشبكة في العنبر ثم أعد المحاولة"
+      );
+    });
+  });
+
+  it("رسالة الخطأ محاذاة يمينًا باتجاه rtl (§10 قاعدة 4)", async () => {
+    accountsSpy.mockResolvedValueOnce([]);
+    render(<LoginScreen />);
+    submit();
+
+    const message = await screen.findByTestId("login-phone-error");
+    const style = textStyleOf(message);
+    expect(style.textAlign).toBe("right");
+    expect(style.writingDirection).toBe("rtl");
   });
 });

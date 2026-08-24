@@ -6,14 +6,16 @@ import { AuthScreen } from "@/components/ui/AuthScreen";
 import { Button } from "@/components/ui/Button";
 import { FormField } from "@/components/ui/FormField";
 import { color, font, radius, spacing } from "@/constants/theme";
-import { LoginRequestError, login } from "@/lib/api";
+import { LoginRequestError, fetchAccountsForPhone } from "@/lib/api";
 import { LOGIN_VALIDATION, loginErrorView, type LoginErrorView } from "@/lib/authErrors";
-import { targetAfterLogin } from "@/lib/authFlow";
 import { setPendingLogin } from "@/lib/pendingLogin";
-import { saveToken } from "@/lib/session";
 
 /**
- * شاشة تسجيل الدخول — نمط "نموذج إدخال" (§9-4): تدفق رأسي واحد، الإجراء
+ * شاشة تسجيل الدخول — **الخطوة الأولى** في تدفّق الشكل الرابع (القرار #106):
+ * الرقم وحده بلا كلمة مرور. الخادم يعيد حسابات الرقم، ثم تُطلب كلمة المرور
+ * مقابل حساب محدَّد — فلا تُقارَن كلمة شخص بصف شخص آخر أبدًا.
+ *
+ * نمط "نموذج إدخال" (§9-4): تدفق رأسي واحد، الإجراء
  * أسفل الشاشة (قاعدة الإبهام §11)، وكل رسالة خطأ **تحت حقلها مباشرة** لا
  * أعلى الشاشة (§8.11).
  *
@@ -27,12 +29,11 @@ import { saveToken } from "@/lib/session";
 export default function LoginScreen() {
   const router = useRouter();
   const [phone, setPhone] = useState("");
-  const [password, setPassword] = useState("");
   const [error, setError] = useState<LoginErrorView | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   async function handleSubmit(): Promise<void> {
-    const invalid = validate(phone, password);
+    const invalid = validate(phone);
     if (invalid !== null) {
       setError(invalid);
       return;
@@ -41,7 +42,7 @@ export default function LoginScreen() {
     setError(null);
     setSubmitting(true);
     try {
-      setError(await submitLogin({ phone: phone.trim(), password, router }));
+      setError(await submitPhone({ phone: phone.trim(), router }));
     } catch (caught: unknown) {
       setError(failureView(caught));
     } finally {
@@ -60,7 +61,7 @@ export default function LoginScreen() {
       }
       footer={
         <Button
-          label={submitting ? "جارٍ تسجيل الدخول" : "تسجيل الدخول"}
+          label={submitting ? "جارٍ البحث" : "متابعة"}
           variant="primary"
           formSize
           onPress={() => {
@@ -70,13 +71,7 @@ export default function LoginScreen() {
         />
       }
     >
-      <LoginFields
-        phone={phone}
-        password={password}
-        error={error}
-        onPhoneChange={setPhone}
-        onPasswordChange={setPassword}
-      />
+      <LoginFields phone={phone} error={error} onPhoneChange={setPhone} />
     </AuthScreen>
   );
 }
@@ -84,16 +79,12 @@ export default function LoginScreen() {
 /** الحقلان ورسائلهما — التسمية فوق الحقل والخطأ تحته مباشرة (§8.11). */
 function LoginFields({
   phone,
-  password,
   error,
   onPhoneChange,
-  onPasswordChange,
 }: {
   phone: string;
-  password: string;
   error: LoginErrorView | null;
   onPhoneChange: (value: string) => void;
-  onPasswordChange: (value: string) => void;
 }) {
   const errorFor = (field: LoginErrorView["field"]): string | undefined =>
     error?.field === field ? error.message : undefined;
@@ -120,18 +111,6 @@ function LoginFields({
         </Text>
       </View>
 
-      <FormField
-        label="كلمة المرور"
-        type="text"
-        value={password}
-        onChangeText={onPasswordChange}
-        secureTextEntry
-        autoComplete="current-password"
-        placeholder="كلمة المرور التي سلّمها لك المشرف"
-        testID="login-password"
-        error={errorFor("password")}
-      />
-
       {error?.field === "form" ? (
         <Text style={styles.formError} testID="login-form-error" accessibilityRole="alert">
           {error.message}
@@ -142,40 +121,33 @@ function LoginFields({
 }
 
 /** تحقق محلي قبل أي طلب شبكة — الرسالة تحت الحقل الناقص نفسه. */
-function validate(phone: string, password: string): LoginErrorView | null {
+function validate(phone: string): LoginErrorView | null {
   if (phone.trim().length === 0) {
     return { field: "phone", message: LOGIN_VALIDATION.phoneRequired };
-  }
-  if (password.length === 0) {
-    return { field: "password", message: LOGIN_VALIDATION.passwordRequired };
   }
   return null;
 }
 
 /**
- * ينفّذ الطلب وينتقل بنتيجته.
+ * يجلب حسابات الرقم وينتقل بالنتيجة (القرار #106):
+ * صفر ← رسالة · واحد ← كلمة المرور مباشرة · أكثر ← شاشة الاختيار.
  * @returns رسالة خطأ تُعرض على الشاشة، أو null إن تمّ الانتقال
  */
-async function submitLogin(args: {
+async function submitPhone(args: {
   phone: string;
-  password: string;
   router: ReturnType<typeof useRouter>;
 }): Promise<LoginErrorView | null> {
-  const { phone, password, router } = args;
-  const result = await login({ phone, password });
+  const { phone, router } = args;
+  const accounts = await fetchAccountsForPhone(phone);
 
-  if (result.kind === "needsTenantSelection") {
-    // كلمة المرور تبقى في الذاكرة وحدها لإعادة الطلب مع tenantId المختار
-    setPendingLogin({ phone, password, accounts: result.accounts });
-    router.push("/auth/select-account");
-    return null;
+  if (accounts.length === 0) {
+    return { field: "phone", message: LOGIN_VALIDATION.phoneNotRegistered };
   }
 
-  await saveToken(result.token);
-
-  const target = targetAfterLogin(result.user);
-  if (target.kind === "error") return { field: "form", message: target.message };
-  router.replace(target.href);
+  const single = accounts.length === 1 ? accounts[0] : undefined;
+  setPendingLogin({ phone, accounts, selectedTenantId: single ? single.tenantId : null });
+  // حساب واحد: لا معنى لشاشة اختيار من عنصر واحد — تُتخطّى لكلمة المرور
+  router.push(single ? "/auth/password" : "/auth/select-account");
   return null;
 }
 

@@ -51,6 +51,7 @@ export default function RootLayout() {
       >
         <Stack.Screen name="auth/login" />
         <Stack.Screen name="auth/select-account" />
+        <Stack.Screen name="auth/password" />
         {/* بلا إيماءة رجوع: التغيير إجباري ولا يُتجاوَز (زر رجوع أندرويد
             معترَض داخل الشاشة نفسها أيضًا) */}
         <Stack.Screen name="auth/change-password" options={{ gestureEnabled: false }} />

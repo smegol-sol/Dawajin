@@ -1,65 +1,37 @@
 import { useRouter } from "expo-router";
-import { useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
 import { AuthScreen } from "@/components/ui/AuthScreen";
 import { Card } from "@/components/ui/Card";
 import { color, font, spacing } from "@/constants/theme";
-import { LoginRequestError, login } from "@/lib/api";
 import type { SelectableAccount } from "@/lib/api";
-import { loginErrorView, type LoginErrorView } from "@/lib/authErrors";
-import { targetAfterLogin } from "@/lib/authFlow";
-import { clearPendingLogin, getPendingLogin } from "@/lib/pendingLogin";
-import { saveToken } from "@/lib/session";
-
-const ROLE_LABEL: Record<string, string> = {
-  farmer: "مربي",
-  supervisor: "مشرف",
-  vet: "طبيب",
-  owner: "مالك",
-};
+import { getPendingLogin, selectPendingTenant } from "@/lib/pendingLogin";
 
 /**
- * اختيار الحساب عند تطابق الجوال وكلمة المرور مع أكثر من مستأجر — طبيب
- * مستقل يخدم عدة ملّاك (القرار #57).
+ * اختيار الحساب حين يكون الرقم مسجَّلًا لدى أكثر من مالك — طبيب مستقل مثلًا
+ * (القرار #57). **الخطوة الوسطى** في تدفّق الشكل الرابع (القرار #106): تأتي
+ * **قبل** كلمة المرور لا بعدها، فلا تعود تظهر بحسب تطابق الكلمة (قناة جانبية
+ * كانت تقول «كلمتك تطابق أكثر من حساب»)، بل بحسب الرقم وحده.
  *
  * **بلا AppHeader** (القرار #93): متغيّرا §8.8 كلاهما يفترضان مستخدمًا داخل
  * التطبيق — سهم الرجوع يفترض شاشة سابقة يُرجَع إليها، والجرس يفترض إشعارات
- * لحساب قائم. هنا كلمة المرور تحققت لكن **لم يُختَر حساب بعد**، فلا جلسة
+ * لحساب قائم. هنا **لم يُختَر حساب بعد ولم تُدخَل كلمة مرور أصلًا**، فلا جلسة
  * ولا إشعارات، والرجوع بلا وجهة. كتلة عنوان بسيطة كشاشة الدخول قبلها.
  *
- * البطاقة تعرض **اسم المستأجر** بارزًا لأنه وحده ما يميّز الحسابين، والاسم
- * والدور ثانويَّين تحته (القرار #84). **`tenantId` يُرسَل ولا يُعرَض إطلاقًا**
- * — §12 تمنع أي معرّف داخلي على الشاشة.
+ * البطاقة تعرض **اسم المستأجر وحده** — لا اسم ولا دور: الخادم لا يُرجعهما
+ * قبل التحقق (القيد ب في #106)، لأن إرجاع الاسم الكامل يحوّل التسريب من «هذا
+ * الرقم مسجَّل لدى مزرعة» إلى «هذا الرقم يخصّ فلانًا تحديدًا».
+ * **`tenantId` يُرسَل ولا يُعرَض إطلاقًا** — §12 تمنع أي معرّف داخلي على الشاشة.
  */
 export default function SelectAccountScreen() {
   const router = useRouter();
   const pending = getPendingLogin();
-  const [error, setError] = useState<LoginErrorView | null>(null);
-  const [submitting, setSubmitting] = useState(false);
 
-  async function chooseAccount(tenantId: number): Promise<void> {
-    if (pending === null || submitting) return;
-    setError(null);
-    setSubmitting(true);
-    try {
-      setError(
-        await resolveAccount({
-          phone: pending.phone,
-          password: pending.password,
-          tenantId,
-          router,
-        })
-      );
-    } catch (caught: unknown) {
-      setError(
-        caught instanceof LoginRequestError
-          ? loginErrorView(caught.failure)
-          : loginErrorView({ status: null, code: null })
-      );
-    } finally {
-      setSubmitting(false);
-    }
+  // لا طلب شبكة هنا: الاختيار يثبّت الحساب فقط، وكلمة المرور تُطلب بعده
+  function chooseAccount(tenantId: number): void {
+    if (pending === null) return;
+    selectPendingTenant(tenantId);
+    router.push("/auth/password");
   }
 
   return (
@@ -76,12 +48,6 @@ export default function SelectAccountScreen() {
     >
       <View style={styles.list}>
         <AccountList accounts={pending?.accounts ?? null} onChoose={chooseAccount} />
-
-        {error !== null ? (
-          <Text style={styles.formError} testID="select-account-error" accessibilityRole="alert">
-            {error.message}
-          </Text>
-        ) : null}
       </View>
     </AuthScreen>
   );
@@ -93,7 +59,7 @@ function AccountList({
   onChoose,
 }: {
   accounts: SelectableAccount[] | null;
-  onChoose: (tenantId: number) => Promise<void>;
+  onChoose: (tenantId: number) => void;
 }) {
   if (accounts === null) {
     // فُتحت الشاشة بلا مسار دخول سابق (تحديث الصفحة على الويب مثلًا)
@@ -119,8 +85,8 @@ function AccountList({
 }
 
 /**
- * بطاقة حساب واحد. **اسم المستأجر عنوانًا** لأنه وحده ما يميّز الحسابين،
- * والاسم والدور سطرًا ثانويًا (القرار #84). لا `tenantId` في أي نص معروض.
+ * بطاقة حساب واحد. **اسم المستأجر وحده عنوانًا** — لا سطر ثانوي: هو كل ما
+ * يُرجعه الخادم قبل التحقق (القيد ب في #106). لا `tenantId` في أي نص معروض.
  */
 function AccountCard({
   account,
@@ -129,47 +95,18 @@ function AccountCard({
 }: {
   account: SelectableAccount;
   index: number;
-  onChoose: (tenantId: number) => Promise<void>;
+  onChoose: (tenantId: number) => void;
 }) {
   return (
     <Card
       testID={`account-card-${String(index)}`}
       title={account.tenantName}
-      subtitle={`${account.fullName} · ${ROLE_LABEL[account.role] ?? account.role}`}
-      primaryActionLabel="الدخول بهذا الحساب"
+      primaryActionLabel="متابعة بهذا الحساب"
       onPrimaryAction={() => {
-        void onChoose(account.tenantId);
+        onChoose(account.tenantId);
       }}
     />
   );
-}
-
-/**
- * يعيد الطلب بـ`tenantId` المختار وينتقل بنتيجته.
- * @returns رسالة خطأ تُعرض، أو null إن تمّ الانتقال
- */
-async function resolveAccount(args: {
-  phone: string;
-  password: string;
-  tenantId: number;
-  router: ReturnType<typeof useRouter>;
-}): Promise<LoginErrorView | null> {
-  const { phone, password, tenantId, router } = args;
-  const result = await login({ phone, password, tenantId });
-
-  if (result.kind === "needsTenantSelection") {
-    // غير متوقَّع: الطلب حُسم بـtenantId فلا يجوز أن يعود بطلب اختيار.
-    // يُعرض سببه لا يُبتلع صامتًا (§8.17: حالة الخطأ تعرض السبب).
-    return { field: "form", message: "تعذّر حسم الحساب — أعد تسجيل الدخول" };
-  }
-
-  await saveToken(result.token);
-  clearPendingLogin();
-
-  const target = targetAfterLogin(result.user);
-  if (target.kind === "error") return { field: "form", message: target.message };
-  router.replace(target.href);
-  return null;
 }
 
 const styles = StyleSheet.create({
@@ -199,13 +136,6 @@ const styles = StyleSheet.create({
     fontSize: font.size.content,
     fontFamily: font.familyRegular,
     color: color.textBody,
-    writingDirection: "rtl",
-    textAlign: "right",
-  },
-  formError: {
-    fontSize: font.size.content,
-    fontFamily: font.familyRegular,
-    color: color.statusCritical,
     writingDirection: "rtl",
     textAlign: "right",
   },

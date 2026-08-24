@@ -35,37 +35,56 @@ export interface AuthenticatedUser {
   mustChangePassword: boolean;
 }
 
-/** حساب معروض في شاشة اختيار الحساب — `tenantId` يُرسَل ولا يُعرَض (§12). */
+/**
+ * حساب معروض في شاشة اختيار الحساب — `tenantId` يُرسَل ولا يُعرَض (§12).
+ * **بلا اسم أو دور**: الخادم لا يُرجعهما قبل التحقق (القيد ب، القرار #106).
+ */
 export interface SelectableAccount {
   tenantId: number;
   tenantName: string;
-  fullName: string;
-  role: string;
 }
 
-export type LoginResult =
-  | { kind: "success"; token: string; user: AuthenticatedUser }
-  | { kind: "needsTenantSelection"; accounts: SelectableAccount[] };
+export interface LoginSuccess {
+  token: string;
+  user: AuthenticatedUser;
+}
 
 interface LoginResponseBody {
-  needsTenantSelection?: boolean;
-  accounts?: SelectableAccount[];
   token?: string;
   user?: AuthenticatedUser;
 }
 
+interface AccountsResponseBody {
+  accounts?: SelectableAccount[];
+}
+
 /**
- * `POST /auth/login`. يرمي `LoginRequestError` عند أي فشل — الشاشة تحوّله
- * لرسالة عبر `loginErrorView`.
- * @param input رقم الجوال (بأي صيغة — الخادم يطبّعها §11) وكلمة المرور،
- *              و`tenantId` عند حسم حساب بعد `needsTenantSelection`
- * @returns نجاح بتوكن، أو طلب اختيار حساب
+ * `POST /auth/accounts` — **الخطوة الأولى** في تدفّق الدخول (القرار #106):
+ * الرقم وحده، بلا كلمة مرور. الرد قائمة المستأجرين النشطين لهذا الرقم.
+ * @param phone رقم الجوال بأي صيغة — الخادم يطبّعه (§11)
+ * @returns الحسابات النشطة (قد تكون فارغة أو واحدًا أو أكثر)
+ */
+export async function fetchAccountsForPhone(phone: string): Promise<SelectableAccount[]> {
+  const response = await apiClient
+    .post<AccountsResponseBody>("/auth/accounts", { phone })
+    .catch((error: unknown) => {
+      throw toLoginRequestError(error);
+    });
+  return response.data.accounts ?? [];
+}
+
+/**
+ * `POST /auth/login` — **الخطوة الثانية**: كلمة المرور مقابل حساب محدَّد.
+ * يرمي `LoginRequestError` عند أي فشل — الشاشة تحوّله لرسالة عبر
+ * `loginErrorView`.
+ * @param input الجوال وكلمة المرور و`tenantId` **إلزاميًا** (القيد أ، #106)
+ * @returns الرمز والمستخدم عند النجاح
  */
 export async function login(input: {
   phone: string;
   password: string;
-  tenantId?: number;
-}): Promise<LoginResult> {
+  tenantId: number;
+}): Promise<LoginSuccess> {
   const response = await apiClient
     .post<LoginResponseBody>("/auth/login", input)
     .catch((error: unknown) => {
@@ -73,17 +92,13 @@ export async function login(input: {
     });
 
   const body = response.data;
-  if (body.needsTenantSelection === true) {
-    return { kind: "needsTenantSelection", accounts: body.accounts ?? [] };
-  }
-
   if (body.token === undefined || body.user === undefined) {
     // استجابة 200 بشكل غير متوقَّع — تُعامَل كفشل صريح لا كنجاح ناقص يمرّ
     // فيتعطّل التطبيق لاحقًا بعيدًا عن سببه
     throw new LoginRequestError({ status: response.status, code: null });
   }
 
-  return { kind: "success", token: body.token, user: body.user };
+  return { token: body.token, user: body.user };
 }
 
 /** يغيّر كلمة المرور للمستخدم صاحب الرمز، ويُسقط `mustChangePassword`. */
