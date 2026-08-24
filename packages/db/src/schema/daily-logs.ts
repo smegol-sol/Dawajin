@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   pgTable,
   serial,
@@ -11,12 +12,12 @@ import {
   index,
   type AnyPgColumn,
 } from "drizzle-orm/pg-core";
-import { sql } from "drizzle-orm";
+
 import { mortalityCauseEnum, reviewStatusEnum, feedStageEnum } from "./enums";
-import { tenants } from "./tenants";
 import { houses, batches } from "./farms";
-import { users } from "./users";
 import { products } from "./inventory";
+import { tenants } from "./tenants";
+import { users } from "./users";
 
 /**
  * السجل اليومي — غير قابل للتعديل (decisions.md #4). التصحيح بسجل جديد
@@ -52,26 +53,18 @@ export const dailyLogs = pgTable(
     photoUrls: text("photo_urls").array(),
     voiceNoteUrl: text("voice_note_url"),
     reviewStatus: reviewStatusEnum("review_status").notNull().default("none"),
-    correctionOfId: integer("correction_of_id").references(
-      (): AnyPgColumn => dailyLogs.id
-    ),
+    correctionOfId: integer("correction_of_id").references((): AnyPgColumn => dailyLogs.id),
     clientId: uuid("client_id"), // عطالة عند إعادة الإرسال
     createdBy: integer("created_by")
       .notNull()
       .references(() => users.id),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
     uniqueIndex("daily_logs_batch_date_uq")
       .on(table.batchId, table.logDate)
       .where(sql`${table.correctionOfId} IS NULL`),
-    index("daily_logs_tenant_house_date_idx").on(
-      table.tenantId,
-      table.houseId,
-      table.logDate
-    ),
+    index("daily_logs_tenant_house_date_idx").on(table.tenantId, table.houseId, table.logDate),
   ]
 );
 
@@ -100,7 +93,5 @@ export const logNotes = pgTable("log_notes", {
     .notNull()
     .references(() => users.id),
   body: text("body").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto";
+
 import type { Request, Response, NextFunction } from "express";
+
 import { runWithRequestContext } from "../lib/requestContext";
 
 const HEADER = "x-request-id";
@@ -16,5 +18,7 @@ export function requestId(req: Request, res: Response, next: NextFunction) {
   req.requestId = id;
   res.setHeader("X-Request-Id", id);
 
-  runWithRequestContext({ requestId: id }, () => next());
+  runWithRequestContext({ requestId: id }, () => {
+    next();
+  });
 }

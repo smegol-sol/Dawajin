@@ -1,4 +1,5 @@
 import { migrate } from "drizzle-orm/node-postgres/migrator";
+
 import { createDbClient } from "./client";
 
 /**
@@ -27,7 +28,7 @@ function maskUrl(url: string): string {
   }
 }
 
-main().catch((error) => {
+main().catch((error: unknown) => {
   console.error("[migrate] فشل:", error);
   process.exit(1);
 });

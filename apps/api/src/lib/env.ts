@@ -13,10 +13,22 @@ const envSchema = z.object({
 
 export type Env = z.infer<typeof envSchema>;
 
+/**
+ * يقرأ ويتحقق من متغيرات البيئة، مع حارس صريح ضد أشهر خطأ نشر (الإنتاج
+ * يشير لـlocalhost أو يستخدم سر JWT التطويري).
+ * @returns متغيرات البيئة مُحقَّقة الشكل مع القيم الافتراضية مطبَّقة
+ * @throws Error إن نقصت متغيرات مطلوبة، أو عند حارس بيئة الإنتاج
+ */
 export function loadEnv(): Env {
   const parsed = envSchema.safeParse(process.env);
   if (!parsed.success) {
-    console.error("[env] متغيرات بيئة ناقصة أو غير صالحة:", parsed.error.flatten().fieldErrors);
+    // نقطة الإقلاع الوحيدة قبل بناء pino — env نفسه غير محمَّل بعد (LOG_LEVEL
+    // يأتي منه)، فلا logger متاح هنا بنيويًا. console هو الخيار الوحيد فعليًا.
+    // eslint-disable-next-line no-console
+    console.error(
+      "[env] متغيرات بيئة ناقصة أو غير صالحة:",
+      z.flattenError(parsed.error).fieldErrors
+    );
     throw new Error("فشل تحميل متغيرات البيئة");
   }
   const env = parsed.data;

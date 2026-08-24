@@ -1,8 +1,18 @@
 import { randomUUID } from "node:crypto";
+
+import {
+  createDbClient,
+  type Database,
+  tenants,
+  farms,
+  houses,
+  products,
+  inventoryMovements,
+} from "@dawajin/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { createDbClient, type Database, tenants, farms, houses, products, inventoryMovements } from "@dawajin/db";
-import { assertIsTestDatabase } from "../lib/testGuard";
+
 import { computeBalance, computeTotalMovements } from "./inventoryBalance";
+import { assertIsTestDatabase } from "../lib/testGuard";
 
 /**
  * ثابت الدفتر (docs/work-plan.md المرحلة 1، بوابة الخروج):
@@ -43,7 +53,10 @@ beforeAll(async () => {
   tenantId = tenant.id;
 
   const farm = firstRow(
-    await db.insert(farms).values({ tenantId, name: "مزرعة اختبار الدفتر" }).returning({ id: farms.id })
+    await db
+      .insert(farms)
+      .values({ tenantId, name: "مزرعة اختبار الدفتر" })
+      .returning({ id: farms.id })
   );
 
   const houseA = firstRow(
@@ -74,21 +87,21 @@ beforeAll(async () => {
   // location_type='warehouse' ⇒ house_id/farm_id كلاهما NULL، بلا صف مرجعي إضافي مطلوب.
   warehouseLocationId = 1; // location_id اصطلاحي ثابت لمخزن هذا المستأجر (decisions.md #14)
 
-  async function movement(
-    locationType: "warehouse" | "house",
-    locationId: number,
-    houseId: number | null,
-    quantity: string,
-    movementType: (typeof inventoryMovements.$inferInsert)["movementType"]
-  ) {
+  async function movement(input: {
+    locationType: "warehouse" | "house";
+    locationId: number;
+    houseId: number | null;
+    quantity: string;
+    movementType: (typeof inventoryMovements.$inferInsert)["movementType"];
+  }) {
     await db.insert(inventoryMovements).values({
       tenantId,
-      locationType,
-      locationId,
-      houseId,
+      locationType: input.locationType,
+      locationId: input.locationId,
+      houseId: input.houseId,
       productId,
-      movementType,
-      quantity,
+      movementType: input.movementType,
+      quantity: input.quantity,
       unit: "كيس",
       sourceType: "test_fixture",
       sourceUuid: randomUUID(),
@@ -96,15 +109,45 @@ beforeAll(async () => {
   }
 
   // مخزن: +100 استلام، -30 شحن صادر (تحوّل لاحقًا لعنبر أ) ⇒ رصيد المخزن = 70
-  await movement("warehouse", warehouseLocationId, null, "100", "استلام");
-  await movement("warehouse", warehouseLocationId, null, "-30", "شحن صادر");
+  await movement({
+    locationType: "warehouse",
+    locationId: warehouseLocationId,
+    houseId: null,
+    quantity: "100",
+    movementType: "استلام",
+  });
+  await movement({
+    locationType: "warehouse",
+    locationId: warehouseLocationId,
+    houseId: null,
+    quantity: "-30",
+    movementType: "شحن صادر",
+  });
 
   // عنبر أ: +20 شحن وارد، -5 استهلاك يومي ⇒ رصيد عنبر أ = 15
-  await movement("house", houseAId, houseAId, "20", "شحن وارد");
-  await movement("house", houseAId, houseAId, "-5", "استهلاك يومي");
+  await movement({
+    locationType: "house",
+    locationId: houseAId,
+    houseId: houseAId,
+    quantity: "20",
+    movementType: "شحن وارد",
+  });
+  await movement({
+    locationType: "house",
+    locationId: houseAId,
+    houseId: houseAId,
+    quantity: "-5",
+    movementType: "استهلاك يومي",
+  });
 
   // عنبر ب: +10 شحن وارد ⇒ رصيد عنبر ب = 10
-  await movement("house", houseBId, houseBId, "10", "شحن وارد");
+  await movement({
+    locationType: "house",
+    locationId: houseBId,
+    houseId: houseBId,
+    quantity: "10",
+    movementType: "شحن وارد",
+  });
 });
 
 afterAll(async () => {

@@ -1,14 +1,16 @@
 import { randomUUID } from "node:crypto";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import request from "supertest";
-import pino from "pino";
+
 import { createDbClient, type Database, tenants, users, settingsAuditLog } from "@dawajin/db";
-import { eq } from "drizzle-orm";
 import { normalizePhoneE164 } from "@dawajin/shared";
-import { assertIsTestDatabase } from "../lib/testGuard";
+import { eq } from "drizzle-orm";
+import pino from "pino";
+import request from "supertest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+
 import { createApp } from "../app";
 import { loadEnv } from "../lib/env";
 import { signAccessToken } from "../lib/jwt";
+import { assertIsTestDatabase } from "../lib/testGuard";
 
 type Pool = ReturnType<typeof createDbClient>["pool"];
 
@@ -98,14 +100,26 @@ beforeAll(async () => {
   );
 
   const env = loadEnv();
-  ownerToken = await signAccessToken({ sub: String(owner.id), tenantId, role: "owner" }, env.JWT_SECRET, "1h");
-  farmerToken = await signAccessToken({ sub: String(farmer.id), tenantId, role: "farmer" }, env.JWT_SECRET, "1h");
+  ownerToken = await signAccessToken(
+    { sub: String(owner.id), tenantId, role: "owner" },
+    env.JWT_SECRET,
+    "1h"
+  );
+  farmerToken = await signAccessToken(
+    { sub: String(farmer.id), tenantId, role: "farmer" },
+    env.JWT_SECRET,
+    "1h"
+  );
   supervisorToken = await signAccessToken(
     { sub: String(supervisor.id), tenantId, role: "supervisor" },
     env.JWT_SECRET,
     "1h"
   );
-  vetToken = await signAccessToken({ sub: String(vet.id), tenantId, role: "vet" }, env.JWT_SECRET, "1h");
+  vetToken = await signAccessToken(
+    { sub: String(vet.id), tenantId, role: "vet" },
+    env.JWT_SECRET,
+    "1h"
+  );
   app = createApp(db, env, pino({ level: "silent" }));
 });
 
@@ -121,7 +135,7 @@ describe("PATCH /api/settings — request_id يربط سجل التدقيق با
       .send({ minRestDays: 21 });
 
     expect(res.status).toBe(200);
-    expect(res.body.minRestDays).toBe(21);
+    expect((res.body as { minRestDays: number }).minRestDays).toBe(21);
 
     const returnedRequestId: string | undefined = res.headers["x-request-id"];
     expect(returnedRequestId).toBeTruthy();
@@ -183,7 +197,9 @@ describe("PATCH /api/settings — request_id يربط سجل التدقيق با
     ["supervisor", () => supervisorToken],
     ["vet", () => vetToken],
   ])("GET /api/settings يرفض غير المالك (%s) — 403", async (_role, getToken) => {
-    const res = await request(app).get("/api/settings").set("Authorization", `Bearer ${getToken()}`);
+    const res = await request(app)
+      .get("/api/settings")
+      .set("Authorization", `Bearer ${getToken()}`);
     expect(res.status).toBe(403);
   });
 });

@@ -1,14 +1,15 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import request from "supertest";
-import pino from "pino";
-import bcrypt from "bcryptjs";
-import { eq } from "drizzle-orm";
 import { createDbClient, type Database, tenants, users } from "@dawajin/db";
 import { normalizePhoneE164, type UserRole } from "@dawajin/shared";
-import { assertIsTestDatabase } from "../lib/testGuard";
+import bcrypt from "bcryptjs";
+import { eq } from "drizzle-orm";
+import pino from "pino";
+import request from "supertest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+
 import { createApp } from "../app";
 import { loadEnv } from "../lib/env";
 import { signAccessToken } from "../lib/jwt";
+import { assertIsTestDatabase } from "../lib/testGuard";
 
 /**
  * GET /api/auth/me · POST /api/auth/change-password ·
@@ -35,6 +36,17 @@ function firstRow<T>(rows: T[]): T {
   const row = rows[0];
   if (!row) throw new Error("expected at least one returned row in test fixture");
   return row;
+}
+
+function mustGet<K, V>(map: Map<K, V>, key: K): V {
+  const value = map.get(key);
+  if (value === undefined) throw new Error(`expected map to contain key ${String(key)}`);
+  return value;
+}
+
+interface UserProfileResponseBody {
+  id: number;
+  role: UserRole;
 }
 
 beforeAll(async () => {
@@ -73,7 +85,10 @@ beforeAll(async () => {
         .returning({ id: users.id })
     );
     userIdsByRole.set(role, user.id);
-    tokensByRole.set(role, await signAccessToken({ sub: String(user.id), tenantId, role }, env.JWT_SECRET, "1h"));
+    tokensByRole.set(
+      role,
+      await signAccessToken({ sub: String(user.id), tenantId, role }, env.JWT_SECRET, "1h")
+    );
   }
 
   app = createApp(db, env, pino({ level: "silent" }));
@@ -91,10 +106,13 @@ describe("مصفوفة الصلاحيات — مسارات /api/auth/* الذا�
 
   for (const role of ROLES) {
     it(`GET /api/auth/me — allow لدور ${role}`, async () => {
-      const res = await request(app).get("/api/auth/me").set("Authorization", `Bearer ${tokensByRole.get(role)}`);
+      const res = await request(app)
+        .get("/api/auth/me")
+        .set("Authorization", `Bearer ${tokensByRole.get(role)}`);
+      const body = res.body as UserProfileResponseBody;
       expect(res.status).toBe(200);
-      expect(res.body.id).toBe(userIdsByRole.get(role));
-      expect(res.body.role).toBe(role);
+      expect(body.id).toBe(userIdsByRole.get(role));
+      expect(body.role).toBe(role);
     });
   }
 
@@ -114,7 +132,7 @@ describe("مصفوفة الصلاحيات — مسارات /api/auth/* الذا�
   });
 
   it("POST /api/auth/change-password — allow: يغيّر كلمة المرور فعليًا ويُسقط must_change_password", async () => {
-    const userId = userIdsByRole.get("farmer")!;
+    const userId = mustGet(userIdsByRole, "farmer");
     const res = await request(app)
       .post("/api/auth/change-password")
       .set("Authorization", `Bearer ${tokensByRole.get("farmer")}`)
@@ -122,13 +140,15 @@ describe("مصفوفة الصلاحيات — مسارات /api/auth/* الذا�
 
     expect(res.status).toBe(204);
 
-    const [updated] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
-    expect(updated?.mustChangePassword).toBe(false);
-    expect(await bcrypt.compare("NewPassw0rd!23", updated!.passwordHash)).toBe(true);
+    const updated = firstRow(await db.select().from(users).where(eq(users.id, userId)).limit(1));
+    expect(updated.mustChangePassword).toBe(false);
+    expect(await bcrypt.compare("NewPassw0rd!23", updated.passwordHash)).toBe(true);
   });
 
   it("POST /api/auth/register-push-token — 401 بلا توكن", async () => {
-    const res = await request(app).post("/api/auth/register-push-token").send({ expoPushToken: "ExponentPushToken[x]" });
+    const res = await request(app)
+      .post("/api/auth/register-push-token")
+      .send({ expoPushToken: "ExponentPushToken[x]" });
     expect(res.status).toBe(401);
   });
 
@@ -142,12 +162,14 @@ describe("مصفوفة الصلاحيات — مسارات /api/auth/* الذا�
 
       expect(res.status).toBe(204);
 
-      const [updated] = await db
-        .select()
-        .from(users)
-        .where(eq(users.id, userIdsByRole.get(role)!))
-        .limit(1);
-      expect(updated?.expoPushToken).toBe(token);
+      const updated = firstRow(
+        await db
+          .select()
+          .from(users)
+          .where(eq(users.id, mustGet(userIdsByRole, role)))
+          .limit(1)
+      );
+      expect(updated.expoPushToken).toBe(token);
     });
   }
 });

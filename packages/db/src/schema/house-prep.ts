@@ -9,10 +9,11 @@ import {
   numeric,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
-import { houses } from "./farms";
-import { users } from "./users";
-import { products } from "./inventory";
+
 import { houseStatusEnum } from "./enums";
+import { houses } from "./farms";
+import { products } from "./inventory";
+import { users } from "./users";
 
 /** دورة تجهيز العنبر — 8-9 خطوات ثم 10 أيام راحة بيولوجية (app-complete-spec.md §3.3). */
 export const housePrepCycles = pgTable("house_prep_cycles", {
@@ -43,9 +44,7 @@ export const housePrepSteps = pgTable(
     productId: integer("product_id").references(() => products.id),
     quantityUsed: numeric("quantity_used", { precision: 10, scale: 3 }),
   },
-  (table) => [
-    uniqueIndex("house_prep_steps_cycle_order_uq").on(table.cycleId, table.stepOrder),
-  ]
+  (table) => [uniqueIndex("house_prep_steps_cycle_order_uq").on(table.cycleId, table.stepOrder)]
 );
 
 export const houseStatusHistory = pgTable("house_status_history", {

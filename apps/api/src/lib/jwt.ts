@@ -1,5 +1,5 @@
-import { SignJWT, jwtVerify, type JWTPayload } from "jose";
 import type { UserRole } from "@dawajin/shared";
+import { SignJWT, jwtVerify, type JWTPayload } from "jose";
 
 export interface AuthTokenPayload extends JWTPayload {
   sub: string; // user id
@@ -11,6 +11,10 @@ function getSecretKey(secret: string): Uint8Array {
   return new TextEncoder().encode(secret);
 }
 
+/**
+ * يوقّع JWT بخوارزمية HS256.
+ * @returns رمز JWT جاهز للإرسال في ترويسة Authorization
+ */
 export async function signAccessToken(
   payload: Omit<AuthTokenPayload, "iat" | "exp">,
   secret: string,
@@ -23,10 +27,12 @@ export async function signAccessToken(
     .sign(getSecretKey(secret));
 }
 
-export async function verifyAccessToken(
-  token: string,
-  secret: string
-): Promise<AuthTokenPayload> {
+/**
+ * يتحقق من توقيع JWT وصلاحيته الزمنية.
+ * @returns حمولة الرمز (sub/tenantId/role) بعد التحقق
+ * @throws JWTExpired أو JWSSignatureVerificationFailed (من jose) إن كان الرمز منتهيًا أو مزوَّرًا
+ */
+export async function verifyAccessToken(token: string, secret: string): Promise<AuthTokenPayload> {
   const { payload } = await jwtVerify(token, getSecretKey(secret));
   return payload as AuthTokenPayload;
 }

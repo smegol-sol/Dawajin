@@ -1,4 +1,3 @@
-import { pgEnum } from "drizzle-orm/pg-core";
 import {
   USER_ROLE,
   BATCH_STATUS,
@@ -27,6 +26,7 @@ import {
   DISPUTE_STATUS,
   STORAGE_CONDITIONS,
 } from "@dawajin/shared";
+import { pgEnum } from "drizzle-orm/pg-core";
 
 // كل قيمة enum مصدرها packages/shared — لا تُعرَّف القوائم هنا (backend-technical-spec.md §6).
 export const userRoleEnum = pgEnum("user_role", USER_ROLE);
@@ -41,10 +41,7 @@ export const productCategoryEnum = pgEnum("product_category", PRODUCT_CATEGORY);
 export const stockUnitEnum = pgEnum("stock_unit", STOCK_UNIT);
 export const doseBasisEnum = pgEnum("dose_basis", DOSE_BASIS);
 export const routeEnum = pgEnum("route", ROUTE);
-export const inventoryMovementTypeEnum = pgEnum(
-  "inventory_movement_type",
-  INVENTORY_MOVEMENT_TYPE
-);
+export const inventoryMovementTypeEnum = pgEnum("inventory_movement_type", INVENTORY_MOVEMENT_TYPE);
 export const shipmentStatusEnum = pgEnum("shipment_status", SHIPMENT_STATUS);
 export const shipmentVarianceStatusEnum = pgEnum(
   "shipment_variance_status",
@@ -52,22 +49,13 @@ export const shipmentVarianceStatusEnum = pgEnum(
 );
 export const disputeOutcomeEnum = pgEnum("dispute_outcome", DISPUTE_OUTCOME);
 export const wastageReasonEnum = pgEnum("wastage_reason", WASTAGE_REASON);
-export const healthTaskStatusEnum = pgEnum(
-  "health_task_status",
-  HEALTH_TASK_STATUS
-);
+export const healthTaskStatusEnum = pgEnum("health_task_status", HEALTH_TASK_STATUS);
 export const healthObservationSeverityEnum = pgEnum(
   "health_observation_severity",
   HEALTH_OBSERVATION_SEVERITY
 );
-export const notificationUrgencyEnum = pgEnum(
-  "notification_urgency",
-  NOTIFICATION_URGENCY
-);
-export const subscriptionStatusEnum = pgEnum(
-  "subscription_status",
-  SUBSCRIPTION_STATUS
-);
+export const notificationUrgencyEnum = pgEnum("notification_urgency", NOTIFICATION_URGENCY);
+export const subscriptionStatusEnum = pgEnum("subscription_status", SUBSCRIPTION_STATUS);
 export const locationTypeEnum = pgEnum("location_type", LOCATION_TYPE);
 export const healthTaskPriorityEnum = pgEnum("health_task_priority", HEALTH_TASK_PRIORITY);
 export const healthObservationStatusEnum = pgEnum(

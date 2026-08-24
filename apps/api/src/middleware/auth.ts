@@ -1,5 +1,6 @@
-import type { Request, Response, NextFunction } from "express";
 import { HttpError } from "@dawajin/shared";
+import type { Request, Response, NextFunction } from "express";
+
 import { verifyAccessToken } from "../lib/jwt";
 
 /**
@@ -11,7 +12,8 @@ export function requireAuth(secret: string) {
   return async function (req: Request, _res: Response, next: NextFunction) {
     const header = req.headers.authorization;
     if (!header?.startsWith("Bearer ")) {
-      return next(new HttpError(401, "unauthorized", "الرجاء تسجيل الدخول"));
+      next(new HttpError(401, "unauthorized", "الرجاء تسجيل الدخول"));
+      return;
     }
 
     const token = header.slice("Bearer ".length);

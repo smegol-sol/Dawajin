@@ -10,6 +10,7 @@
     "seed:demo": "tsx src/scripts/seed-demo.ts",
     "test": "vitest run --config vitest.config.ts src/**/*.test.ts --passWithNoTests",
     "test:integration": "vitest run --config vitest.integration.config.ts",
+    "test:coverage": "vitest run --config vitest.coverage.config.ts --coverage",
     "typecheck": "tsc --noEmit",
     "api:generate": "echo 'TODO: openapi-typescript + orval — يُفعَّل عند إنشاء أول عقد OpenAPI (المرحلة 1)'"
   },
@@ -33,6 +34,7 @@
     "@types/express": "^4.17.21",
     "@types/node": "^22.10.1",
     "@types/supertest": "^6.0.2",
+    "@vitest/coverage-v8": "2.1.9",
     "esbuild": "^0.24.0",
     "supertest": "^7.0.0",
     "tsx": "^4.19.2",

@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   pgTable,
   serial,
@@ -12,7 +13,7 @@ import {
   index,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
-import { sql } from "drizzle-orm";
+
 import {
   productCategoryEnum,
   feedStageEnum,
@@ -28,9 +29,9 @@ import {
   wastageReasonEnum,
   storageConditionsEnum,
 } from "./enums";
+import { farms, houses, batches } from "./farms";
 import { tenants } from "./tenants";
 import { users } from "./users";
-import { farms, houses, batches } from "./farms";
 
 /** مخزن افتراضي واحد لكل مستأجر يُنشأ تلقائيًا — الجدول يسمح بأكثر لاحقًا. */
 export const warehouses = pgTable("warehouses", {
@@ -40,9 +41,7 @@ export const warehouses = pgTable("warehouses", {
     .references(() => tenants.id),
   name: varchar("name", { length: 128 }).notNull(),
   isActive: boolean("is_active").notNull().default(true),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 /** كتالوج المنتجات — علف/دواء/لقاح/فيتامين/مستلزمات. */
@@ -73,9 +72,7 @@ export const products = pgTable(
     notes: text("notes"),
     isActive: boolean("is_active").notNull().default(true),
     createdBy: integer("created_by").references(() => users.id),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
     uniqueIndex("products_system_feed_uq")
@@ -111,9 +108,7 @@ export const inventoryMovements = pgTable(
     sourceUuid: uuid("source_uuid").notNull(),
     notes: text("notes"),
     createdBy: integer("created_by").references(() => users.id),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
     index("inventory_movements_location_product_idx").on(
@@ -175,9 +170,7 @@ export const shipments = pgTable(
     disputeClosedAt: timestamp("dispute_closed_at", { withTimezone: true }),
     bypassCodeUsed: boolean("bypass_code_used").notNull().default(false),
     correctionOfUuid: uuid("correction_of_uuid"),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [index("shipments_tenant_status_idx").on(table.tenantId, table.status)]
 );
@@ -231,9 +224,7 @@ export const wastage = pgTable("wastage", {
   createdBy: integer("created_by")
     .notNull()
     .references(() => users.id),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const inventoryTransfers = pgTable("inventory_transfers", {
@@ -255,9 +246,7 @@ export const inventoryTransfers = pgTable("inventory_transfers", {
   createdBy: integer("created_by")
     .notNull()
     .references(() => users.id),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   confirmedBy: integer("confirmed_by").references(() => users.id),
   confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
 });

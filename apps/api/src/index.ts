@@ -1,7 +1,8 @@
-import pino from "pino";
 import { createDbClient } from "@dawajin/db";
-import { loadEnv } from "./lib/env";
+import pino from "pino";
+
 import { createApp } from "./app";
+import { loadEnv } from "./lib/env";
 
 const env = loadEnv();
 const logger = pino({ level: env.LOG_LEVEL });

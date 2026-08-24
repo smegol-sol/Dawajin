@@ -1,4 +1,5 @@
 import type { Database, entityAuditLog, settingsAuditLog, adminAuditLog } from "@dawajin/db";
+
 import { getRequestId } from "./requestContext";
 
 type AuditTable = typeof entityAuditLog | typeof settingsAuditLog | typeof adminAuditLog;

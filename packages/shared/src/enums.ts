@@ -5,13 +5,7 @@
  * راجع backend-technical-spec.md §8 لجدول الأنواع الكامل.
  */
 
-export const USER_ROLE = [
-  "farmer",
-  "supervisor",
-  "vet",
-  "owner",
-  "platform_admin",
-] as const;
+export const USER_ROLE = ["farmer", "supervisor", "vet", "owner", "platform_admin"] as const;
 export type UserRole = (typeof USER_ROLE)[number];
 
 export const BATCH_STATUS = ["نشطة", "منتهية"] as const;
@@ -55,42 +49,16 @@ export type ReviewStatus = (typeof REVIEW_STATUS)[number];
 export const FEED_STAGE = ["بادئ", "نامي", "ناهي"] as const;
 export type FeedStage = (typeof FEED_STAGE)[number];
 
-export const PRODUCT_CATEGORY = [
-  "علف",
-  "دواء",
-  "لقاح",
-  "فيتامين",
-  "مستلزمات",
-] as const;
+export const PRODUCT_CATEGORY = ["علف", "دواء", "لقاح", "فيتامين", "مستلزمات"] as const;
 export type ProductCategory = (typeof PRODUCT_CATEGORY)[number];
 
-export const STOCK_UNIT = [
-  "عبوة",
-  "زجاجة",
-  "كيس",
-  "لتر",
-  "كجم",
-  "قطعة",
-] as const;
+export const STOCK_UNIT = ["عبوة", "زجاجة", "كيس", "لتر", "كجم", "قطعة"] as const;
 export type StockUnit = (typeof STOCK_UNIT)[number];
 
-export const DOSE_BASIS = [
-  "لكل لتر ماء",
-  "لكل كجم وزن حي",
-  "لكل طير",
-  "لكل 1000 طير",
-] as const;
+export const DOSE_BASIS = ["لكل لتر ماء", "لكل كجم وزن حي", "لكل طير", "لكل 1000 طير"] as const;
 export type DoseBasis = (typeof DOSE_BASIS)[number];
 
-export const ROUTE = [
-  "مع الماء",
-  "مع العلف",
-  "حقن",
-  "رش",
-  "تقطير بالعين",
-  "فموي",
-  "أخرى",
-] as const;
+export const ROUTE = ["مع الماء", "مع العلف", "حقن", "رش", "تقطير بالعين", "فموي", "أخرى"] as const;
 export type Route = (typeof ROUTE)[number];
 
 export const INVENTORY_MOVEMENT_TYPE = [
@@ -112,18 +80,10 @@ export type InventoryMovementType = (typeof INVENTORY_MOVEMENT_TYPE)[number];
 export const SHIPMENT_STATUS = ["معلّقة", "مستلمة", "ملغاة"] as const;
 export type ShipmentStatus = (typeof SHIPMENT_STATUS)[number];
 
-export const SHIPMENT_VARIANCE_STATUS = [
-  "مطابق",
-  "فرق مسجّل",
-  "قيد النزاع",
-] as const;
+export const SHIPMENT_VARIANCE_STATUS = ["مطابق", "فرق مسجّل", "قيد النزاع"] as const;
 export type ShipmentVarianceStatus = (typeof SHIPMENT_VARIANCE_STATUS)[number];
 
-export const DISPUTE_OUTCOME = [
-  "خطأ قياس",
-  "فاقد نقل",
-  "فاقد بعد التسليم",
-] as const;
+export const DISPUTE_OUTCOME = ["خطأ قياس", "فاقد نقل", "فاقد بعد التسليم"] as const;
 export type DisputeOutcome = (typeof DISPUTE_OUTCOME)[number];
 
 export const WASTAGE_REASON = [
@@ -136,32 +96,16 @@ export const WASTAGE_REASON = [
 ] as const;
 export type WastageReason = (typeof WASTAGE_REASON)[number];
 
-export const HEALTH_TASK_STATUS = [
-  "معلقة",
-  "منفّذة",
-  "متأخرة",
-  "متعذّرة",
-  "ملغاة",
-] as const;
+export const HEALTH_TASK_STATUS = ["معلقة", "منفّذة", "متأخرة", "متعذّرة", "ملغاة"] as const;
 export type HealthTaskStatus = (typeof HEALTH_TASK_STATUS)[number];
 
-export const HEALTH_OBSERVATION_SEVERITY = [
-  "خفيف",
-  "متوسط",
-  "شديد",
-] as const;
-export type HealthObservationSeverity =
-  (typeof HEALTH_OBSERVATION_SEVERITY)[number];
+export const HEALTH_OBSERVATION_SEVERITY = ["خفيف", "متوسط", "شديد"] as const;
+export type HealthObservationSeverity = (typeof HEALTH_OBSERVATION_SEVERITY)[number];
 
 export const NOTIFICATION_URGENCY = ["urgent", "action", "info"] as const;
 export type NotificationUrgency = (typeof NOTIFICATION_URGENCY)[number];
 
-export const SUBSCRIPTION_STATUS = [
-  "تجريبي",
-  "نشط",
-  "موقوف",
-  "منتهي",
-] as const;
+export const SUBSCRIPTION_STATUS = ["تجريبي", "نشط", "موقوف", "منتهي"] as const;
 export type SubscriptionStatus = (typeof SUBSCRIPTION_STATUS)[number];
 
 /** نوع الموقع في دفتر المخزون — القيدان المذكوران حرفيًا في قيد CHECK بـ §7.3. */

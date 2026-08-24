@@ -1,13 +1,15 @@
 import { randomInt } from "node:crypto";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import request from "supertest";
-import pino from "pino";
-import bcrypt from "bcryptjs";
+
 import { createDbClient, type Database, tenants, users } from "@dawajin/db";
 import { normalizePhoneE164 } from "@dawajin/shared";
-import { assertIsTestDatabase } from "../lib/testGuard";
+import bcrypt from "bcryptjs";
+import pino from "pino";
+import request from "supertest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+
 import { createApp } from "../app";
 import { loadEnv } from "../lib/env";
+import { assertIsTestDatabase } from "../lib/testGuard";
 
 /**
  * POST /api/auth/login. الحد الأقصى 5 محاولات/دقيقة (backend-technical-spec.md
@@ -20,6 +22,19 @@ import { loadEnv } from "../lib/env";
  * درس الخطأ الذي كُشِف سابقًا مع request_id في settings.integration.test.ts.
  */
 const RUN_SUFFIX = randomInt(100000, 999999).toString();
+
+interface LoginSuccessBody {
+  token: string;
+  user: { role: string; tenantId: number | null };
+}
+interface LoginErrorBody {
+  code: string;
+}
+interface LoginNeedsTenantSelectionBody {
+  needsTenantSelection: true;
+  token?: string;
+  accounts: { tenantId: number | null }[];
+}
 
 type Pool = ReturnType<typeof createDbClient>["pool"];
 
@@ -116,10 +131,11 @@ describe("POST /api/auth/login", () => {
       .post("/api/auth/login")
       .send({ phone: `0096777${RUN_SUFFIX}1`, password: PASSWORD });
 
+    const body = res.body as LoginSuccessBody;
     expect(res.status).toBe(200);
-    expect(res.body.token).toBeTruthy();
-    expect(res.body.user.role).toBe("farmer");
-    expect(res.body.user.tenantId).toBe(tenantAId);
+    expect(body.token).toBeTruthy();
+    expect(body.user.role).toBe("farmer");
+    expect(body.user.tenantId).toBe(tenantAId);
   });
 
   it("طلب 2: كلمة مرور خاطئة ← 401 برسالة عامة", async () => {
@@ -128,7 +144,7 @@ describe("POST /api/auth/login", () => {
       .send({ phone: `077${RUN_SUFFIX}1`, password: "wrong-password" });
 
     expect(res.status).toBe(401);
-    expect(res.body.code).toBe("invalid_credentials");
+    expect((res.body as LoginErrorBody).code).toBe("invalid_credentials");
   });
 
   it("طلب 3: حساب معطَّل ← 401 بنفس رسالة الرفض العامة (لا يكشف حالة الحساب)", async () => {
@@ -137,7 +153,7 @@ describe("POST /api/auth/login", () => {
       .send({ phone: `077${RUN_SUFFIX}2`, password: PASSWORD });
 
     expect(res.status).toBe(401);
-    expect(res.body.code).toBe("invalid_credentials");
+    expect((res.body as LoginErrorBody).code).toBe("invalid_credentials");
   });
 
   it("طلب 4: نفس الجوال في مستأجرين ← needsTenantSelection بلا توكن", async () => {
@@ -145,13 +161,12 @@ describe("POST /api/auth/login", () => {
       .post("/api/auth/login")
       .send({ phone: `077${RUN_SUFFIX}3`, password: PASSWORD });
 
+    const body = res.body as LoginNeedsTenantSelectionBody;
     expect(res.status).toBe(200);
-    expect(res.body.needsTenantSelection).toBe(true);
-    expect(res.body.token).toBeUndefined();
-    expect(res.body.accounts).toHaveLength(2);
-    expect(res.body.accounts.map((a: { tenantId: number }) => a.tenantId).sort()).toEqual(
-      [tenantAId, tenantBId].sort()
-    );
+    expect(body.needsTenantSelection).toBe(true);
+    expect(body.token).toBeUndefined();
+    expect(body.accounts).toHaveLength(2);
+    expect(body.accounts.map((a) => a.tenantId).sort()).toEqual([tenantAId, tenantBId].sort());
   });
 
   it("طلب 5: نفس الجوال مع tenantId يحسم الحساب ويُصدر توكن", async () => {
@@ -159,9 +174,10 @@ describe("POST /api/auth/login", () => {
       .post("/api/auth/login")
       .send({ phone: `077${RUN_SUFFIX}3`, password: PASSWORD, tenantId: tenantBId });
 
+    const body = res.body as LoginSuccessBody;
     expect(res.status).toBe(200);
-    expect(res.body.token).toBeTruthy();
-    expect(res.body.user.tenantId).toBe(tenantBId);
+    expect(body.token).toBeTruthy();
+    expect(body.user.tenantId).toBe(tenantBId);
   });
 
   it("طلب 6: تجاوز 5 محاولات في الدقيقة ← 429 (الحد يعمل فعليًا لا وصفًا)", async () => {

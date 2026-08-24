@@ -3,21 +3,11 @@
  * أربع خطوات بهذا الترتيب: تحويل الأرقام العربية-الهندية · حذف الفواصل · توحيد الصيغ · إضافة +.
  */
 
-const ARABIC_INDIC_DIGITS: Record<string, string> = {
-  "٠": "0",
-  "١": "1",
-  "٢": "2",
-  "٣": "3",
-  "٤": "4",
-  "٥": "5",
-  "٦": "6",
-  "٧": "7",
-  "٨": "8",
-  "٩": "9",
-};
+const ARABIC_INDIC_ZERO_CODE = "٠".charCodeAt(0);
 
+/** ٠-٩ نطاق يونيكود متصل (U+0660-U+0669) — حساب حسابي مباشر، لا جدول بحث بفرع احتياطي غير قابل للبلوغ. */
 function convertArabicIndicDigits(input: string): string {
-  return input.replace(/[٠-٩]/g, (digit) => ARABIC_INDIC_DIGITS[digit] ?? digit);
+  return input.replace(/[٠-٩]/g, (digit) => String(digit.charCodeAt(0) - ARABIC_INDIC_ZERO_CODE));
 }
 
 function stripNonDigitsExceptLeadingPlus(input: string): string {
@@ -31,10 +21,7 @@ function stripNonDigitsExceptLeadingPlus(input: string): string {
  * @param defaultCountryCode كود الدولة الافتراضي للمستأجر، مثل "+967"
  * @returns الرقم بصيغة E.164، مثل "+967712345678"
  */
-export function normalizePhoneE164(
-  rawPhone: string,
-  defaultCountryCode: string
-): string {
+export function normalizePhoneE164(rawPhone: string, defaultCountryCode: string): string {
   const converted = convertArabicIndicDigits(rawPhone.trim());
   const cleaned = stripNonDigitsExceptLeadingPlus(converted);
   const countryDigits = defaultCountryCode.replace(/[^0-9]/g, "");

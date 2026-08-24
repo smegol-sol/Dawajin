@@ -238,10 +238,7 @@
     "schemas": {
       "LoginRequest": {
         "type": "object",
-        "required": [
-          "phone",
-          "password"
-        ],
+        "required": ["phone", "password"],
         "properties": {
           "phone": {
             "type": "string"
@@ -258,10 +255,7 @@
       },
       "LoginSuccess": {
         "type": "object",
-        "required": [
-          "token",
-          "user"
-        ],
+        "required": ["token", "user"],
         "properties": {
           "token": {
             "type": "string"
@@ -274,10 +268,7 @@
       "LoginNeedsTenantSelection": {
         "type": "object",
         "description": "الجوال وكلمة المرور يطابقان حسابات في أكثر من مستأجر — أعد الطلب مع tenantId (decisions.md #57)",
-        "required": [
-          "needsTenantSelection",
-          "accounts"
-        ],
+        "required": ["needsTenantSelection", "accounts"],
         "properties": {
           "needsTenantSelection": {
             "const": true
@@ -308,10 +299,7 @@
             "type": "integer"
           },
           "tenantId": {
-            "type": [
-              "integer",
-              "null"
-            ]
+            "type": ["integer", "null"]
           },
           "fullName": {
             "type": "string"
@@ -332,10 +320,7 @@
       },
       "ChangePasswordRequest": {
         "type": "object",
-        "required": [
-          "currentPassword",
-          "newPassword"
-        ],
+        "required": ["currentPassword", "newPassword"],
         "properties": {
           "currentPassword": {
             "type": "string"
@@ -348,9 +333,7 @@
       },
       "RegisterPushTokenRequest": {
         "type": "object",
-        "required": [
-          "expoPushToken"
-        ],
+        "required": ["expoPushToken"],
         "properties": {
           "expoPushToken": {
             "type": "string"
@@ -413,10 +396,7 @@
       },
       "ApiError": {
         "type": "object",
-        "required": [
-          "code",
-          "message"
-        ],
+        "required": ["code", "message"],
         "properties": {
           "code": {
             "type": "string"

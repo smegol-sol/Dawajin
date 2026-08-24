@@ -1,5 +1,5 @@
-import { sql } from "drizzle-orm";
 import type { Database } from "@dawajin/db";
+import { sql } from "drizzle-orm";
 
 /**
  * حارس fail-closed لاختبارات التكامل — لا يثق باسم الرابط، يتحقق فعليًا من

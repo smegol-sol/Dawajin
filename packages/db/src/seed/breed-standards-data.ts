@@ -84,7 +84,6 @@ function gompertzWeight(day: number, params: BreedCurveParams): number {
 function buildBreedRows(params: BreedCurveParams): BreedStandardRow[] {
   const rows: BreedStandardRow[] = [];
   let previousWeight = params.chickWeightG;
-  let cumulativeFeedG = 0;
 
   for (let day = 1; day <= 45; day++) {
     const targetWeightG = Math.round(gompertzWeight(day, params));
@@ -92,12 +91,10 @@ function buildBreedRows(params: BreedCurveParams): BreedStandardRow[] {
 
     // FCR يتحسن كفاءة إطعام مبكرة ثم يرتفع تدريجيًا مع تقدّم العمر (نمط واقعي عام)
     const fcrProgress = day / 45;
-    const targetFcr =
-      params.startFcr + (params.finalFcr - params.startFcr) * fcrProgress ** 1.3;
+    const targetFcr = params.startFcr + (params.finalFcr - params.startFcr) * fcrProgress ** 1.3;
 
     // الاستهلاك اليومي يُشتق من الزيادة اليومية والـ FCR الجاري
     const dailyFeedGPerBird = Math.round(dailyGainG * targetFcr * 1.15 + day * 1.2);
-    cumulativeFeedG += dailyFeedGPerBird;
 
     // نفوق تراكمي تصاعدي أبطأ في البداية (منحنى قريب من الأسي)
     const mortalityProgress = 1 - Math.exp(-day / 22);
@@ -121,6 +118,10 @@ function buildBreedRows(params: BreedCurveParams): BreedStandardRow[] {
   return rows;
 }
 
+/**
+ * يولّد صفوف بذر breed_standards لثلاث السلالات، الأيام 1-45.
+ * @returns 135 صفًا (45 يومًا × 3 سلالات) — ⚠️ تقريبية، راجع تحذير الملف أعلاه والقرار #56
+ */
 export function buildBreedStandardsSeedData(): BreedStandardRow[] {
   return CURVES.flatMap(buildBreedRows);
 }

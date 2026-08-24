@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   pgTable,
   serial,
@@ -7,7 +8,7 @@ import {
   timestamp,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
-import { sql } from "drizzle-orm";
+
 import { userRoleEnum } from "./enums";
 import { tenants } from "./tenants";
 
@@ -27,14 +28,10 @@ export const users = pgTable(
     phone: varchar("phone", { length: 30 }).notNull(),
     phoneE164: varchar("phone_e164", { length: 20 }).notNull(),
     isActive: boolean("is_active").notNull().default(true),
-    mustChangePassword: boolean("must_change_password")
-      .notNull()
-      .default(false),
+    mustChangePassword: boolean("must_change_password").notNull().default(false),
     expoPushToken: varchar("expo_push_token", { length: 255 }),
     lastActiveAt: timestamp("last_active_at", { withTimezone: true }),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
     uniqueIndex("users_tenant_phone_uq").on(table.tenantId, table.phoneE164),

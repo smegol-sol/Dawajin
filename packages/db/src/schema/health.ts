@@ -10,6 +10,7 @@ import {
   date,
   boolean,
 } from "drizzle-orm/pg-core";
+
 import {
   doseBasisEnum,
   routeEnum,
@@ -18,10 +19,10 @@ import {
   healthObservationSeverityEnum,
   healthObservationStatusEnum,
 } from "./enums";
-import { tenants } from "./tenants";
 import { houses, batches } from "./farms";
-import { users } from "./users";
 import { products } from "./inventory";
+import { tenants } from "./tenants";
+import { users } from "./users";
 
 /** الطبيب يأمر ← المربي ينفّذ ويؤكد ← خصم من مخزون العنبر (app-complete-spec.md §3.8). */
 export const healthTasks = pgTable("health_tasks", {
@@ -50,9 +51,7 @@ export const healthTasks = pgTable("health_tasks", {
   createdBy: integer("created_by")
     .notNull()
     .references(() => users.id), // vet
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const healthTaskExecutions = pgTable("health_task_executions", {
@@ -96,9 +95,7 @@ export const healthObservations = pgTable("health_observations", {
   createdBy: integer("created_by")
     .notNull()
     .references(() => users.id),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const batchDiagnoses = pgTable("batch_diagnoses", {
@@ -112,7 +109,5 @@ export const batchDiagnoses = pgTable("batch_diagnoses", {
   createdBy: integer("created_by")
     .notNull()
     .references(() => users.id), // vet
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

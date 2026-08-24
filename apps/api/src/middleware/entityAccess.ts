@@ -1,15 +1,71 @@
-import type { Request, Response, NextFunction } from "express";
-import { and, eq } from "drizzle-orm";
 import { batches, houses, userAssignments, type Database } from "@dawajin/db";
 import { HttpError } from "@dawajin/shared";
+import { and, eq } from "drizzle-orm";
+import type { NextFunction, Request, Response } from "express";
 
-function firstDefined(...values: unknown[]): string | undefined {
+/** يلتقط أول قيمة أولية (نص/رقم) معرَّفة — يتجاهل الكائنات المتداخلة عمدًا (لا String([object]))، لا يُخمِّن شكلها. */
+function firstDefinedPrimitive(...values: unknown[]): string | undefined {
   for (const value of values) {
-    if (value !== undefined && value !== null && value !== "") {
-      return String(value);
-    }
+    if (typeof value === "string" && value !== "") return value;
+    if (typeof value === "number") return String(value);
   }
   return undefined;
+}
+
+type AuthenticatedUser = NonNullable<Request["user"]>;
+
+/**
+ * يشتق houseId من houseId مباشر أو من batchId (يُحل لعنبره) — القيمة الوحيدة
+ * المخوَّلة باشتقاق العنبر من الدفعة في كل المشروع (راجع تعليق
+ * no-unvetted-house-id-reuse أعلى eslint-rules/no-unvetted-house-id-reuse.mjs).
+ */
+async function resolveHouseId(db: Database, req: Request): Promise<number | undefined> {
+  const rawHouseId = firstDefinedPrimitive(
+    req.params.houseId,
+    req.query.houseId,
+    (req.body as Record<string, unknown> | undefined)?.houseId
+  );
+  if (rawHouseId) return Number(rawHouseId);
+
+  const rawBatchId = firstDefinedPrimitive(
+    req.params.batchId,
+    req.query.batchId,
+    (req.body as Record<string, unknown> | undefined)?.batchId
+  );
+  if (!rawBatchId) return undefined;
+
+  const [batch] = await db
+    .select({ houseId: batches.houseId })
+    .from(batches)
+    .where(eq(batches.id, Number(rawBatchId)))
+    .limit(1);
+  if (!batch) throw new HttpError(404, "not_found", "الدفعة غير موجودة");
+  return batch.houseId;
+}
+
+/** الوجود قبل الإسناد دائمًا (المبدأ #6): 404 للعنبر غير الموجود، 403 للموجود غير المُسند. */
+async function assertHouseAssignment(
+  db: Database,
+  user: AuthenticatedUser,
+  houseId: number
+): Promise<void> {
+  if (user.tenantId == null) {
+    throw new HttpError(401, "unauthorized", "الحساب غير مرتبط بمستأجر");
+  }
+
+  const [house] = await db
+    .select({ id: houses.id })
+    .from(houses)
+    .where(and(eq(houses.id, houseId), eq(houses.tenantId, user.tenantId)))
+    .limit(1);
+  if (!house) throw new HttpError(404, "not_found", "العنبر غير موجود");
+
+  const [assignment] = await db
+    .select({ id: userAssignments.id })
+    .from(userAssignments)
+    .where(and(eq(userAssignments.userId, user.id), eq(userAssignments.houseId, houseId)))
+    .limit(1);
+  if (!assignment) throw new HttpError(403, "forbidden", "غير مخوَّل بالوصول لهذا العنبر");
 }
 
 /**
@@ -31,54 +87,13 @@ export function enforceEntityAccess(db: Database) {
 
       // المالك يرى كل عنابر مستأجره؛ مدير المنصة لا يدخل مسارات المستأجرين هنا
       if (user.role === "owner" || user.role === "platform_admin") {
-        return next();
+        next();
+        return;
       }
 
-      const rawHouseId = firstDefined(
-        req.params.houseId,
-        req.query.houseId,
-        (req.body as Record<string, unknown> | undefined)?.houseId
-      );
-      const rawBatchId = firstDefined(
-        req.params.batchId,
-        req.query.batchId,
-        (req.body as Record<string, unknown> | undefined)?.batchId
-      );
-
-      let houseId = rawHouseId ? Number(rawHouseId) : undefined;
-
-      if (!houseId && rawBatchId) {
-        const [batch] = await db
-          .select({ houseId: batches.houseId })
-          .from(batches)
-          .where(eq(batches.id, Number(rawBatchId)))
-          .limit(1);
-        if (!batch) {
-          throw new HttpError(404, "not_found", "الدفعة غير موجودة");
-        }
-        houseId = batch.houseId;
-      }
-
+      const houseId = await resolveHouseId(db, req);
       if (houseId) {
-        const [house] = await db
-          .select({ id: houses.id })
-          .from(houses)
-          .where(and(eq(houses.id, houseId), eq(houses.tenantId, user.tenantId!)))
-          .limit(1);
-        if (!house) {
-          throw new HttpError(404, "not_found", "العنبر غير موجود");
-        }
-
-        const [assignment] = await db
-          .select({ id: userAssignments.id })
-          .from(userAssignments)
-          .where(
-            and(eq(userAssignments.userId, user.id), eq(userAssignments.houseId, houseId))
-          )
-          .limit(1);
-        if (!assignment) {
-          throw new HttpError(403, "forbidden", "غير مخوَّل بالوصول لهذا العنبر");
-        }
+        await assertHouseAssignment(db, user, houseId);
       }
 
       next();

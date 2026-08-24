@@ -11,12 +11,10 @@ export function translatePgError(error: unknown): HttpError | null {
   const pgError = error as { code?: string; constraint?: string; table?: string };
 
   if (pgError.code === "23505") {
-    return new HttpError(
-      409,
-      "duplicate",
-      constraintMessage(pgError.constraint),
-      { constraint: pgError.constraint, table: pgError.table }
-    );
+    return new HttpError(409, "duplicate", constraintMessage(pgError.constraint), {
+      constraint: pgError.constraint,
+      table: pgError.table,
+    });
   }
 
   return null;

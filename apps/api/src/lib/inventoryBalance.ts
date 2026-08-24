@@ -1,6 +1,6 @@
-import { sql } from "drizzle-orm";
 import type { Database } from "@dawajin/db";
 import type { LocationType } from "@dawajin/shared";
+import { sql } from "drizzle-orm";
 
 /**
  * الرصيد = مجموع الحركات دائمًا — لا عمود مخزَّن (decisions.md #14،

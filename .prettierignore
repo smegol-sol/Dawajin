@@ -1,0 +1,7 @@
+node_modules
+dist
+.expo
+pnpm-lock.yaml
+packages/db/migrations
+apps/mobile/constants/tokens.json
+docs/backend-technical-spec.pdf

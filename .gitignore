@@ -49,3 +49,6 @@ google-services.json
 
 # Android Profiling
 *.hprof
+
+# تقارير التغطية — تُولَّد محليًا وفي CI، لا تُلتزم
+coverage/

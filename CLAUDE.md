@@ -28,10 +28,17 @@
 ```bash
 pnpm migrate          # تطبيق الترحيلات (خطوة نشر صريحة — لا تُستدعى تلقائيًا أبدًا)
 pnpm seed:demo        # بيانات تجريبية عبر الـ API حصريًا، بحارس بيئة (production تُرفض)
+pnpm test             # اختبارات الوحدة لكل الحزم (لا اتصال قاعدة بيانات)
 pnpm test:integration # اختبارات التكامل — قاعدة اختبار منفصلة، متسلسلة
-pnpm check:all        # الفحوص الآلية الستة — تفشل البناء، لا تحذيرات
+pnpm check:all        # كل الفحوص الآلية (typecheck·ESLint·Prettier·تغطية·...) — تفشل البناء، لا تحذيرات
 pnpm typecheck        # tsc --noEmit لكل الحزم
 pnpm dev              # تشغيل خادم الـ API محليًا
+
+# داخل apps/api أو packages/shared:
+npx eslint apps/api/src packages/db/src packages/shared/src --fix   # strict-type-checked + قواعد المشروع (القرار #61)
+npx prettier --write apps/api/src packages/db/src packages/shared/src
+pnpm --filter @dawajin/api run test:coverage       # تغطية apps/api (≥80% عام، 100% لطبقة الصلاحيات/الدفتر — القرار #63)
+pnpm --filter @dawajin/shared run test:coverage    # تغطية packages/shared (100% لتطبيع الجوال)
 ```
 
 ## قاعدة سجل القرارات

@@ -1,5 +1,5 @@
-import type { Request, Response, NextFunction } from "express";
 import { HttpError } from "@dawajin/shared";
+import type { Request, Response, NextFunction } from "express";
 
 /**
  * requireTenant — tenant_id من JWT حصريًا، عزل مطلق (المبدأ #7).
@@ -8,16 +8,19 @@ import { HttpError } from "@dawajin/shared";
  */
 export function requireTenant(req: Request, _res: Response, next: NextFunction) {
   if (!req.user) {
-    return next(new HttpError(401, "unauthorized", "الرجاء تسجيل الدخول"));
+    next(new HttpError(401, "unauthorized", "الرجاء تسجيل الدخول"));
+    return;
   }
 
   // مدير المنصة بلا مستأجر — مساره مسارات /platform فقط، تُفحص لاحقًا بحارس دور منفصل
   if (req.user.role === "platform_admin") {
-    return next();
+    next();
+    return;
   }
 
   if (req.user.tenantId == null) {
-    return next(new HttpError(401, "unauthorized", "الحساب غير مرتبط بمستأجر"));
+    next(new HttpError(401, "unauthorized", "الحساب غير مرتبط بمستأجر"));
+    return;
   }
 
   next();

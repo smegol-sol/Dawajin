@@ -11,22 +11,49 @@
  * عبر الـ API حصريًا بدءًا من المرحلة 1 حين توجد مسارات /users فعلية
  * (decisions.md #27). فرقٌ متعمّد يستحق التوضيح لا التجاهل.
  */
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import express from "express";
-import request from "supertest";
-import pino from "pino";
-import { createDbClient, type Database, tenants, users, farms, houses, userAssignments } from "@dawajin/db";
+import {
+  createDbClient,
+  type Database,
+  tenants,
+  users,
+  farms,
+  houses,
+  batches,
+  userAssignments,
+} from "@dawajin/db";
 import { normalizePhoneE164 } from "@dawajin/shared";
+import express from "express";
+import pino from "pino";
+import request from "supertest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+
+import { signAccessToken } from "../lib/jwt";
 import { assertIsTestDatabase } from "../lib/testGuard";
 import { requireAuth } from "../middleware/auth";
-import { requireTenant } from "../middleware/tenant";
 import { enforceEntityAccess } from "../middleware/entityAccess";
 import { errorHandler } from "../middleware/errorHandler";
-import { signAccessToken } from "../lib/jwt";
+import { requireTenant } from "../middleware/tenant";
 
 type Pool = ReturnType<typeof createDbClient>["pool"];
 
 const JWT_SECRET = "probe-test-secret";
+
+interface ProbeCreateUserBody {
+  tenantId: number;
+  fullName: string;
+  role: "farmer";
+  phone: string;
+}
+interface ProbeCreateUserResponseBody {
+  phoneE164: string;
+}
+interface ProbeErrorResponseBody {
+  code: string;
+  message: string;
+}
+interface ProbeHouseResponseBody {
+  ok: boolean;
+}
 
 /** noUncheckedIndexedAccess يجعل rows[0] قابلًا لـ undefined نوعيًا — مساعد اختبار فقط. */
 function firstRow<T>(rows: T[]): T {
@@ -43,6 +70,9 @@ let tenantBId: number;
 let houseInTenantBId: number;
 let farmerInTenantAId: number;
 let farmerInTenantAToken: string;
+let assignedBatchInTenantAId: number;
+let unassignedBatchInTenantBId: number;
+let assignedHouseInTenantAId: number;
 
 function buildProbeApp() {
   const app = express();
@@ -51,12 +81,14 @@ function buildProbeApp() {
   // -- probe 1: تطبيع الجوال + ترجمة 23505 --
   app.post("/_probe/users", async (req, res, next) => {
     try {
-      const { tenantId, fullName, role, phone } = req.body;
+      const { tenantId, fullName, role, phone } = req.body as ProbeCreateUserBody;
       const phoneE164 = normalizePhoneE164(phone, "+967");
-      const row = firstRow(await db
-        .insert(users)
-        .values({ tenantId, fullName, role, phone, phoneE164, passwordHash: "x" })
-        .returning({ id: users.id, phoneE164: users.phoneE164 }));
+      const row = firstRow(
+        await db
+          .insert(users)
+          .values({ tenantId, fullName, role, phone, phoneE164, passwordHash: "x" })
+          .returning({ id: users.id, phoneE164: users.phoneE164 })
+      );
       res.status(201).json({ id: row.id, phoneE164: row.phoneE164, rawInput: phone });
     } catch (error) {
       next(error);
@@ -74,6 +106,30 @@ function buildProbeApp() {
     }
   );
 
+  // -- probe 3: نفس السلسلة عبر batchId (يُحل لعنبره — resolveHouseId) --
+  app.get(
+    "/_probe/batches/:batchId",
+    requireAuth(JWT_SECRET),
+    requireTenant,
+    enforceEntityAccess(db),
+    (req, res) => {
+      res.status(200).json({ ok: true, batchId: req.params.batchId, userId: req.user?.id });
+    }
+  );
+
+  // -- probe 4: houseId عدد JS خام في body لا نصًا من رابط (يفحص فرع
+  // firstDefinedPrimitive الرقمي — لا مصدر آخر ينتج رقمًا خامًا، الرابط
+  // والاستعلام كلاهما نصوص دائمًا في Express) --
+  app.post(
+    "/_probe/access-by-body",
+    requireAuth(JWT_SECRET),
+    requireTenant,
+    enforceEntityAccess(db),
+    (req, res) => {
+      res.status(200).json({ ok: true, userId: req.user?.id });
+    }
+  );
+
   app.use(errorHandler(pino({ level: "silent" })));
   return app;
 }
@@ -86,39 +142,95 @@ beforeAll(async () => {
   pool = client.pool;
   await assertIsTestDatabase(db);
 
-  const tenantA = firstRow(await db
-    .insert(tenants)
-    .values({ name: "مزارع اختبار A", timezone: "Asia/Aden" })
-    .returning({ id: tenants.id }));
-  const tenantB = firstRow(await db
-    .insert(tenants)
-    .values({ name: "مزارع اختبار B", timezone: "Asia/Aden" })
-    .returning({ id: tenants.id }));
+  const tenantA = firstRow(
+    await db
+      .insert(tenants)
+      .values({ name: "مزارع اختبار A", timezone: "Asia/Aden" })
+      .returning({ id: tenants.id })
+  );
+  const tenantB = firstRow(
+    await db
+      .insert(tenants)
+      .values({ name: "مزارع اختبار B", timezone: "Asia/Aden" })
+      .returning({ id: tenants.id })
+  );
   tenantAId = tenantA.id;
   tenantBId = tenantB.id;
 
-  const farmB = firstRow(await db
-    .insert(farms)
-    .values({ tenantId: tenantBId, name: "مزرعة B الرئيسية" })
-    .returning({ id: farms.id }));
-  const houseB = firstRow(await db
-    .insert(houses)
-    .values({ tenantId: tenantBId, farmId: farmB.id, name: "عنبر 1" })
-    .returning({ id: houses.id }));
+  const farmB = firstRow(
+    await db
+      .insert(farms)
+      .values({ tenantId: tenantBId, name: "مزرعة B الرئيسية" })
+      .returning({ id: farms.id })
+  );
+  const houseB = firstRow(
+    await db
+      .insert(houses)
+      .values({ tenantId: tenantBId, farmId: farmB.id, name: "عنبر 1" })
+      .returning({ id: houses.id })
+  );
   houseInTenantBId = houseB.id;
 
-  const farmerA = firstRow(await db
-    .insert(users)
-    .values({
-      tenantId: tenantAId,
-      fullName: "مربي مستأجر A",
-      role: "farmer",
-      phone: "0770000001",
-      phoneE164: normalizePhoneE164("0770000001", "+967"),
-      passwordHash: "x",
-    })
-    .returning({ id: users.id }));
+  const farmerA = firstRow(
+    await db
+      .insert(users)
+      .values({
+        tenantId: tenantAId,
+        fullName: "مربي مستأجر A",
+        role: "farmer",
+        phone: "0770000001",
+        phoneE164: normalizePhoneE164("0770000001", "+967"),
+        passwordHash: "x",
+      })
+      .returning({ id: users.id })
+  );
   farmerInTenantAId = farmerA.id;
+
+  const farmA = firstRow(
+    await db
+      .insert(farms)
+      .values({ tenantId: tenantAId, name: "مزرعة A للدفعات" })
+      .returning({ id: farms.id })
+  );
+  const houseAForBatch = firstRow(
+    await db
+      .insert(houses)
+      .values({ tenantId: tenantAId, farmId: farmA.id, name: "عنبر دفعة مُسندة" })
+      .returning({ id: houses.id })
+  );
+  assignedHouseInTenantAId = houseAForBatch.id;
+  await db.insert(userAssignments).values({
+    userId: farmerInTenantAId,
+    houseId: houseAForBatch.id,
+    tenantId: tenantAId,
+  });
+  const assignedBatchInTenantA = firstRow(
+    await db
+      .insert(batches)
+      .values({
+        tenantId: tenantAId,
+        houseId: houseAForBatch.id,
+        breed: "Ross 308",
+        startDate: "2026-01-01",
+        initialBirdCount: 1000,
+      })
+      .returning({ id: batches.id })
+  );
+  assignedBatchInTenantAId = assignedBatchInTenantA.id;
+
+  const unassignedBatchInTenantB = firstRow(
+    await db
+      .insert(batches)
+      .values({
+        tenantId: tenantBId,
+        houseId: houseInTenantBId,
+        breed: "Cobb 500",
+        startDate: "2026-01-01",
+        initialBirdCount: 1000,
+      })
+      .returning({ id: batches.id })
+  );
+  unassignedBatchInTenantBId = unassignedBatchInTenantB.id;
 
   farmerInTenantAToken = await signAccessToken(
     { sub: String(farmerInTenantAId), tenantId: tenantAId, role: "farmer" },
@@ -137,12 +249,15 @@ describe("١) تطبيع الجوال + رفض التكرار بـ 409 (decision
   const canonical = "+967771234567";
 
   it("الصيغة الأولى (+967...) تُقبل وتُخزَّن مطبَّعة", async () => {
-    const res = await request(app)
-      .post("/_probe/users")
-      .send({ tenantId: tenantAId, fullName: "أحمد المربي", role: "farmer", phone: "+967771234567" });
+    const res = await request(app).post("/_probe/users").send({
+      tenantId: tenantAId,
+      fullName: "أحمد المربي",
+      role: "farmer",
+      phone: "+967771234567",
+    });
 
     expect(res.status).toBe(201);
-    expect(res.body.phoneE164).toBe(canonical);
+    expect((res.body as ProbeCreateUserResponseBody).phoneE164).toBe(canonical);
   });
 
   it.each([
@@ -150,26 +265,32 @@ describe("١) تطبيع الجوال + رفض التكرار بـ 409 (decision
     ["0771234567", "0771... (محلي)"],
     ["٠٧٧١٢٣٤٥٦٧", "أرقام عربية-هندية"],
   ])("الصيغة %s (%s) تُرفض كتكرار — 409", async (rawPhone) => {
-    const res = await request(app)
-      .post("/_probe/users")
-      .send({ tenantId: tenantAId, fullName: "مستخدم آخر بنفس الرقم", role: "farmer", phone: rawPhone });
+    const res = await request(app).post("/_probe/users").send({
+      tenantId: tenantAId,
+      fullName: "مستخدم آخر بنفس الرقم",
+      role: "farmer",
+      phone: rawPhone,
+    });
 
+    const body = res.body as ProbeErrorResponseBody;
     expect(res.status).toBe(409);
-    expect(res.body.code).toBe("duplicate");
-    expect(res.body.message).toContain("رقم الجوال");
+    expect(body.code).toBe("duplicate");
+    expect(body.message).toContain("رقم الجوال");
   });
 
   it("نفس الرقم في مستأجر مختلف مقبول (الفريد داخل المستأجر لا عالميًا)", async () => {
-    const res = await request(app)
-      .post("/_probe/users")
-      .send({ tenantId: tenantBId, fullName: "مربي في مستأجر آخر", role: "farmer", phone: "0771234567" });
+    const res = await request(app).post("/_probe/users").send({
+      tenantId: tenantBId,
+      fullName: "مربي في مستأجر آخر",
+      role: "farmer",
+      phone: "0771234567",
+    });
 
     expect(res.status).toBe(201);
   });
 });
 
 describe("٢) العزل: الوجود قبل التعيين — 404 لا 403 عبر المستأجرين (decisions.md #22)", () => {
-
   it("مستخدم من المستأجر A يطلب عنبرًا من المستأجر B ← 404", async () => {
     const res = await request(app)
       .get(`/_probe/houses/${houseInTenantBId}`)
@@ -188,14 +309,18 @@ describe("٢) العزل: الوجود قبل التعيين — 404 لا 403 ع
   });
 
   it("عنبر موجود في نفس المستأجر لكن غير مُسند للمربي ← 403 (بعد التأكد من الوجود)", async () => {
-    const farmA = firstRow(await db
-      .insert(farms)
-      .values({ tenantId: tenantAId, name: "مزرعة A أخرى" })
-      .returning({ id: farms.id }));
-    const houseA = firstRow(await db
-      .insert(houses)
-      .values({ tenantId: tenantAId, farmId: farmA.id, name: "عنبر غير مُسند" })
-      .returning({ id: houses.id }));
+    const farmA = firstRow(
+      await db
+        .insert(farms)
+        .values({ tenantId: tenantAId, name: "مزرعة A أخرى" })
+        .returning({ id: farms.id })
+    );
+    const houseA = firstRow(
+      await db
+        .insert(houses)
+        .values({ tenantId: tenantAId, farmId: farmA.id, name: "عنبر غير مُسند" })
+        .returning({ id: houses.id })
+    );
 
     const res = await request(app)
       .get(`/_probe/houses/${houseA.id}`)
@@ -206,14 +331,18 @@ describe("٢) العزل: الوجود قبل التعيين — 404 لا 403 ع
   });
 
   it("عنبر مُسند فعليًا للمربي ← 200", async () => {
-    const farmA = firstRow(await db
-      .insert(farms)
-      .values({ tenantId: tenantAId, name: "مزرعة A ثالثة" })
-      .returning({ id: farms.id }));
-    const houseA = firstRow(await db
-      .insert(houses)
-      .values({ tenantId: tenantAId, farmId: farmA.id, name: "عنبر مُسند" })
-      .returning({ id: houses.id }));
+    const farmA = firstRow(
+      await db
+        .insert(farms)
+        .values({ tenantId: tenantAId, name: "مزرعة A ثالثة" })
+        .returning({ id: farms.id })
+    );
+    const houseA = firstRow(
+      await db
+        .insert(houses)
+        .values({ tenantId: tenantAId, farmId: farmA.id, name: "عنبر مُسند" })
+        .returning({ id: houses.id })
+    );
     await db.insert(userAssignments).values({
       userId: farmerInTenantAId,
       houseId: houseA.id,
@@ -225,11 +354,60 @@ describe("٢) العزل: الوجود قبل التعيين — 404 لا 403 ع
       .set("Authorization", `Bearer ${farmerInTenantAToken}`);
 
     expect(res.status).toBe(200);
-    expect(res.body.ok).toBe(true);
+    expect((res.body as ProbeHouseResponseBody).ok).toBe(true);
   });
 
   it("بلا رمز دخول إطلاقًا ← 401 (قبل أي فحص عزل)", async () => {
     const res = await request(app).get(`/_probe/houses/${houseInTenantBId}`);
     expect(res.status).toBe(401);
+  });
+
+  it("رمز دخول تالف/غير صالح ← 401 (لا 500 — jwt.verify يفشل بأمان)", async () => {
+    const res = await request(app)
+      .get(`/_probe/houses/${houseInTenantBId}`)
+      .set("Authorization", "Bearer garbage.not.a.jwt");
+    expect(res.status).toBe(401);
+  });
+});
+
+describe("٣) اشتقاق houseId من batchId (resolveHouseId، القرار #58)", () => {
+  it('batchId غير موجود إطلاقًا ← 404 "الدفعة غير موجودة"', async () => {
+    const res = await request(app)
+      .get(`/_probe/batches/999999`)
+      .set("Authorization", `Bearer ${farmerInTenantAToken}`);
+
+    expect(res.status).toBe(404);
+    expect(res.body).toEqual({ code: "not_found", message: "الدفعة غير موجودة" });
+  });
+
+  it('batchId يُحل لعنبر في مستأجر آخر ← 404 "العنبر غير موجود" (لا تسريب عبر المستأجرين)', async () => {
+    const res = await request(app)
+      .get(`/_probe/batches/${unassignedBatchInTenantBId}`)
+      .set("Authorization", `Bearer ${farmerInTenantAToken}`);
+
+    expect(res.status).toBe(404);
+    expect(res.body).toEqual({ code: "not_found", message: "العنبر غير موجود" });
+  });
+
+  it("batchId يُحل لعنبر مُسند فعليًا للمربي ← 200", async () => {
+    const res = await request(app)
+      .get(`/_probe/batches/${assignedBatchInTenantAId}`)
+      .set("Authorization", `Bearer ${farmerInTenantAToken}`);
+
+    expect(res.status).toBe(200);
+    expect((res.body as { ok: boolean }).ok).toBe(true);
+  });
+
+  it("houseId كعدد JS خام في body (لا نصًا من رابط) يُقبل ويُحسَم بنجاح ← 200", async () => {
+    // لا :houseId في الرابط هنا — القيمة الوحيدة تأتي من body كعدد JSON خام،
+    // خلاف params/query اللذين يبقيان نصوصًا دائمًا في Express (يفحص فرع
+    // firstDefinedPrimitive الرقمي في resolveHouseId).
+    const res = await request(app)
+      .post("/_probe/access-by-body")
+      .set("Authorization", `Bearer ${farmerInTenantAToken}`)
+      .send({ houseId: assignedHouseInTenantAId });
+
+    expect(res.status).toBe(200);
+    expect((res.body as { ok: boolean }).ok).toBe(true);
   });
 });

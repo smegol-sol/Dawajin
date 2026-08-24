@@ -1,4 +1,5 @@
 import { sql } from "drizzle-orm";
+
 import { createDbClient } from "./client";
 
 /**
@@ -16,12 +17,14 @@ async function main() {
   }
 
   const { pool, db } = createDbClient(testDatabaseUrl);
-  await db.execute(sql`create table if not exists __test_marker__ (created_at timestamptz default now())`);
+  await db.execute(
+    sql`create table if not exists __test_marker__ (created_at timestamptz default now())`
+  );
   console.log("[setup-test-db] جدول العلامة جاهز");
   await pool.end();
 }
 
-main().catch((error) => {
+main().catch((error: unknown) => {
   console.error("[setup-test-db] فشل:", error);
   process.exit(1);
 });

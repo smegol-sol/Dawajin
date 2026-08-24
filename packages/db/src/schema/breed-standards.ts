@@ -1,5 +1,6 @@
-import { pgTable, serial, integer, numeric, uniqueIndex } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
+import { pgTable, serial, integer, numeric, uniqueIndex } from "drizzle-orm/pg-core";
+
 import { breedEnum } from "./enums";
 import { tenants } from "./tenants";
 
@@ -28,11 +29,7 @@ export const breedStandards = pgTable(
     chickWeightG: numeric("chick_weight_g", { precision: 6, scale: 2 }),
   },
   (table) => [
-    uniqueIndex("breed_standards_tenant_breed_day_uq").on(
-      table.tenantId,
-      table.breed,
-      table.day
-    ),
+    uniqueIndex("breed_standards_tenant_breed_day_uq").on(table.tenantId, table.breed, table.day),
     // إضافة على النص الحرفي للمواصفة: NULL في tenant_id لا يمنع التكرار في قيد
     // UNIQUE عادي (NULLs متمايزة في PostgreSQL) — هذا الفهرس الجزئي يسد الثغرة
     // لصفوف المعايير العالمية تحديدًا. مسجَّل كقرار إضافي في decisions.md #47.
