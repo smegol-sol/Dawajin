@@ -8,6 +8,7 @@ declare global {
         tenantId: number | null;
         role: UserRole;
       };
+      requestId?: string;
     }
   }
 }
