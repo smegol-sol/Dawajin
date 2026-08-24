@@ -42,6 +42,12 @@ interface FormFieldProps {
   keyboardType?: KeyboardTypeOptions;
   /** تلميح الإكمال التلقائي لمدير كلمات المرور على الجهاز. */
   autoComplete?: "tel" | "current-password" | "new-password" | "off";
+  /**
+   * نص إرشادي داخل الحقل — **إضافة إلى التسمية لا بديلًا عنها**. §8.11 تمنع
+   * «placeholder يختفي» بمعنى استعماله تسميةً؛ التسمية هنا تبقى فوق الحقل
+   * دائمًا، والنص الإرشادي يوضّح **الصيغة** المتوقَّعة وحدها (القرار #92).
+   */
+  placeholder?: string;
   /** معرّف الاختبار — يُمرَّر لحقل الإدخال نفسه لا للحاوية. */
   testID?: string;
 }
@@ -63,15 +69,15 @@ export function FormField({
   secureTextEntry = false,
   keyboardType,
   autoComplete,
+  placeholder,
   testID,
 }: FormFieldProps) {
   const [isFocused, setIsFocused] = useState(false);
-  const focused = forceFocusedStyle || isFocused;
-  const hasError = error !== undefined;
-  const fieldColors = {
-    borderColor: borderColorFor({ disabled, hasError, focused }),
-    backgroundColor: disabled ? color.surfaceSunken : color.surfaceCard,
-  };
+  const fieldColors = fieldColorsFor({
+    disabled,
+    hasError: error !== undefined,
+    focused: forceFocusedStyle || isFocused,
+  });
 
   return (
     <View style={styles.container}>
@@ -95,23 +101,52 @@ export function FormField({
           secureTextEntry={secureTextEntry}
           keyboardType={keyboardType}
           autoComplete={autoComplete}
+          placeholder={placeholder}
           testID={testID}
           fieldColors={fieldColors}
           onFocusChange={setIsFocused}
         />
       )}
 
-      {hasError ? (
-        <Text
-          style={styles.error}
-          testID={testID === undefined ? undefined : `${testID}-error`}
-          accessibilityRole="alert"
-        >
-          {error}
-        </Text>
-      ) : null}
+      <FieldError message={error} testID={testID} />
     </View>
   );
+}
+
+/** رسالة الخطأ تحت الحقل مباشرة لا أعلى الشاشة (§8.11). */
+function FieldError({
+  message,
+  testID,
+}: {
+  message?: string | undefined;
+  testID?: string | undefined;
+}) {
+  if (message === undefined) return null;
+  return (
+    <Text
+      style={styles.error}
+      testID={testID === undefined ? undefined : `${testID}-error`}
+      accessibilityRole="alert"
+    >
+      {message}
+    </Text>
+  );
+}
+
+/** لون الحد والخلفية للحالات الأربع: عادي · مركّز · خطأ · معطّل (§8.11). */
+function fieldColorsFor({
+  disabled,
+  hasError,
+  focused,
+}: {
+  disabled: boolean;
+  hasError: boolean;
+  focused: boolean;
+}): { borderColor: string; backgroundColor: string } {
+  return {
+    borderColor: borderColorFor({ disabled, hasError, focused }),
+    backgroundColor: disabled ? color.surfaceSunken : color.surfaceCard,
+  };
 }
 
 function borderColorFor({
@@ -142,6 +177,7 @@ function TextField({
   secureTextEntry,
   keyboardType,
   autoComplete,
+  placeholder,
   testID,
   fieldColors,
   onFocusChange,
@@ -154,6 +190,7 @@ function TextField({
   secureTextEntry: boolean;
   keyboardType?: KeyboardTypeOptions | undefined;
   autoComplete?: FormFieldProps["autoComplete"];
+  placeholder?: string | undefined;
   testID?: string | undefined;
   fieldColors: { borderColor: string; backgroundColor: string };
   onFocusChange: (focused: boolean) => void;
@@ -171,6 +208,9 @@ function TextField({
       secureTextEntry={secureTextEntry}
       keyboardType={keyboardType}
       autoComplete={autoComplete}
+      placeholder={placeholder}
+      // #4A4A4A هو الحد المسموح تمامًا لنص فعّال (§12) — لا أفتح منه
+      placeholderTextColor={color.textBody}
       autoCapitalize="none"
       testID={testID}
       accessibilityLabel={label}

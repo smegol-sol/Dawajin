@@ -109,9 +109,14 @@ function LoginFields({
         onChangeText={onPhoneChange}
         keyboardType="phone-pad"
         autoComplete="tel"
+        placeholder="77xxxxxxx"
         testID="login-phone"
         error={errorFor("phone")}
       />
+      {/* تحت حقل الجوال مباشرة لا في نهاية النموذج — يخصّه وحده */}
+      <Text style={styles.hint} testID="login-phone-hint">
+        بصفر بادئ أو بدونه، وبرمز الدولة أو بدونه — النظام يوحّد الصيغ
+      </Text>
 
       <FormField
         label="كلمة المرور"
@@ -120,6 +125,7 @@ function LoginFields({
         onChangeText={onPasswordChange}
         secureTextEntry
         autoComplete="current-password"
+        placeholder="كلمة المرور التي سلّمها لك المشرف"
         testID="login-password"
         error={errorFor("password")}
       />
@@ -186,14 +192,16 @@ const styles = StyleSheet.create({
   scroll: {
     flexGrow: 1,
     padding: spacing.xxl,
-    gap: spacing.xxl,
-    // الإجراء أسفل الشاشة والنموذج فوقه — قاعدة الإبهام (§11)
-    justifyContent: "space-between",
+    // تدفّق من الأعلى بمسافات المقياس، لا `space-between` الذي كان يمطّ
+    // الكتلة فيبدأ النموذج قرب منتصف الشاشة والزر ملتصقًا بالأسفل.
+    // الزر يبقى بعد النموذج مباشرة — أقرب للإبهام على الشاشات الصغيرة
+    // فعليًا مما كان عليه وهو مثبَّت في القاع على شاشة طويلة.
+    gap: spacing.xl,
   },
   brand: {
     alignItems: "center",
     gap: spacing.xs,
-    paddingTop: spacing.xxl,
+    paddingTop: spacing.lg,
   },
   appName: {
     // screenTitle لا heroNumber: heroNumber رمز دلالي لـ"الرقم البطل" (§8.5)
@@ -211,12 +219,21 @@ const styles = StyleSheet.create({
     writingDirection: "rtl",
   },
   form: {
-    gap: spacing.lg,
+    gap: spacing.md,
     backgroundColor: color.surfaceRaised,
     borderRadius: radius.card,
     borderWidth: 1,
     borderColor: color.borderSubtle,
     padding: spacing.lg,
+  },
+  hint: {
+    // حجم المحتوى لا technicalRef (11px): هذا نص يقرؤه المربي تحت شمس
+    // مباشرة، و§7.2 تحصر ما دون 15px في الشارات والتبويبات والمراجع التقنية
+    fontSize: font.size.content,
+    fontFamily: font.familyRegular,
+    color: color.textBody,
+    writingDirection: "rtl",
+    textAlign: "right",
   },
   formError: {
     fontSize: font.size.content,

@@ -2,7 +2,6 @@ import { useRouter } from "expo-router";
 import { useState } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 
-import { AppHeader } from "@/components/ui/AppHeader";
 import { Card } from "@/components/ui/Card";
 import { color, font, spacing } from "@/constants/theme";
 import { LoginRequestError, login } from "@/lib/api";
@@ -21,8 +20,12 @@ const ROLE_LABEL: Record<string, string> = {
 
 /**
  * اختيار الحساب عند تطابق الجوال وكلمة المرور مع أكثر من مستأجر — طبيب
- * مستقل يخدم عدة ملّاك (القرار #57). **شاشة فرعية** بمتغيّر `sub` من
- * AppHeader: سهم رجوع يمينًا يعيد لشاشة الدخول (§8.8 و§10 قاعدة 1).
+ * مستقل يخدم عدة ملّاك (القرار #57).
+ *
+ * **بلا AppHeader** (القرار #93): متغيّرا §8.8 كلاهما يفترضان مستخدمًا داخل
+ * التطبيق — سهم الرجوع يفترض شاشة سابقة يُرجَع إليها، والجرس يفترض إشعارات
+ * لحساب قائم. هنا كلمة المرور تحققت لكن **لم يُختَر حساب بعد**، فلا جلسة
+ * ولا إشعارات، والرجوع بلا وجهة. كتلة عنوان بسيطة كشاشة الدخول قبلها.
  *
  * البطاقة تعرض **اسم المستأجر** بارزًا لأنه وحده ما يميّز الحسابين، والاسم
  * والدور ثانويَّين تحته (القرار #84). **`tenantId` يُرسَل ولا يُعرَض إطلاقًا**
@@ -33,11 +36,6 @@ export default function SelectAccountScreen() {
   const pending = getPendingLogin();
   const [error, setError] = useState<LoginErrorView | null>(null);
   const [submitting, setSubmitting] = useState(false);
-
-  function goBackToLogin(): void {
-    clearPendingLogin();
-    router.replace("/auth/login");
-  }
 
   async function chooseAccount(tenantId: number): Promise<void> {
     if (pending === null || submitting) return;
@@ -65,12 +63,12 @@ export default function SelectAccountScreen() {
 
   return (
     <View style={styles.flex}>
-      <AppHeader
-        variant="sub"
-        title="اختر الحساب"
-        contextLine="نفس رقم الجوال مسجَّل لدى أكثر من مالك"
-        onBackPress={goBackToLogin}
-      />
+      <View style={styles.header}>
+        <Text style={styles.title} testID="select-account-title">
+          اختر الحساب
+        </Text>
+        <Text style={styles.subtitle}>نفس رقم الجوال مسجَّل لدى أكثر من مالك</Text>
+      </View>
 
       <ScrollView contentContainerStyle={styles.scroll}>
         <AccountList accounts={pending?.accounts ?? null} onChoose={chooseAccount} />
@@ -174,6 +172,27 @@ const styles = StyleSheet.create({
   flex: {
     flex: 1,
     backgroundColor: color.surfacePage,
+  },
+  header: {
+    gap: spacing.xxs,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.xxl,
+    paddingBottom: spacing.md,
+  },
+  title: {
+    fontSize: font.size.screenTitle,
+    fontFamily: font.familyBold,
+    color: color.brandPrimary,
+    writingDirection: "rtl",
+    // العنوان محاذاته يمين حصرًا في كل الحالات (§10 قاعدة 4)
+    textAlign: "right",
+  },
+  subtitle: {
+    fontSize: font.size.content,
+    fontFamily: font.familyRegular,
+    color: color.textBody,
+    writingDirection: "rtl",
+    textAlign: "right",
   },
   scroll: {
     padding: spacing.lg,
