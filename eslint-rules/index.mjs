@@ -2,6 +2,7 @@ import noDbInRoutes from "./no-db-in-routes.mjs";
 import noEnglishUserError from "./no-english-user-error.mjs";
 import noFloatQuantityColumn from "./no-float-quantity-column.mjs";
 import noMagicConfigNumber from "./no-magic-config-number.mjs";
+import noManualTempPassword from "./no-manual-temp-password.mjs";
 import noUnvettedHouseIdReuse from "./no-unvetted-house-id-reuse.mjs";
 import requireTxForMultiTableWrite from "./require-tx-for-multi-table-write.mjs";
 
@@ -14,5 +15,6 @@ export default {
     "no-english-user-error": noEnglishUserError,
     "no-float-quantity-column": noFloatQuantityColumn,
     "no-magic-config-number": noMagicConfigNumber,
+    "no-manual-temp-password": noManualTempPassword,
   },
 };

@@ -12,6 +12,7 @@ import type { Env } from "./lib/env";
 import { requireAuth } from "./middleware/auth";
 import { enforceEntityAccess } from "./middleware/entityAccess";
 import { errorHandler } from "./middleware/errorHandler";
+import { requireLiveSession } from "./middleware/liveSession";
 import { requestId } from "./middleware/requestId";
 import { requireTenant } from "./middleware/tenant";
 import { authProtectedRouter } from "./routes/authProtected";
@@ -76,7 +77,15 @@ export function createApp(db: Database, env: Env, logger: Logger): Express {
   // لإعادة بناء بادئة من regexp داخلي (scripts/lib/introspectRoutes.ts) —
   // لا اعتماد على اسم متغيّر ولا مطابقة نصية تفوّت مسارًا بالخطأ.
   const api = express.Router();
-  api.use(requireAuth(env.JWT_SECRET), requireTenant, enforceEntityAccess(db));
+  api.use(
+    requireAuth(env.JWT_SECRET),
+    // بعد requireAuth مباشرة: يعيد قراءة is_active و must_change_password من
+    // القاعدة بقراءة واحدة، فلا يمر طلب على رمز لحساب عُطِّل أو بكلمة مؤقتة
+    // لم تُغيَّر (القرار #99)
+    requireLiveSession(db),
+    requireTenant,
+    enforceEntityAccess(db)
+  );
   api.use(authProtectedRouter(db, env));
   api.use(settingsRouter(db));
   app.use(api);
