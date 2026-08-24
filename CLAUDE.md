@@ -38,6 +38,14 @@ cp .env.example .env   # مرة واحدة — القيم الافتراضية �
 set -a && source .env && set +a   # في كل جلسة/طرفية جديدة قبل أي أمر يلمس القاعدة
 ```
 
+تأكيدات تخطيط RTL (`check:all` الفحص العاشر) تحتاج متصفحًا مطابقًا لنسخة Playwright. في حاوية
+تحمل نسخة مثبَّتة مسبقًا لا تطابقها (فتفشل بـ`Executable doesn't exist`)، صدّر المسار الموجود بدل
+`playwright install` (القرار #103):
+
+```bash
+export PLAYWRIGHT_CHROMIUM_EXECUTABLE=/opt/pw-browsers/chromium-1194/chrome-linux/chrome
+```
+
 `.env` مُستبعَد بـ`.gitignore` (`.env` و`.env.*`) ولا يُلتزم أبدًا — القرار #67 في `docs/decisions.md`
 دقّق كل تاريخ المستودع للتأكد من عدم تسرّب سرّ حقيقي واحد.
 
