@@ -1,6 +1,7 @@
-// إعداد ESLint للخادم فقط: apps/api · packages/db · packages/shared.
-// apps/mobile له إعداده الخاص (eslint-config-expo) — نطاق مختلف (React
-// Native)، والقواعد المخصصة هنا (Drizzle/tx/رسائل الخطأ) خادمية بحتة.
+// إعداد ESLint لكل كود المستودع بلا استثناء ملف واحد — لا "هذا سابق
+// للقواعد" ولا "هذا أداة لا تطبيق". القواعد المخصصة (Drizzle/tx/رسائل
+// الخطأ/أعمدة float) خادمية بطبيعتها فلن تُطلق على كود الموبايل، لكنها
+// مُفعَّلة عليه أيضًا لا مستثناة منه.
 import js from "@eslint/js";
 import tseslint from "typescript-eslint";
 import importX from "eslint-plugin-import-x";
@@ -16,15 +17,10 @@ export default tseslint.config(
     ignores: [
       "**/dist/**",
       "**/node_modules/**",
-      "apps/mobile/**",
-      "**/*.config.{js,mjs,ts}",
-      "packages/db/drizzle.config.ts",
+      "**/.expo/**",
+      "**/coverage/**",
+      // SQL ولقطات JSON مولَّدة بـ drizzle-kit — ليست كودًا يُكتب يدويًا
       "packages/db/migrations/**",
-      // أدوات بناء الفحوص نفسها (scripts/checks/*.ts, قواعد ESLint المخصصة)
-      // خارج نطاق هذه البوابة عمدًا — البوابة تحرس كود التطبيق الخادم لا
-      // الأدوات التي تبنيها.
-      "scripts/**",
-      "eslint-rules/**",
     ],
   },
   js.configs.recommended,
@@ -36,7 +32,9 @@ export default tseslint.config(
   {
     languageOptions: {
       parserOptions: {
-        projectService: true,
+        projectService: {
+          allowDefaultProject: ["*.mjs", "*.js"],
+        },
         tsconfigRootDir: __dirname,
       },
     },
@@ -87,7 +85,10 @@ export default tseslint.config(
       // (req,res,next)=>void — Express لا ينتظر عودته أصلًا، والخطأ يُمسَك
       // فعليًا عبر try/catch+next(error) في كل معالج (لا تجاهل صامت لوعد).
       // القيود الأخرى للقاعدة (نسيان await، وعد في شرط) تبقى فعّالة.
-      "@typescript-eslint/no-misused-promises": ["error", { checksVoidReturn: { arguments: false } }],
+      "@typescript-eslint/no-misused-promises": [
+        "error",
+        { checksVoidReturn: { arguments: false } },
+      ],
       // أرقام تُستخدم كثيرًا بأمان في قوالب نصية (أعمار، عدّادات) — تحويلها
       // نصيًا يعطي دائمًا التمثيل المتوقَّع؛ الخطر الحقيقي (كائن/undefined)
       // يبقى مرفوضًا.
@@ -113,18 +114,10 @@ export default tseslint.config(
     },
   },
   {
-    // مسموح بـ console في سكربتات التشغيل والاختبار — ليست كود خادم يخدم طلبات
-    files: ["**/*.test.ts", "**/*.integration.test.ts", "**/scripts/**/*.ts", "**/migrate.ts", "**/setup-test-db.ts"],
-    rules: {
-      "no-console": "off",
-      "max-lines-per-function": "off",
-      "dawajin/no-db-in-routes": "off",
-      // بيانات تركيب اختبار (fixtures) لا مسار كتابة إنتاجي — لا حاجة لذرّية
-      // معاملاتية بين صفوف تجريبية في جداول مختلفة (المبدأ #2 يخص الإنتاج).
-      "dawajin/require-tx-for-multi-table-write": "off",
-      // قيم إدخال اختبار (body مُرسَل لفحص سلوك) ليست "إعدادًا مُدمَجًا في
-      // كود التطبيق" — الإعداد الفعلي القابل للضبط يبقى في عمود tenants.
-      "dawajin/no-magic-config-number": "off",
-    },
+    // ملفات JS/MJS خالصة (قواعد ESLint المخصصة، ملفات الإعداد) — قواعد
+    // typescript-eslint المعتمِدة على الأنواع لا يمكنها العمل بلا برنامج TS
+    // (قيد تقني لا تخفيف: لا توجد أنواع لتُفحَص). بقية القواعد فعّالة عليها.
+    files: ["**/*.mjs", "**/*.js"],
+    extends: [tseslint.configs.disableTypeChecked],
   }
 );
