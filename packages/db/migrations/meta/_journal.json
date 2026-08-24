@@ -15,6 +15,13 @@
       "when": 1787535234960,
       "tag": "0001_seed_breed_standards",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1787537000542,
+      "tag": "0002_unify_audit_log_columns",
+      "breakpoints": true
     }
   ]
 }
