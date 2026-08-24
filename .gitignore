@@ -1,3 +1,20 @@
+# Node / pnpm
+node_modules/
+dist/
+.turbo/
+*.tsbuildinfo
+pnpm-debug.log*
+
+# Env
+.env
+.env.*
+!.env.example
+
+# Expo
+.expo/
+.expo-shared/
+web-build/
+
 # Gradle files
 .gradle/
 build/

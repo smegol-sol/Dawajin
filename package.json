@@ -1,0 +1,26 @@
+{
+  "name": "dawajin",
+  "private": true,
+  "version": "0.0.1",
+  "description": "نظام إدارة مزارع دواجن التسمين — مونوريبو",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "migrate": "pnpm --filter @dawajin/db run migrate",
+    "generate": "pnpm --filter @dawajin/db run generate",
+    "seed:demo": "pnpm --filter @dawajin/api run seed:demo",
+    "dev": "pnpm --filter @dawajin/api run dev",
+    "test": "pnpm -r run test",
+    "test:integration": "pnpm --filter @dawajin/api run test:integration",
+    "typecheck": "pnpm -r run typecheck",
+    "check:all": "tsx scripts/check-all.ts",
+    "api:generate": "pnpm --filter @dawajin/api run api:generate"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "tsx": "^4.19.2"
+  }
+}

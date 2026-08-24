@@ -1,0 +1,28 @@
+{
+  "expo": {
+    "name": "دواجن",
+    "slug": "dawajin",
+    "scheme": "dawajin",
+    "version": "0.0.1",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "backgroundColor": "#EDE7D6"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.dawajin.app"
+    },
+    "android": {
+      "package": "com.dawajin.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#EDE7D6"
+      }
+    },
+    "plugins": ["expo-router", "expo-secure-store", "expo-font"],
+    "extra": {
+      "router": {}
+    }
+  }
+}

@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: dawajin
+          POSTGRES_PASSWORD: dawajin_ci_password
+          POSTGRES_DB: dawajin_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U dawajin"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgres://dawajin:dawajin_ci_password@localhost:5432/dawajin_test
+      TEST_DATABASE_URL: postgres://dawajin:dawajin_ci_password@localhost:5432/dawajin_test
+      JWT_SECRET: ci-only-secret
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: تطبيق الترحيلات على قاعدة الاختبار
+        run: pnpm --filter @dawajin/db run migrate
+
+      - name: تجهيز جدول علامة الاختبار
+        run: pnpm --filter @dawajin/db run setup:test-db
+
+      - name: الفحوص الآلية الستة
+        run: pnpm run check:all
+
+      - name: اختبارات الوحدة
+        run: pnpm run test
+
+      - name: اختبارات التكامل
+        run: pnpm run test:integration
