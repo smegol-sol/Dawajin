@@ -22,6 +22,10 @@ import {
   NOTIFICATION_URGENCY,
   SUBSCRIPTION_STATUS,
   LOCATION_TYPE,
+  HEALTH_TASK_PRIORITY,
+  HEALTH_OBSERVATION_STATUS,
+  DISPUTE_STATUS,
+  STORAGE_CONDITIONS,
 } from "@dawajin/shared";
 
 // كل قيمة enum مصدرها packages/shared — لا تُعرَّف القوائم هنا (backend-technical-spec.md §6).
@@ -65,3 +69,10 @@ export const subscriptionStatusEnum = pgEnum(
   SUBSCRIPTION_STATUS
 );
 export const locationTypeEnum = pgEnum("location_type", LOCATION_TYPE);
+export const healthTaskPriorityEnum = pgEnum("health_task_priority", HEALTH_TASK_PRIORITY);
+export const healthObservationStatusEnum = pgEnum(
+  "health_observation_status",
+  HEALTH_OBSERVATION_STATUS
+);
+export const disputeStatusEnum = pgEnum("dispute_status", DISPUTE_STATUS);
+export const storageConditionsEnum = pgEnum("storage_conditions", STORAGE_CONDITIONS);

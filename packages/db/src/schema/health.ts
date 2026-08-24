@@ -14,7 +14,9 @@ import {
   doseBasisEnum,
   routeEnum,
   healthTaskStatusEnum,
+  healthTaskPriorityEnum,
   healthObservationSeverityEnum,
+  healthObservationStatusEnum,
 } from "./enums";
 import { tenants } from "./tenants";
 import { houses, batches } from "./farms";
@@ -42,7 +44,7 @@ export const healthTasks = pgTable("health_tasks", {
   doseBasis: doseBasisEnum("dose_basis"),
   route: routeEnum("route"),
   scheduledDate: date("scheduled_date").notNull(),
-  priority: varchar("priority", { length: 16 }),
+  priority: healthTaskPriorityEnum("priority").notNull().default("عادي"),
   notesVet: text("notes_vet"),
   status: healthTaskStatusEnum("status").notNull().default("معلقة"),
   createdBy: integer("created_by")
@@ -87,7 +89,7 @@ export const healthObservations = pgTable("health_observations", {
   affectedEstimate: integer("affected_estimate"),
   photoUrls: text("photo_urls").array(),
   notes: text("notes"),
-  status: varchar("status", { length: 24 }).notNull().default("جديد"),
+  status: healthObservationStatusEnum("status").notNull().default("جديد"),
   vetResponse: text("vet_response"),
   respondedBy: integer("responded_by").references(() => users.id),
   respondedAt: timestamp("responded_at", { withTimezone: true }),

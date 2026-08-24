@@ -167,3 +167,21 @@ export type SubscriptionStatus = (typeof SUBSCRIPTION_STATUS)[number];
 /** نوع الموقع في دفتر المخزون — القيدان المذكوران حرفيًا في قيد CHECK بـ §7.3. */
 export const LOCATION_TYPE = ["warehouse", "house"] as const;
 export type LocationType = (typeof LOCATION_TYPE)[number];
+
+/** أولوية المهمة الصحية (decisions.md #50 — حسمها صاحب المنتج). */
+export const HEALTH_TASK_PRIORITY = ["عادي", "عاجل"] as const;
+export type HealthTaskPriority = (typeof HEALTH_TASK_PRIORITY)[number];
+
+/** حالة البلاغ الصحي (decisions.md #51). */
+export const HEALTH_OBSERVATION_STATUS = ["جديد", "قيد المراجعة", "مغلق"] as const;
+export type HealthObservationStatus = (typeof HEALTH_OBSERVATION_STATUS)[number];
+
+/**
+ * حالة النزاع نفسها — منفصلة عن dispute_outcome (سبب الحسم). decisions.md #52.
+ */
+export const DISPUTE_STATUS = ["مفتوح", "مغلق"] as const;
+export type DisputeStatus = (typeof DISPUTE_STATUS)[number];
+
+/** ظروف تخزين المنتج (decisions.md #53). */
+export const STORAGE_CONDITIONS = ["عادي", "مبرّد 2-8°م", "مجمّد"] as const;
+export type StorageConditions = (typeof STORAGE_CONDITIONS)[number];

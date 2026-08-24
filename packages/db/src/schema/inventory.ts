@@ -24,7 +24,9 @@ import {
   shipmentStatusEnum,
   shipmentVarianceStatusEnum,
   disputeOutcomeEnum,
+  disputeStatusEnum,
   wastageReasonEnum,
+  storageConditionsEnum,
 } from "./enums";
 import { tenants } from "./tenants";
 import { users } from "./users";
@@ -66,7 +68,7 @@ export const products = pgTable(
     defaultDoseBasis: doseBasisEnum("default_dose_basis"),
     defaultRoute: routeEnum("default_route"),
     withdrawalDays: integer("withdrawal_days"),
-    storageConditions: varchar("storage_conditions", { length: 64 }),
+    storageConditions: storageConditionsEnum("storage_conditions"),
     supplier: varchar("supplier", { length: 160 }),
     notes: text("notes"),
     isActive: boolean("is_active").notNull().default(true),
@@ -166,7 +168,7 @@ export const shipments = pgTable(
     notesReceiver: text("notes_receiver"),
     signatureUrl: text("signature_url"),
     photoUrls: text("photo_urls").array(),
-    disputeStatus: varchar("dispute_status", { length: 32 }),
+    disputeStatus: disputeStatusEnum("dispute_status"),
     disputeOutcome: disputeOutcomeEnum("dispute_outcome"),
     disputeReason: text("dispute_reason"),
     disputeClosedBy: integer("dispute_closed_by").references(() => users.id),
