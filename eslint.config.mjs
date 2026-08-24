@@ -148,5 +148,16 @@ export default tseslint.config(
     rules: {
       "no-console": "off",
     },
+  },
+  {
+    // react-test-renderer مُعلَن deprecated من فريق React نفسه (بلا بديل
+    // مستقر بعد لاختبار مكوّنات React Native تحديدًا) — @testing-library/
+    // react-native v13 يعتمد عليه بنيويًا حاليًا (ReactTestInstance هو نوع
+    // إرجاع render/screen). هذا قيد أداة بيئية لا كود يمكن إصلاحه، ونطاقه
+    // محصور بملف الأدوات المساعدة الوحيد الذي يستورد النوع صراحة (decisions.md).
+    files: ["apps/mobile/test-utils/**/*.ts"],
+    rules: {
+      "@typescript-eslint/no-deprecated": "off",
+    },
   }
 );
