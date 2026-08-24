@@ -114,6 +114,7 @@ export default tseslint.config(
       "dawajin/no-english-user-error": "error",
       "dawajin/no-float-quantity-column": "error",
       "dawajin/no-magic-config-number": "error",
+      "dawajin/no-manual-temp-password": "error",
     },
   },
   {
