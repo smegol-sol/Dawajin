@@ -6,7 +6,9 @@ import {
   TEMP_PASSWORD_LENGTH,
   TEMP_PASSWORD_NOT_GENERATED_MESSAGE,
   isGeneratedTemporaryPassword,
+  normalizeTemporaryPassword,
 } from "@dawajin/shared";
+import bcrypt from "bcryptjs";
 
 /**
  * توليد الكلمة المؤقتة — **خادمي حصرًا**.
@@ -48,4 +50,30 @@ export function assertGeneratedTemporaryPassword(candidate: string): void {
   if (!isGeneratedTemporaryPassword(candidate)) {
     throw new HttpError(400, "temp_password_not_generated", TEMP_PASSWORD_NOT_GENERATED_MESSAGE);
   }
+}
+
+/**
+ * يقارن كلمة مرور مُدخَلة بتجزئتها، **متسامحًا مع شرطات العرض في الكلمة
+ * المؤقتة وحدها**.
+ *
+ * المخزَّن والمُجزَّأ هو الشكل القانوني (12 محرفًا بلا شرطات)، لكن المشرف يرى
+ * `K7RM-4XQP-2HTV` على شاشته فقد ينسخها بالشرطات. المقارنة المباشرة كانت
+ * ستفشل، والمستخدم يظن أن الكلمة خاطئة (القرار #105).
+ *
+ * **التسامح مقيَّد بالشكل لا عام:** المحاولة الثانية لا تقع إلا إذا كان النص
+ * بعد حذف الشرطات مطابقًا **لشكل الكلمة المولَّدة بالضبط** (12 محرفًا من
+ * الأبجدية المعتمدة). فكلمة مرور يختارها المستخدم وتحوي شرطة لا تُمسّ
+ * إطلاقًا — لا يُحذف منها شيء ولا تُقارَن بصيغة أخرى.
+ * @returns true إن طابق النص كما هو، أو طابق شكله القانوني حين يكون مؤقتًا
+ */
+export async function verifyPasswordAllowingTempFormat(
+  input: string,
+  passwordHash: string
+): Promise<boolean> {
+  if (await bcrypt.compare(input, passwordHash)) return true;
+
+  const canonical = normalizeTemporaryPassword(input);
+  if (canonical === input || !isGeneratedTemporaryPassword(canonical)) return false;
+
+  return bcrypt.compare(canonical, passwordHash);
 }

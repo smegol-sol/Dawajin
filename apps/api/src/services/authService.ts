@@ -5,6 +5,7 @@ import { and, eq } from "drizzle-orm";
 
 import type { Env } from "../lib/env";
 import { signAccessToken } from "../lib/jwt";
+import { verifyPasswordAllowingTempFormat } from "../lib/tempPassword";
 
 /**
  * طبقة services لمسارات auth — كل استعلام Drizzle يعيش هنا لا في routes/*.ts
@@ -87,7 +88,7 @@ export async function loginWithPhonePassword(
 
   const matches = [];
   for (const candidate of candidates) {
-    if (await bcrypt.compare(input.password, candidate.user.passwordHash)) {
+    if (await verifyPasswordAllowingTempFormat(input.password, candidate.user.passwordHash)) {
       matches.push(candidate);
     }
   }
@@ -174,7 +175,10 @@ export async function changeUserPassword(
   const [user] = await db.select().from(users).where(eq(users.id, input.userId)).limit(1);
   if (!user) throw new HttpError(404, "not_found", "المستخدم غير موجود");
 
-  const currentOk = await bcrypt.compare(input.currentPassword, user.passwordHash);
+  const currentOk = await verifyPasswordAllowingTempFormat(
+    input.currentPassword,
+    user.passwordHash
+  );
   if (!currentOk) {
     throw new HttpError(401, "invalid_credentials", "كلمة المرور الحالية غير صحيحة");
   }
