@@ -9,7 +9,9 @@ interface NumberStepperProps {
   min?: number;
   max?: number;
   onChange: (value: number) => void;
-  /** سطر الحساب تحت الرقم، مثل «= 375 كجم» (§8.10). */
+  /** التسمية فوق العنصر — يوحّد مع اتفاقية حقول النموذج (§8.11). */
+  label?: string;
+  /** سطر الحساب تحت الرقم، مثل «= 375 كجم» (§8.10) — نتيجة محسوبة لا تسمية. */
   computedLine?: string;
 }
 
@@ -24,6 +26,7 @@ export function NumberStepper({
   min = 0,
   max,
   onChange,
+  label,
   computedLine,
 }: NumberStepperProps) {
   const atMin = value <= min;
@@ -44,6 +47,7 @@ export function NumberStepper({
 
   return (
     <View style={styles.container}>
+      {label ? <Text style={styles.label}>{label}</Text> : null}
       <View style={styles.row}>
         <StepButton icon={Plus} disabled={atMax} onPress={increment} label="زيادة" />
         <View style={styles.valueBlock}>
@@ -94,6 +98,12 @@ const styles = StyleSheet.create({
   container: {
     alignItems: "center",
     gap: spacing.xs,
+  },
+  label: {
+    fontSize: font.size.content,
+    fontFamily: font.familyRegular,
+    color: color.brandPrimary,
+    writingDirection: "rtl",
   },
   row: {
     flexDirection: "row",

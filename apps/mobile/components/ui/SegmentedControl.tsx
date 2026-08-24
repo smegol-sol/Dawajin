@@ -61,8 +61,10 @@ const styles = StyleSheet.create({
     borderRadius: radius.control,
     backgroundColor: color.surfaceSunken,
   },
+  // أخضر — يوحّد مع اصطلاح "نشط/محدَّد" في كل مكوّن آخر (BottomTabBar،
+  // Chip، الزر الأساسي) بدل الأخضر الداكن brandPrimary المحجوز للهوية.
   segmentActive: {
-    backgroundColor: color.brandPrimary,
+    backgroundColor: color.accentSuccess,
   },
   label: {
     fontSize: font.size.content,

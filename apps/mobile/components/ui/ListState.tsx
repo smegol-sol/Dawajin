@@ -2,6 +2,7 @@ import { Inbox, RefreshCw, TriangleAlert } from "lucide-react-native";
 import type { ReactNode } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
+import { Button } from "@/components/ui/Button";
 import { color, font, radius, spacing } from "@/constants/theme";
 
 type ListStateProps =
@@ -49,10 +50,9 @@ export function ListState(props: ListStateProps) {
         <View style={styles.centerBlock}>
           <TriangleAlert color={color.statusCritical} size={40} />
           <Text style={styles.message}>{props.reason}</Text>
-          <Pressable onPress={props.onRetry} accessibilityRole="button" style={styles.retryButton}>
-            <RefreshCw color={color.textOnDark} size={16} />
-            <Text style={styles.retryLabel}>إعادة المحاولة</Text>
-          </Pressable>
+          {/* إعادة المحاولة إجراء آمن لا خطِر — ثانوي، لا أحمر ممتلئ (§7.1:
+              الأحمر محصور بالخطر/النزاع/الرفض). */}
+          <Button label="إعادة المحاولة" variant="secondary" icon={RefreshCw} onPress={props.onRetry} />
         </View>
       );
   }
@@ -87,21 +87,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   actionLabel: {
-    fontSize: font.size.content,
-    fontFamily: font.familyBold,
-    color: color.textOnDark,
-    writingDirection: "rtl",
-  },
-  retryButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.xs,
-    height: 44,
-    paddingHorizontal: spacing.lg,
-    borderRadius: radius.control,
-    backgroundColor: color.statusCritical,
-  },
-  retryLabel: {
     fontSize: font.size.content,
     fontFamily: font.familyBold,
     color: color.textOnDark,

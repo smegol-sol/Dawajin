@@ -26,9 +26,10 @@ export const color = {
 
 /**
  * يُلحق بايت شفافية بلون hex نقي (بلا #alpha مسبق) — يستنسخ صيغة
- * "RRGGBB+alphaHex" المعروفة في RN/CSS. `alpha` كسر 0-1.
+ * "RRGGBB+alphaHex" المعروفة في RN/CSS. `alpha` كسر 0-1. مُصدَّرة لأي مكوّن
+ * يحتاج نصًا ثانويًا بشفافية على خلفية داكنة (مثل StatTile.onDark).
  */
-function withAlpha(hex: string, alpha: number): string {
+export function withAlpha(hex: string, alpha: number): string {
   const alphaHex = Math.round(alpha * 255)
     .toString(16)
     .padStart(2, "0");

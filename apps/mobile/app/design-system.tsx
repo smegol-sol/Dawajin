@@ -148,7 +148,7 @@ function CardSection() {
         edgeTone="warning"
       />
       <Card title="الدفعة 2024-014 — روس 308" subtitle="اليوم 40 من 42" variant="identity">
-        <StatTile label="الوزن الحالي" value="2.1" unit="كجم" standardValue="2.2 كجم" />
+        <StatTile label="الوزن الحالي" value="2.1" unit="كجم" standardValue="2.2 كجم" onDark />
       </Card>
     </Section>
   );
@@ -214,11 +214,12 @@ function NumberStepperSection() {
   return (
     <Section title="NumberStepper" count={2}>
       <Row>
-        <NumberStepper value={mortality} step={1} onChange={setMortality} computedLine="عدد النافق" />
+        <NumberStepper value={mortality} step={1} onChange={setMortality} label="عدد النافق" />
         <NumberStepper
           value={feedBags}
           step={0.5}
           onChange={setFeedBags}
+          label="أكياس العلف"
           computedLine={`= ${feedBags * 25} كجم`}
         />
       </Row>
@@ -273,16 +274,15 @@ function ChipSection() {
   const causes = ["مرض تنفسي", "إجهاد حراري", "مشاكل مياه/علف", "حادث", "غير معروف", "أخرى"];
   return (
     <Section title="Chips" count={2}>
-      <Row>
+      {/* شبكة عمودين منتظمة (§8.12) — عرض ثابت 48% لا تدفّق حر بعرض المحتوى،
+          وإلا اختلف عدد الشرائح في كل صف حسب طول النص (مخالفة مرصودة). */}
+      <View style={styles.chipGrid}>
         {causes.map((cause) => (
-          <Chip
-            key={cause}
-            label={cause}
-            selected={selected === cause}
-            onPress={() => { setSelected(cause); }}
-          />
+          <View key={cause} style={styles.chipGridItem}>
+            <Chip label={cause} selected={selected === cause} onPress={() => { setSelected(cause); }} />
+          </View>
         ))}
-      </Row>
+      </View>
     </Section>
   );
 }
@@ -375,6 +375,14 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: spacing.md,
+  },
+  chipGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.xs,
+  },
+  chipGridItem: {
+    width: "48%",
   },
   groupLabel: {
     fontSize: font.size.technicalRef,

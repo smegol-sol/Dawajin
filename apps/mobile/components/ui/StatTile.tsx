@@ -1,7 +1,10 @@
 import { Minus, TrendingDown, TrendingUp } from "lucide-react-native";
 import { StyleSheet, Text, View } from "react-native";
 
-import { color, font, spacing } from "@/constants/theme";
+import { color, font, spacing, withAlpha } from "@/constants/theme";
+
+/** نص ثانوي أبيض بشفافية 72% — يبقى مقروءًا على بطاقة الهوية الداكنة (§8.3). */
+const MUTED_ON_DARK = withAlpha(color.textOnDark, 0.72);
 
 export type StatTrend = "up" | "down" | "flat";
 
@@ -21,6 +24,12 @@ interface StatTileProps {
    */
   unavailableReason?: string;
   tone?: "success" | "warning" | "critical";
+  /**
+   * على بطاقة الهوية الداكنة (Card variant="identity") — القيمة الافتراضية
+   * (بلا tone) كانت brandPrimary، بلون خلفية البطاقة نفسه بالضبط: قيمة غير
+   * مرئية إطلاقًا لا متدنّية التباين فقط. النصوص الثانوية تتحوّل لأبيض 72%.
+   */
+  onDark?: boolean;
 }
 
 const TONE_COLOR = {
@@ -38,23 +47,27 @@ export function StatTile({
   trend,
   unavailableReason,
   tone,
+  onDark = false,
 }: StatTileProps) {
   const TrendIcon = trend ? TREND_ICON[trend] : null;
-  const valueColor = tone ? TONE_COLOR[tone] : color.brandPrimary;
+  const valueColor = tone ? TONE_COLOR[tone] : onDark ? color.textOnDark : color.brandPrimary;
+  const mutedColor = onDark ? MUTED_ON_DARK : color.textBody;
 
   return (
     <View style={styles.container}>
-      <Text style={styles.label}>{label}</Text>
+      <Text style={[styles.label, { color: mutedColor }]}>{label}</Text>
       {value !== undefined ? (
         <View style={styles.valueRow}>
           <Text style={[styles.value, { color: valueColor }]}>{value}</Text>
-          {unit ? <Text style={styles.unit}>{unit}</Text> : null}
+          {unit ? <Text style={[styles.unit, { color: mutedColor }]}>{unit}</Text> : null}
           {TrendIcon ? <TrendIcon color={valueColor} size={16} /> : null}
         </View>
       ) : (
-        <Text style={styles.unavailable}>{unavailableReason}</Text>
+        <Text style={[styles.unavailable, { color: mutedColor }]}>{unavailableReason}</Text>
       )}
-      {standardValue ? <Text style={styles.standard}>المعيار: {standardValue}</Text> : null}
+      {standardValue ? (
+        <Text style={[styles.standard, { color: mutedColor }]}>المعيار: {standardValue}</Text>
+      ) : null}
     </View>
   );
 }
@@ -67,7 +80,6 @@ const styles = StyleSheet.create({
   label: {
     fontSize: font.size.technicalRef,
     fontFamily: font.familyRegular,
-    color: color.textBody,
     writingDirection: "rtl",
   },
   valueRow: {
@@ -83,19 +95,16 @@ const styles = StyleSheet.create({
   unit: {
     fontSize: font.size.technicalRef,
     fontFamily: font.familyRegular,
-    color: color.textBody,
     writingDirection: "rtl",
   },
   unavailable: {
     fontSize: font.size.technicalRef,
     fontFamily: font.familyRegular,
-    color: color.textBody,
     writingDirection: "rtl",
   },
   standard: {
     fontSize: font.size.technicalRef,
     fontFamily: font.familyRegular,
-    color: color.textBody,
     writingDirection: "rtl",
   },
 });
