@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import type { BadgeTone } from "@/components/ui/Badge";
-import { color, font, radius, spacing } from "@/constants/theme";
+import { color, component, font, radius, spacing } from "@/constants/theme";
 
 const EDGE_TONE_COLOR: Record<BadgeTone, string> = {
   success: color.accentSuccess,
@@ -51,7 +51,12 @@ export function Card({
       style={[
         styles.container,
         isIdentity ? styles.identityContainer : styles.defaultContainer,
-        edgeTone ? { borderRightWidth: 4, borderRightColor: EDGE_TONE_COLOR[edgeTone] } : null,
+        // physical-right عمدًا لا logical (borderStartWidth/borderEndWidth):
+        // RN لا يعكس خاصية فيزيائية تحت I18nManager.isRTL، فيبقى الحد على
+        // يمين الشاشة بصريًا دائمًا (component.statusEdge.side في tokens.json).
+        edgeTone
+          ? { borderRightWidth: component.statusEdge.width, borderRightColor: EDGE_TONE_COLOR[edgeTone] }
+          : null,
       ]}
     >
       <View style={styles.headerRow}>

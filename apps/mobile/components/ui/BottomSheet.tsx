@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 
-import { color, font, radius, spacing } from "@/constants/theme";
+import { color, elevation, font, radius, spacing } from "@/constants/theme";
 
 /**
  * Bottom Sheet — لمبدّل العنبر والفلاتر، أقرب للإبهام من القوائم العلوية
@@ -46,9 +46,11 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xxl,
     gap: spacing.md,
     shadowColor: color.brandPrimary,
+    // اتجاه الظل صاعد (height سالب) خاص بهذا المكوّن تحديدًا — مثبَّت أسفل
+    // الشاشة فيحتاج ظلًا يعلوه، خلافًا لعمق/تعتيم elevation.floating العامّين.
     shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
+    shadowOpacity: elevation.floating.shadowOpacity,
+    shadowRadius: elevation.floating.shadowRadius,
     elevation: 8,
   },
   handle: {

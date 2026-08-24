@@ -1,6 +1,6 @@
 import { StyleSheet, View } from "react-native";
 
-import { color, radius } from "@/constants/theme";
+import { color, component, radius } from "@/constants/theme";
 
 export type ProgressTone = "success" | "warning" | "critical";
 
@@ -37,7 +37,7 @@ export function ProgressBar({
 
 const styles = StyleSheet.create({
   track: {
-    height: 10,
+    height: component.progressBar.height,
     borderRadius: radius.pill,
     backgroundColor: color.surfaceSunken,
     overflow: "hidden",

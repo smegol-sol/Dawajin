@@ -1,7 +1,7 @@
 import type { LucideIcon } from "lucide-react-native";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
-import { color, font, radius, spacing } from "@/constants/theme";
+import { color, component, font, radius, spacing } from "@/constants/theme";
 
 export interface BottomTabItem {
   key: string;
@@ -63,7 +63,7 @@ export function BottomTabBar({
 const styles = StyleSheet.create({
   container: {
     flexDirection: "row",
-    height: 72,
+    height: component.bottomTabBar.height,
     backgroundColor: color.surfaceCard,
     borderTopWidth: 1,
     borderTopColor: color.borderSubtle,

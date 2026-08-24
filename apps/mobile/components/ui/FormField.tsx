@@ -2,7 +2,7 @@ import { Calendar, ChevronDown } from "lucide-react-native";
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
-import { color, font, radius, spacing } from "@/constants/theme";
+import { color, component, font, radius, spacing } from "@/constants/theme";
 
 export type FormFieldType = "text" | "longText" | "select" | "date";
 
@@ -140,7 +140,9 @@ const styles = StyleSheet.create({
     textAlign: "right",
   },
   field: {
-    minHeight: 52,
+    // القرار: كان نطاقًا 52-56 في الوثيقة، حُسم على 56 (= touchTarget.primary،
+    // لا رقم مستقل) — يوحّد الحقول مع بقية عناصر اللمس القياسية.
+    minHeight: component.field.height,
     borderWidth: 1,
     borderRadius: radius.control,
     paddingHorizontal: spacing.md,

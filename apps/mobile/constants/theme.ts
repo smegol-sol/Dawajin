@@ -24,8 +24,38 @@ export const color = {
   borderSubtle: tokens.color.border.subtle,
 } as const;
 
-/** خلفية 10% + حد 28% مشتقّان من لون الحالة — للاستخدام خلف Badge/AlertBanner. */
-export const statusDerived = tokens.color.statusDerived;
+/**
+ * يُلحق بايت شفافية بلون hex نقي (بلا #alpha مسبق) — يستنسخ صيغة
+ * "RRGGBB+alphaHex" المعروفة في RN/CSS. `alpha` كسر 0-1.
+ */
+function withAlpha(hex: string, alpha: number): string {
+  const alphaHex = Math.round(alpha * 255)
+    .toString(16)
+    .padStart(2, "0");
+  return `${hex}${alphaHex}`;
+}
+
+const STATUS_TONE_COLOR = {
+  success: tokens.color.accent.success,
+  critical: tokens.color.status.critical,
+  warning: tokens.color.status.warning,
+  info: tokens.color.status.info,
+} as const;
+
+/**
+ * خلفية وحد أي حالة (Badge/AlertBanner) — مُشتقّان حسابيًا من لون الحالة
+ * بشفافيتَي tokens.color.$derived، لا 8 قيم hex محسوبة يدويًا مسبقًا
+ * (توحيد مع ملف رموز المصمم v5.0 — يضمن عدم انحراف حساب لاحقًا).
+ */
+export const statusDerived = Object.fromEntries(
+  Object.entries(STATUS_TONE_COLOR).map(([tone, hex]) => [
+    tone,
+    {
+      background: withAlpha(hex, tokens.color.$derived.statusBackgroundAlpha),
+      border: withAlpha(hex, tokens.color.$derived.statusBorderAlpha),
+    },
+  ])
+) as Record<keyof typeof STATUS_TONE_COLOR, { background: string; border: string }>;
 
 export const font = {
   /**
@@ -33,9 +63,12 @@ export const font = {
    * `@expo-google-fonts/tajawal` (الوزنان 500 و700 فقط — §7.2:
    * «لا وزن أخف من 500»). لا يوجد اسم عائلة عام "Tajawal" بوزن متغيّر:
    * الخط ثابت الوزن، فكل وزن عائلة مستقلة تُختار بالاسم لا بـ fontWeight.
+   * القيم من tokens.json (typography.loadedFamilies) — مصدر واحد يقرأه
+   * فاحص رموز التصميم أيضًا (scripts/checks/design-tokens.ts) بلا استيراد
+   * react-native في سكربت Node خالص.
    */
-  familyRegular: "Tajawal_500Medium",
-  familyBold: "Tajawal_700Bold",
+  familyRegular: tokens.typography.loadedFamilies.regular,
+  familyBold: tokens.typography.loadedFamilies.bold,
   /**
    * خط الأرقام أحادي المسافة (§7.2 — «ui-monospace» قيمة ويب؛ المقابل
    * الفعلي في React Native يُختار حسب المنصة).
@@ -59,5 +92,13 @@ export const touchTarget = tokens.touchTarget;
 export const motion = tokens.motion;
 
 export const border = tokens.border;
+
+export const elevation = tokens.elevation;
+
+/** حزم أبعاد/ألوان مكوّنات محدَّدة (§8) — بديل للأرقام المدمَجة داخل كل ملف مكوّن. */
+export const component = tokens.component;
+
+/** الحد الأدنى لحجم نص المحتوى (§7.2) — ما دونه محصور بـ badge/tabLabel/technicalRef. */
+export const minContentSize = tokens.typography.$minContentSize;
 
 export default tokens;
