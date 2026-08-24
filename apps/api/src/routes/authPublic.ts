@@ -1,0 +1,67 @@
+import type { Database } from "@dawajin/db";
+import { HttpError } from "@dawajin/shared";
+import { Router } from "express";
+import rateLimit from "express-rate-limit";
+import { z } from "zod";
+
+import type { Env } from "../lib/env";
+import { loginWithPhonePassword } from "../services/authService";
+
+/**
+ * POST /api/auth/login — بادئة /api كبقية المسارات (backend-technical-spec.md
+ * §17: "كلها تبدأ بـ /api")، لكنه مُستثنى صراحة من requireAuth/requireTenant/
+ * enforceEntityAccess ("بلا مصادقة") — يُركَّب مباشرة على app قبل تلك السلسلة
+ * في app.ts، لا داخل موجّه api المحمي. المنطق الفعلي (بحث، مقارنة كلمة
+ * المرور) في services/authService.ts — القرار #61: لا استعلام في route.
+ */
+
+const loginSchema = z.object({
+  phone: z.string().min(1),
+  password: z.string().min(1),
+  // لحسم حساب واحد صراحة عندما يطابق نفس الجوال وكلمة المرور أكثر من
+  // مستأجر — طبيب مستقل يخدم عدة ملّاك (decisions.md #23 و#57)
+  tenantId: z.number().int().positive().optional(),
+});
+
+const loginRateLimit = rateLimit({
+  // backend-technical-spec.md §11 و§3.4: "5 محاولات ثم تأخير 60 ثانية" —
+  // سياسة أمنية ثابتة بالمواصفة، لا إعداد تشغيلي للمستأجر.
+  // eslint-disable-next-line dawajin/no-magic-config-number
+  windowMs: 60_000,
+  // eslint-disable-next-line dawajin/no-magic-config-number
+  limit: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { code: "too_many_attempts", message: "محاولات كثيرة — حاول بعد دقيقة" },
+});
+
+/**
+ * يبني موجّه POST /api/auth/login العام (بلا مصادقة).
+ * @returns Router يُركَّب في app.ts قبل سلسلة requireAuth مباشرة
+ */
+export function authPublicRouter(db: Database, env: Env): Router {
+  const router = Router();
+
+  router.post("/api/auth/login", loginRateLimit, async (req, res, next) => {
+    try {
+      const input = loginSchema.parse(req.body);
+      const outcome = await loginWithPhonePassword(db, env, input);
+
+      if (outcome.kind === "invalid") {
+        // رسالة رفض عامة — لا تكشف أي الحقلين خاطئ (backend-technical-spec.md §11)
+        throw new HttpError(401, "invalid_credentials", "رقم الجوال أو كلمة المرور غير صحيحة");
+      }
+
+      if (outcome.kind === "needsTenantSelection") {
+        res.status(200).json({ needsTenantSelection: true, accounts: outcome.accounts });
+        return;
+      }
+
+      res.json({ token: outcome.token, user: outcome.user });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  return router;
+}

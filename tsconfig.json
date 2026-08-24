@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "types": ["node"]
+  },
+  "include": [
+    "scripts/**/*.ts",
+    "apps/*/vitest*.config.ts",
+    "packages/*/vitest*.config.ts",
+    "apps/api/src/types/**/*.d.ts"
+  ]
+}

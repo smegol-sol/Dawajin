@@ -1,0 +1,37 @@
+{
+  "name": "dawajin",
+  "private": true,
+  "version": "0.0.1",
+  "description": "نظام إدارة مزارع دواجن التسمين — مونوريبو",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "migrate": "pnpm --filter @dawajin/db run migrate",
+    "generate": "pnpm --filter @dawajin/db run generate",
+    "seed:demo": "pnpm --filter @dawajin/api run seed:demo",
+    "dev": "pnpm --filter @dawajin/api run dev",
+    "test": "pnpm -r run test",
+    "test:integration": "pnpm --filter @dawajin/api run test:integration",
+    "typecheck": "pnpm -r run typecheck",
+    "check:all": "tsx scripts/check-all.ts",
+    "api:generate": "pnpm --filter @dawajin/api run api:generate"
+  },
+  "devDependencies": {
+    "@dawajin/db": "workspace:^",
+    "@eslint/js": "^9.15.0",
+    "@types/node": "^22.10.1",
+    "eslint": "^9.15.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-import-resolver-typescript": "^4.4.5",
+    "eslint-plugin-import-x": "^4.17.1",
+    "globals": "^17.11.0",
+    "pino": "^9.5.0",
+    "prettier": "^3.9.6",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3",
+    "typescript-eslint": "^8.67.0"
+  }
+}
