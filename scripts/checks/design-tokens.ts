@@ -5,7 +5,12 @@ import tokens from "../../apps/mobile/constants/tokens.json" with { type: "json"
 
 /**
  * فاحص رموز التصميم — يمنع لونًا حرفيًا · رماديًا أفتح من #4A4A4A · إيموجي ·
- * نصف قطر خارج المقياس (backend-technical-spec.md §21 · app-complete-spec.md §12).
+ * نصف قطر خارج المقياس · وزن/عائلة خط خارج المسموح · نص محتوى أصغر من
+ * $minContentSize (backend-technical-spec.md §21 · app-complete-spec.md §7.2
+ * و§12: "لا وزن أخف من 500"، "الحد الأدنى لنص المحتوى 15px").
+ *
+ * القيم المسموحة كلها تُقرأ من tokens.json/theme.ts — لا تُكرَّر كثوابت هنا،
+ * فتعديل الرمز المركزي يكفي لتحديث الفاحص بلا تعارض بينهما.
  */
 
 const MOBILE_DIR = join(process.cwd(), "apps/mobile");
@@ -16,6 +21,44 @@ const HEX_COLOR = /#[0-9a-fA-F]{3,8}\b/g;
 // نطاقات الإيموجي الشائعة (لا تلتقط علامات RTL أو رموز نصية عادية)
 const EMOJI = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{1F1E6}-\u{1F1FF}]/gu;
 const BORDER_RADIUS_LITERAL = /borderRadius:\s*(-?\d+(?:\.\d+)?)/g;
+const FONT_WEIGHT_ASSIGNMENT = /fontWeight:\s*([^,\n}]+)/g;
+const FONT_FAMILY_ASSIGNMENT = /fontFamily:\s*([^,\n}]+)/g;
+const FONT_SIZE_ASSIGNMENT = /fontSize:\s*([^,\n}]+)/g;
+const ALLOWED_FONT_WEIGHTS = new Set([
+  String(tokens.typography.weights.regular),
+  String(tokens.typography.weights.bold),
+]);
+const ALLOWED_FONT_FAMILIES = new Set([
+  tokens.typography.loadedFamilies.regular,
+  tokens.typography.loadedFamilies.bold,
+]);
+// أحجام النص المسموح لها بالنزول عن الحد الأدنى — الثلاثة المصرَّح بها حرفيًا
+// في §7.2 (الشارات · تسميات التبويبات · المراجع التقنية)، مقروءة من الرمز.
+const MIN_CONTENT_SIZE = tokens.typography.$minContentSize;
+const ALLOWED_SMALL_SIZES = new Set([
+  tokens.typography.size.badge,
+  tokens.typography.size.tabLabel,
+  tokens.typography.size.technicalRef,
+]);
+
+/**
+ * يستخرج القيمة الحرفية من تعبير fontWeight/fontFamily/fontSize، أو null إن
+ * كان التعبير مشتقًا من `font.weight*`/`font.family*`/`font.size.*` (موثوق
+ * مركزيًا عبر theme.ts، لا حاجة لفحصه حرفيًا هنا).
+ */
+function extractFontLiteral(rawExpression: string): string | null {
+  const trimmed = rawExpression.trim();
+  if (
+    trimmed.includes("font.weight") ||
+    trimmed.includes("font.family") ||
+    trimmed.includes("font.size")
+  )
+    return null;
+  const quoted = trimmed.match(/^["']([^"']+)["']/);
+  if (quoted) return quoted[1] ?? null;
+  const bare = trimmed.match(/^([A-Za-z0-9_]+)/);
+  return bare ? (bare[1] ?? null) : null;
+}
 
 function collectAllowedHexColors(): Set<string> {
   const allowed = new Set<string>();
@@ -90,6 +133,34 @@ export function checkDesignTokens(): { ok: boolean; message: string } {
       const value = Number(match[1]);
       if (!allowedRadii.has(value)) {
         violations.push(`${relPath}: borderRadius=${value} خارج المقياس الخمسي`);
+      }
+    }
+
+    for (const match of content.matchAll(FONT_WEIGHT_ASSIGNMENT)) {
+      const literal = extractFontLiteral(match[1] ?? "");
+      if (literal !== null && !ALLOWED_FONT_WEIGHTS.has(literal)) {
+        violations.push(`${relPath}: fontWeight="${literal}" — لا وزن أخف من 500، فقط 500 أو 700`);
+      }
+    }
+
+    for (const match of content.matchAll(FONT_FAMILY_ASSIGNMENT)) {
+      const literal = extractFontLiteral(match[1] ?? "");
+      if (literal !== null && !ALLOWED_FONT_FAMILIES.has(literal)) {
+        violations.push(
+          `${relPath}: fontFamily="${literal}" — استخدم font.familyRegular أو font.familyBold`
+        );
+      }
+    }
+
+    for (const match of content.matchAll(FONT_SIZE_ASSIGNMENT)) {
+      const literal = extractFontLiteral(match[1] ?? "");
+      if (literal === null) continue; // مشتق من font.size.* — موثوق مركزيًا
+      const size = Number(literal);
+      if (Number.isNaN(size)) continue;
+      if (size < MIN_CONTENT_SIZE && !ALLOWED_SMALL_SIZES.has(size)) {
+        violations.push(
+          `${relPath}: fontSize=${size} — دون الحد الأدنى لنص المحتوى (${MIN_CONTENT_SIZE}px)، محصور بـ font.size.badge/tabLabel/technicalRef`
+        );
       }
     }
   }

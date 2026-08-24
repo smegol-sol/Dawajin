@@ -21,7 +21,7 @@ const styles = StyleSheet.create({
     backgroundColor: color.surfacePage,
     alignItems: "center",
     justifyContent: "center",
-    gap: spacing[2] ?? 10,
+    gap: spacing.sm,
   },
   title: {
     fontSize: font.size.screenTitle,
