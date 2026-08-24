@@ -5,7 +5,7 @@ import rateLimit from "express-rate-limit";
 import { z } from "zod";
 
 import type { Env } from "../lib/env";
-import { loginWithPhonePassword } from "../services/authService";
+import { listAccountsForPhone, loginWithPhonePassword } from "../services/authService";
 
 /**
  * POST /api/auth/login — بادئة /api كبقية المسارات (backend-technical-spec.md
@@ -18,10 +18,15 @@ import { loginWithPhonePassword } from "../services/authService";
 const loginSchema = z.object({
   phone: z.string().min(1),
   password: z.string().min(1),
-  // لحسم حساب واحد صراحة عندما يطابق نفس الجوال وكلمة المرور أكثر من
-  // مستأجر — طبيب مستقل يخدم عدة ملّاك (decisions.md #23 و#57)
-  tenantId: z.number().int().positive().optional(),
+  /**
+   * **إلزامي** (القيد أ في القرار #106) — لا `.optional()`. جعله اختياريًا
+   * يُعيد السلوك القديم كاملًا: مقارنة الكلمة بكل صفوف الرقم عبر كل
+   * المستأجرين، وهو عين الثقب (#98). الإلزام هنا هو الإصلاح نفسه لا تفصيلًا.
+   */
+  tenantId: z.number().int().positive(),
 });
+
+const accountsSchema = z.object({ phone: z.string().min(1) });
 
 /**
  * يبني حدّ محاولات دخول جديدًا **لكل تطبيق** لا واحدًا مشتركًا على مستوى
@@ -45,12 +50,43 @@ function createLoginRateLimit() {
 }
 
 /**
+ * حدّ أشدّ لمسار سرد الحسابات (القيد ج في القرار #106): لا `bcrypt` فيه، فهو
+ * **أرخص أداة تعداد من الدخول نفسه** — استجابته أسرع بمراتب، فيحتمل معدّلًا
+ * أعلى بكثير لو حمل حدّ الدخول نفسه.
+ * @returns middleware مستقل العدّاد لهذا التطبيق وحده
+ */
+function createAccountsRateLimit() {
+  return rateLimit({
+    // eslint-disable-next-line dawajin/no-magic-config-number -- سياسة أمنية لا إعداد مستأجر
+    windowMs: 60_000,
+    // أشدّ من حدّ الدخول (5) لأن الطلب أرخص على الخادم وأنفع للمهاجم
+    // eslint-disable-next-line dawajin/no-magic-config-number -- سياسة أمنية لا إعداد مستأجر
+    limit: 3,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { code: "too_many_attempts", message: "محاولات كثيرة — حاول بعد دقيقة" },
+  });
+}
+
+/**
  * يبني موجّه POST /api/auth/login العام (بلا مصادقة).
  * @returns Router يُركَّب في app.ts قبل سلسلة requireAuth مباشرة
  */
 export function authPublicRouter(db: Database, env: Env): Router {
   const router = Router();
   const loginRateLimit = createLoginRateLimit();
+  const accountsRateLimit = createAccountsRateLimit();
+
+  // الخطوة الأولى في الشكل الرابع (القرار #106): الرقم ← قائمة المستأجرين.
+  // لا كلمة مرور هنا، ولا بيانات شخصية في الرد (القيد ب).
+  router.post("/api/auth/accounts", accountsRateLimit, async (req, res, next) => {
+    try {
+      const input = accountsSchema.parse(req.body);
+      res.json({ accounts: await listAccountsForPhone(db, env, input.phone) });
+    } catch (error) {
+      next(error);
+    }
+  });
 
   router.post("/api/auth/login", loginRateLimit, async (req, res, next) => {
     try {
@@ -67,11 +103,6 @@ export function authPublicRouter(db: Database, env: Env): Router {
         // مطابق لجدول §19. التمييز هنا آمن لأنه بعد المطابقة حصرًا
         // (القرار #84)، ومن لا يعرف كلمة المرور يبقى على 401 العامة.
         throw new HttpError(403, "account_disabled", "حسابك معطّل — راجع المشرف");
-      }
-
-      if (outcome.kind === "needsTenantSelection") {
-        res.status(200).json({ needsTenantSelection: true, accounts: outcome.accounts });
-        return;
       }
 
       res.json({ token: outcome.token, user: outcome.user });

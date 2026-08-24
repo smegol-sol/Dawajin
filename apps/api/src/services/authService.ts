@@ -30,25 +30,24 @@ export interface AuthenticatedUserProfile {
  * مستقلًا بنفس الدور لدى مالكَين (القرار #84).
  */
 export interface SelectableAccount {
-  tenantId: number | null;
+  tenantId: number;
   tenantName: string;
-  fullName: string;
-  role: UserRole;
 }
 
 export type LoginOutcome =
   | { kind: "invalid" }
   /** الجوال وكلمة المرور صحيحان، وكل الحسابات المطابقة معطَّلة (القرار #84). */
   | { kind: "disabled" }
-  | { kind: "needsTenantSelection"; accounts: SelectableAccount[] }
   | { kind: "success"; token: string; user: AuthenticatedUserProfile };
 
 export interface LoginInput {
   phone: string;
   password: string;
-  // `| undefined` صريح: zod يستنتج الحقل الاختياري كـ`number | undefined`،
-  // و`exactOptionalPropertyTypes` يفرّق بين "غائب" و"موجود بقيمة undefined"
-  tenantId?: number | undefined;
+  /**
+   * **إلزامي** (القيد أ في القرار #106). جعله اختياريًا يعيد السلوك القديم
+   * كما هو: مقارنة الكلمة بكل صفوف الرقم عبر كل المستأجرين.
+   */
+  tenantId: number;
 }
 
 /**
@@ -64,6 +63,45 @@ export interface LoginInput {
  * يظن أنه نسي كلمة مروره. الفلترة على `isActive` **بعد** المقارنة لا داخل
  * الاستعلام — الترتيب هو الضمانة الأمنية نفسها.
  */
+/**
+ * يسرد حسابات رقم جوال عبر المستأجرين — **الخطوة الأولى في الشكل الرابع**
+ * (القرار #106): الرقم ← قائمة ← اختيار ← كلمة المرور مقابل صف واحد.
+ *
+ * **لا `fullName` ولا `role`** (القيد ب): اسم المستأجر وحده يكفي للتمييز،
+ * وإرجاع الاسم الكامل **قبل أي تحقق** يحوّل التسريب من «هذا الرقم مسجَّل لدى
+ * مزرعة» إلى «هذا الرقم يخصّ فلانًا تحديدًا» — فرق جوهري. الاسم يعود بعد
+ * نجاح كلمة المرور في استجابة الدخول.
+ *
+ * **الحسابات المعطَّلة تُخفى** (القيد د): إظهارها يسرّب حالتها قبل أي تحقق.
+ * ورسالة «معطَّل» (القرار #84) تبقى محفوظة عبر الدخول المباشر بـ`tenantId`
+ * بعد نجاح كلمة المرور.
+ *
+ * **التسريب المقبول صراحةً:** من يُدخل رقمًا يعرف هل هو مسجَّل ولدى أي مزرعة.
+ * أخفّ بمراتب من الاستيلاء الكامل الذي كان ممكنًا (القرار #98)، والتبادل رابح.
+ * @returns حسابات نشطة فقط، باسم المستأجر دون أي بيانات شخصية
+ */
+export async function listAccountsForPhone(
+  db: Database,
+  env: Env,
+  phone: string
+): Promise<SelectableAccount[]> {
+  const phoneE164 = normalizePhoneE164(phone, env.DEFAULT_COUNTRY_CODE);
+
+  const rows = await db
+    .select({ tenantId: users.tenantId, tenantName: tenants.name, isActive: users.isActive })
+    .from(users)
+    .leftJoin(tenants, eq(users.tenantId, tenants.id))
+    .where(eq(users.phoneE164, phoneE164));
+
+  // flatMap لا filter+map: الأخير لا يُضيّق `tenantId` من `number | null`
+  // فيضطر لتأكيد نوع، والتأكيد يخفي تغيّرًا مستقبليًا في المخطط بدل كشفه
+  return rows.flatMap((r) => {
+    // مسار مدير المنصة منفصل (platform-login)، والمعطَّل مخفي (القيد د)
+    if (r.tenantId === null || !r.isActive) return [];
+    return [{ tenantId: r.tenantId, tenantName: r.tenantName ?? "" }];
+  });
+}
+
 export async function loginWithPhonePassword(
   db: Database,
   env: Env,
@@ -71,49 +109,26 @@ export async function loginWithPhonePassword(
 ): Promise<LoginOutcome> {
   const phoneE164 = normalizePhoneE164(input.phone, env.DEFAULT_COUNTRY_CODE);
 
-  const whereClause = input.tenantId
-    ? and(eq(users.phoneE164, phoneE164), eq(users.tenantId, input.tenantId))
-    : eq(users.phoneE164, phoneE164);
-
-  // join على tenants لاسم المستأجر المعروض في شاشة اختيار الحساب (القرار #84)
-  // — بديل إرسال tenantId للعرض، وهو معرّف داخلي تمنعه §12.
-  const rows = await db
-    .select({ user: users, tenantName: tenants.name })
+  // **صف واحد محدَّد** بالمفتاح الفريد الفعلي (tenant_id + phone_e164) — لا
+  // مقارنة عبر مستأجرين. هذا جوهر الشكل الرابع (القرار #106): كلمة شخص لا
+  // تُقارَن أبدًا بصف شخص آخر، فينهار الافتراض الخاطئ "تطابق الكلمة يثبت
+  // وحدة الشخص" (القرار #98) من أصله بدل ترقيعه.
+  const [row] = await db
+    .select({ user: users })
     .from(users)
-    .leftJoin(tenants, eq(users.tenantId, tenants.id))
-    .where(whereClause);
+    .where(and(eq(users.phoneE164, phoneE164), eq(users.tenantId, input.tenantId)))
+    .limit(1);
 
-  // مسار مدير المنصة منفصل (platform-login) — لاحقًا، فيُستبعَد هنا صراحة
-  const candidates = rows.filter((r) => r.user.tenantId !== null);
-
-  const matches = [];
-  for (const candidate of candidates) {
-    if (await verifyPasswordAllowingTempFormat(input.password, candidate.user.passwordHash)) {
-      matches.push(candidate);
-    }
+  // الترتيب أمني: من لا يعرف كلمة المرور يبقى على الرفض العام دائمًا
+  if (!row) return { kind: "invalid" };
+  if (!(await verifyPasswordAllowingTempFormat(input.password, row.user.passwordHash))) {
+    return { kind: "invalid" };
   }
 
-  // الترتيب أمني: الرفض العام أولًا لكل من لم تُطابَق كلمة مروره
-  if (matches.length === 0) return { kind: "invalid" };
+  // كلمة المرور صحيحة يقينًا هنا — التمييز بعدها وحدها (القرار #84)
+  if (!row.user.isActive) return { kind: "disabled" };
 
-  // كلمة المرور صحيحة هنا يقينًا — التمييز بعدها وحدها لا قبلها
-  const active = matches.filter((m) => m.user.isActive);
-  if (active.length === 0) return { kind: "disabled" };
-
-  if (active.length > 1) {
-    return {
-      kind: "needsTenantSelection",
-      accounts: active.map((m) => ({
-        tenantId: m.user.tenantId,
-        // `leftJoin` يجعل الاسم قابلًا لـnull نوعيًا، لكن كل صف هنا مرَّ
-        // بفلتر `tenantId !== null` وقيد المفتاح الأجنبي يضمن وجود المستأجر
-        tenantName: m.tenantName ?? "",
-        fullName: m.user.fullName,
-        role: m.user.role,
-      })),
-    };
-  }
-
+  const active = [row];
   const [match] = active;
   if (!match) return { kind: "invalid" }; // غير قابل للوصول عمليًا — active.length === 1 هنا
   const user = match.user;
