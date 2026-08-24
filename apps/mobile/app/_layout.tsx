@@ -50,6 +50,7 @@ export default function RootLayout() {
         }}
       >
         <Stack.Screen name="auth/login" />
+        <Stack.Screen name="design-system" />
         <Stack.Screen name="(farmer)" />
         <Stack.Screen name="(supervisor)" />
         <Stack.Screen name="(vet)" />
