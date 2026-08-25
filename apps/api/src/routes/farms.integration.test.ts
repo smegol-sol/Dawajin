@@ -217,13 +217,18 @@ describe(`POST /api/sites/:siteId/farms — التحقق والعزل (${S})`, (
   });
 });
 
-describe(`GET المزارع — القراءة لكل الأدوار والعزل مطلق (${S})`, () => {
-  it("المربي يسرد مزارع الموقع ← 200", async () => {
+describe(`GET المزارع — الإسناد والعزل (${S})`, () => {
+  /**
+   * **قُلب بالقرار #131.** كان يوثّق «القراءة لكل الأدوار» — ومربٍّ بلا إسناد
+   * في الموقع لا يحقّ له سرد مزارعه أصلًا. و**403 لا قائمة فارغة**: الفارغة
+   * تُقرأ نفيَ وجود لا نفيَ صلاحية.
+   */
+  it("المربي بلا إسناد في الموقع ← 403 لا قائمة فارغة", async () => {
     const res = await request(app)
       .get(`/api/sites/${String(siteAId)}/farms`)
       .set("Authorization", `Bearer ${farmerToken}`);
-    expect(res.status).toBe(200);
-    expect(Array.isArray((res.body as { farms: unknown[] }).farms)).toBe(true);
+    expect(res.status).toBe(403);
+    expect((res.body as { code?: string }).code).toBe("forbidden");
   });
 
   it("قراءة مزرعة مستأجر آخر ← 404 لا 403", async () => {

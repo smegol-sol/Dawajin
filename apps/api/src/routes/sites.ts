@@ -46,7 +46,7 @@ export function sitesRouter(db: Database): Router {
   router.get("/api/sites", async (req, res, next) => {
     try {
       const user = requireTenantUser(req);
-      res.json({ sites: await listSites(db, user.tenantId) });
+      res.json({ sites: await listSites(db, user.tenantId, { id: user.id, role: user.role }) });
     } catch (error) {
       next(error);
     }
