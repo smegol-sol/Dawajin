@@ -77,7 +77,7 @@ export async function fetchAccountsForPhone(phone: string): Promise<SelectableAc
  * `POST /auth/login` — **الخطوة الثانية**: كلمة المرور مقابل حساب محدَّد.
  * يرمي `LoginRequestError` عند أي فشل — الشاشة تحوّله لرسالة عبر
  * `loginErrorView`.
- * @param input الجوال وكلمة المرور و`tenantId` **إلزاميًا** (القيد أ، #106)
+ * @param input الجوال وكلمة المرور و`tenantId` **إلزاميًا** (القيد أ، القرار #106)
  * @returns الرمز والمستخدم عند النجاح
  */
 export async function login(input: {
