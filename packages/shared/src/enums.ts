@@ -28,6 +28,22 @@ export type HouseStatus = (typeof HOUSE_STATUS)[number];
 export const HOUSE_TYPE = ["مفتوح", "مغلق", "هجين"] as const;
 export type HouseType = (typeof HOUSE_TYPE)[number];
 
+/**
+ * مصادر طاقة **المزرعة** — لا العنبر (القرار #112).
+ *
+ * **قيمتان لا أربع:** الشبكة الحكومية والتجارية لا تصلان أماكن العنابر في
+ * ميدان المالك أصلًا، فإدراجهما كان وصفًا لواقع غير موجود.
+ *
+ * **قائمة لا حقل نعم/لا** رغم أن القيمتين تبدوان قابلتين للاختزال: القيد
+ * «لا مزرعة بلا مصدر طاقة» **غير قابل للتعبير عنه** بحقل منطقي — `has_solar
+ * = false` لا يفرّق بين مزرعة بمولّد ومزرعة بلا طاقة. والقائمة تعبّر عنه
+ * بـ`cardinality >= 1` مباشرة.
+ *
+ * والاختيار متعدّد لأن المزرعة تجمع المصدرين فعلًا (شمسية نهارًا ومولّد ليلًا).
+ */
+export const POWER_SOURCE = ["شمسية", "مولدات"] as const;
+export type PowerSource = (typeof POWER_SOURCE)[number];
+
 export const MORTALITY_CAUSE = [
   "مرض تنفسي",
   "إجهاد حراري",
