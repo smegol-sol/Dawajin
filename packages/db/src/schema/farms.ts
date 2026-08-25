@@ -68,6 +68,7 @@ export const farms = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
+    uniqueIndex("farms_id_tenant_uq").on(table.id, table.tenantId),
     // اسم المزرعة فريد **داخل موقعها** لا عبر المستأجر: «مزرعة 1» في الجبل
     // وفي الحمراء اسمان مشروعان
     uniqueIndex("farms_site_name_uq").on(table.siteId, table.name),
@@ -98,9 +99,7 @@ export const houses = pgTable(
     tenantId: integer("tenant_id")
       .notNull()
       .references(() => tenants.id),
-    farmId: integer("farm_id")
-      .notNull()
-      .references(() => farms.id),
+    farmId: integer("farm_id").notNull(),
     name: varchar("name", { length: 64 }).notNull(),
     type: houseTypeEnum("type"),
     status: houseStatusEnum("status").notNull().default("جاهز للإسكان"),
@@ -112,48 +111,71 @@ export const houses = pgTable(
     }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [uniqueIndex("houses_farm_name_uq").on(table.farmId, table.name)]
+  (table) => [
+    uniqueIndex("houses_id_tenant_uq").on(table.id, table.tenantId),
+    foreignKey({
+      columns: [table.farmId, table.tenantId],
+      foreignColumns: [farms.id, farms.tenantId],
+      name: "houses_farm_id_tenant_fk",
+    }),
+    uniqueIndex("houses_farm_name_uq").on(table.farmId, table.name),
+  ]
 );
 
 /** الدفعة — قطيع كامل من الإسكان إلى التسويق. */
-export const batches = pgTable("batches", {
-  id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id")
-    .notNull()
-    .references(() => tenants.id),
-  houseId: integer("house_id")
-    .notNull()
-    .references(() => houses.id),
-  breed: breedEnum("breed").notNull(),
-  startDate: date("start_date").notNull(),
-  initialBirdCount: integer("initial_bird_count").notNull(),
-  status: batchStatusEnum("status").notNull().default("نشطة"),
-  closedAt: timestamp("closed_at", { withTimezone: true }),
-  soldBirdCount: integer("sold_bird_count"),
-  marketAvgWeightG: integer("market_avg_weight_g"),
-  // علامة دائمة — لا تُمحى حتى بعد بدء التشغيل الطبيعي (decisions.md — انظر تدفق 14.6)
-  housedBeforeReady: boolean("housed_before_ready").notNull().default(false),
-  housedReason: text("housed_reason"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const batches = pgTable(
+  "batches",
+  {
+    id: serial("id").primaryKey(),
+    tenantId: integer("tenant_id")
+      .notNull()
+      .references(() => tenants.id),
+    houseId: integer("house_id").notNull(),
+    breed: breedEnum("breed").notNull(),
+    startDate: date("start_date").notNull(),
+    initialBirdCount: integer("initial_bird_count").notNull(),
+    status: batchStatusEnum("status").notNull().default("نشطة"),
+    closedAt: timestamp("closed_at", { withTimezone: true }),
+    soldBirdCount: integer("sold_bird_count"),
+    marketAvgWeightG: integer("market_avg_weight_g"),
+    // علامة دائمة — لا تُمحى حتى بعد بدء التشغيل الطبيعي (decisions.md — انظر تدفق 14.6)
+    housedBeforeReady: boolean("housed_before_ready").notNull().default(false),
+    housedReason: text("housed_reason"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("batches_id_tenant_uq").on(table.id, table.tenantId),
+    foreignKey({
+      columns: [table.houseId, table.tenantId],
+      foreignColumns: [houses.id, houses.tenantId],
+      name: "batches_house_id_tenant_fk",
+    }),
+  ]
+);
 
 /** إسنادات تراكمية: مستخدم واحد لعدة عنابر بنفس المزرعة (decisions.md #24). */
 export const userAssignments = pgTable(
   "user_assignments",
   {
     id: serial("id").primaryKey(),
-    userId: integer("user_id")
-      .notNull()
-      .references(() => users.id),
-    houseId: integer("house_id")
-      .notNull()
-      .references(() => houses.id),
+    userId: integer("user_id").notNull(),
+    houseId: integer("house_id").notNull(),
     tenantId: integer("tenant_id")
       .notNull()
       .references(() => tenants.id),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
+    foreignKey({
+      columns: [table.houseId, table.tenantId],
+      foreignColumns: [houses.id, houses.tenantId],
+      name: "user_assignments_house_id_tenant_fk",
+    }),
+    foreignKey({
+      columns: [table.userId, table.tenantId],
+      foreignColumns: [users.id, users.tenantId],
+      name: "user_assignments_user_id_tenant_fk",
+    }),
     // التكرار ← 409 (backend-technical-spec.md §7.1)
     uniqueIndex("user_assignments_user_house_uq").on(table.userId, table.houseId),
   ]

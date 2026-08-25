@@ -1,5 +1,6 @@
 import {
   pgTable,
+  foreignKey,
   serial,
   integer,
   uuid,
@@ -43,25 +44,58 @@ const auditColumns = {
 } as const;
 
 /** عمليات المالك التشغيلية — كل الكيانات: شحنات · دفعات · مستخدمون · إلخ. */
-export const entityAuditLog = pgTable("entity_audit_log", {
-  ...auditColumns,
-  tenantId: integer("tenant_id")
-    .notNull()
-    .references(() => tenants.id),
-});
+export const entityAuditLog = pgTable(
+  "entity_audit_log",
+  {
+    ...auditColumns,
+    // يُعاد تعريفه بلا مرجع مفرد — المفتاح المركَّب أدناه يغطّيه ويزيد
+    // اتساق المستأجر (القرار #122)
+    actorId: integer("actor_id").notNull(),
+    tenantId: integer("tenant_id")
+      .notNull()
+      .references(() => tenants.id),
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.actorId, table.tenantId],
+      foreignColumns: [users.id, users.tenantId],
+      name: "entity_audit_log_actor_id_tenant_fk",
+    }),
+  ]
+);
 
 /** تغييرات الإعدادات — entity_type ثابت 'setting'، entity_id = مفتاح الإعداد. */
-export const settingsAuditLog = pgTable("settings_audit_log", {
-  ...auditColumns,
-  tenantId: integer("tenant_id")
-    .notNull()
-    .references(() => tenants.id),
-});
+export const settingsAuditLog = pgTable(
+  "settings_audit_log",
+  {
+    ...auditColumns,
+    // يُعاد تعريفه بلا مرجع مفرد — المفتاح المركَّب أدناه يغطّيه ويزيد
+    // اتساق المستأجر (القرار #122)
+    actorId: integer("actor_id").notNull(),
+    tenantId: integer("tenant_id")
+      .notNull()
+      .references(() => tenants.id),
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.actorId, table.tenantId],
+      foreignColumns: [users.id, users.tenantId],
+      name: "settings_audit_log_actor_id_tenant_fk",
+    }),
+  ]
+);
 
 /**
  * مدير المنصة حصريًا — entity_type غالبًا 'tenant'، entity_id = رقم
  * المستأجر كنص. tenant_id هنا نفسه nullable لأن بعض أفعال المنصة
  * (مثل مراجعة سجل الاستخدام العام) لا تستهدف مستأجرًا واحدًا بعينه.
+ */
+/**
+ * **الاستثناء الوحيد من قاعدة المفتاح المركَّب** (القرار #122): `actor_id`
+ * يبقى مفتاحًا **مفردًا** هنا. الفاعل مدير منصة و`users.tenant_id` له
+ * `NULL`، بينما `admin_audit_log.tenant_id` قد يحمل مستأجرًا حقيقيًا يستهدفه
+ * الفعل. مفتاح مركَّب `(actor_id, tenant_id)` كان **يرفض كل صف مشروع**، لا
+ * يضعف الحراسة فحسب.
  */
 export const adminAuditLog = pgTable("admin_audit_log", {
   ...auditColumns,

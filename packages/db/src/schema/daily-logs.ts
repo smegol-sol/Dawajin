@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   pgTable,
+  foreignKey,
   serial,
   integer,
   uuid,
@@ -10,7 +11,6 @@ import {
   timestamp,
   uniqueIndex,
   index,
-  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 
 import { mortalityCauseEnum, reviewStatusEnum, feedStageEnum } from "./enums";
@@ -31,12 +31,8 @@ export const dailyLogs = pgTable(
     tenantId: integer("tenant_id")
       .notNull()
       .references(() => tenants.id),
-    houseId: integer("house_id")
-      .notNull()
-      .references(() => houses.id),
-    batchId: integer("batch_id")
-      .notNull()
-      .references(() => batches.id),
+    houseId: integer("house_id").notNull(),
+    batchId: integer("batch_id").notNull(),
     logDate: date("log_date").notNull(),
     mortalityCount: integer("mortality_count").notNull(),
     mortalityCause: mortalityCauseEnum("mortality_cause"),
@@ -53,14 +49,33 @@ export const dailyLogs = pgTable(
     photoUrls: text("photo_urls").array(),
     voiceNoteUrl: text("voice_note_url"),
     reviewStatus: reviewStatusEnum("review_status").notNull().default("none"),
-    correctionOfId: integer("correction_of_id").references((): AnyPgColumn => dailyLogs.id),
+    correctionOfId: integer("correction_of_id"),
     clientId: uuid("client_id"), // عطالة عند إعادة الإرسال
-    createdBy: integer("created_by")
-      .notNull()
-      .references(() => users.id),
+    createdBy: integer("created_by").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
+    uniqueIndex("daily_logs_id_tenant_uq").on(table.id, table.tenantId),
+    foreignKey({
+      columns: [table.batchId, table.tenantId],
+      foreignColumns: [batches.id, batches.tenantId],
+      name: "daily_logs_batch_id_tenant_fk",
+    }),
+    foreignKey({
+      columns: [table.correctionOfId, table.tenantId],
+      foreignColumns: [table.id, table.tenantId],
+      name: "daily_logs_correction_of_id_tenant_fk",
+    }),
+    foreignKey({
+      columns: [table.createdBy, table.tenantId],
+      foreignColumns: [users.id, users.tenantId],
+      name: "daily_logs_created_by_tenant_fk",
+    }),
+    foreignKey({
+      columns: [table.houseId, table.tenantId],
+      foreignColumns: [houses.id, houses.tenantId],
+      name: "daily_logs_house_id_tenant_fk",
+    }),
     uniqueIndex("daily_logs_batch_date_uq")
       .on(table.batchId, table.logDate)
       .where(sql`${table.correctionOfId} IS NULL`),

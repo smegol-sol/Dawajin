@@ -34,6 +34,7 @@ export const users = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
+    uniqueIndex("users_id_tenant_uq").on(table.id, table.tenantId),
     uniqueIndex("users_tenant_phone_uq").on(table.tenantId, table.phoneE164),
     // يشمل المعطّلين — يمنع "أوقف الحساب وأنشئ آخر بنفس الرقم" (decisions.md #23)
     uniqueIndex("users_platform_phone_unique")
