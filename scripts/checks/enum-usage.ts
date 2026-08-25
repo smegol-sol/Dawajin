@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { join, sep } from "node:path";
 
 /**
  * فاحص صحة enum — **بوابة إنفاذ حقيقية**: يفشل البناء عند قيمة enum معرَّفة
@@ -20,6 +20,8 @@ import { join } from "node:path";
  */
 
 const SHARED_ENUMS_FILE = join(process.cwd(), "packages/shared/src/enums.ts");
+const DB_ENUMS_FILE = join(process.cwd(), "packages/db/src/schema/enums.ts");
+const DB_SCHEMA_DIR = join(process.cwd(), "packages/db/src/schema");
 const API_DIR = join(process.cwd(), "apps/api/src");
 
 function walk(dir: string, files: string[] = []): string[] {
@@ -29,6 +31,10 @@ function walk(dir: string, files: string[] = []): string[] {
       if (entry === "node_modules") continue;
       walk(full, files);
     } else if (full.endsWith(".ts") && !full.endsWith(".d.ts") && !full.endsWith(".test.ts")) {
+      // تجهيزات الاختبار ليست مسار كتابة في الـAPI (القرار #125): عدّها كذلك
+      // يجعل قيمةً تكتبها تجهيزةٌ «مغطّاة» وقيمةً لا تكتبها «ميتة» — فتقرّر
+      // بيانات الاختبار نتيجة بوابة تفحص كود الإنتاج.
+      if (full.includes(`${sep}test-support${sep}`)) continue;
       files.push(full);
     }
   }
@@ -74,6 +80,36 @@ function parseEnums(source: string): EnumDef[] {
   return defs;
 }
 
+/**
+ * يربط كل enum مشترك بأسماء الأعمدة التي تستعمله (بصيغة camelCase كما تظهر
+ * في كود Drizzle). المسار: `enums.ts` يربط `xEnum` بثابت القيم، وملفات
+ * المخطط تربط `xEnum("column_name")` بالعمود.
+ * @returns خريطة اسم الـenum المشترك ← أسماء أعمدته
+ */
+function enumColumnNames(): Map<string, string[]> {
+  const drizzleToShared = new Map<string, string>();
+  const dbEnums = readFileSync(DB_ENUMS_FILE, "utf8");
+  for (const m of dbEnums.matchAll(/export const (\w+) = pgEnum\(\s*"[\w]+",\s*(\w+)\s*\)/g)) {
+    const [, drizzleName, sharedName] = m;
+    if (drizzleName && sharedName) drizzleToShared.set(drizzleName, sharedName);
+  }
+
+  const result = new Map<string, string[]>();
+  for (const file of walk(DB_SCHEMA_DIR)) {
+    const src = readFileSync(file, "utf8");
+    for (const m of src.matchAll(/(\w+Enum)\(\s*"([\w]+)"/g)) {
+      const [, drizzleName, column] = m;
+      const shared = drizzleName ? drizzleToShared.get(drizzleName) : undefined;
+      if (!shared || !column) continue;
+      const camel = column.replace(/_(\w)/g, (_, c: string) => c.toUpperCase());
+      const list = result.get(shared) ?? [];
+      if (!list.includes(camel)) list.push(camel);
+      result.set(shared, list);
+    }
+  }
+  return result;
+}
+
 export function checkEnumUsage(): { ok: boolean; message: string } {
   const enums = parseEnums(readFileSync(SHARED_ENUMS_FILE, "utf8"));
   const apiSource = existsSync(API_DIR) ? writeLayerSource(walk(API_DIR)) : "";
@@ -82,9 +118,17 @@ export function checkEnumUsage(): { ok: boolean; message: string } {
   const inUse: EnumDef[] = [];
   const untouched: string[] = [];
 
+  const columnsByEnum = enumColumnNames();
+
   for (const def of enums) {
-    // "ملموس" = طبقة الكتابة تكتب إحدى قيمه فعليًا
-    const touched = def.values.some((v) => apiSource.includes(`"${v}"`));
+    // "ملموس" = طبقة الكتابة تذكر **عمودًا من نوع هذا الـenum** وتكتب إحدى
+    // قيمه (القرار #125). اشتراط العمود لا القيمة وحدها يمنع تصادمًا نصيًا
+    // حقيقيًا وقع فعلًا: `entityType: "house"` في سجل التدقيق كان يجعل
+    // LOCATION_TYPE (‏warehouse|house) «ملموسًا» فيُبلَّغ عن "warehouse" كقيمة
+    // ميتة — وهو سجل تدقيق لا علاقة له بموقع المخزون.
+    const columns = columnsByEnum.get(def.name) ?? [];
+    const columnMentioned = columns.some((c) => apiSource.includes(c));
+    const touched = columnMentioned && def.values.some((v) => apiSource.includes(`"${v}"`));
     if (!touched) {
       untouched.push(def.name);
       continue;

@@ -35,6 +35,7 @@ export default defineConfig({
         "src/index.ts", // نقطة إقلاع الخادم — لا تُختبر بمعزل عن عملية Node حية
         "src/openapi/**",
         "src/types/**", // تصريحات أنواع بحتة (express.d.ts) — لا منطق قابل للتغطية
+        "src/test-support/**", // تجهيزات اختبار مشتركة — تُستهلك من الاختبارات لا من الخادم
         "src/scripts/**", // seed-demo.ts يُشغَّل يدويًا مقابل خادم حي عبر الـ API — لا اختبار آلي هنا (decisions.md #27)
       ],
       thresholds: {

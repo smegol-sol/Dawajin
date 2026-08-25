@@ -1,14 +1,6 @@
 import { randomInt } from "node:crypto";
 
-import {
-  createDbClient,
-  type Database,
-  entityAuditLog,
-  farms,
-  houses,
-  tenants,
-  users,
-} from "@dawajin/db";
+import { createDbClient, type Database, entityAuditLog, farms, tenants, users } from "@dawajin/db";
 import { normalizePhoneE164, type UserRole } from "@dawajin/shared";
 import { and, eq } from "drizzle-orm";
 import pino from "pino";
@@ -96,11 +88,16 @@ async function farmVia(token: string, siteId: number, name: string): Promise<num
 }
 
 /**
- * يُسكن عنبرًا في مزرعة **بإدراج مباشر** — لا مسار API للعنابر بعد (الدفعة 4).
- * تجهيزة اختبار لا بذر: حظر الإدراج المباشر يخصّ `seed:demo` وحده.
+ * يُسكن عنبرًا في مزرعة **عبر المسار الحقيقي** — بُني في الدفعة 4، فلم يعد
+ * الإدراج المباشر لازمًا. الفرق ليس شكليًا: القيد #114 يُفحص الآن على عنبر
+ * أنشأه المستخدم كما ينشئه في الميدان، لا على صف زرعه الاختبار.
  */
-async function addHouse(tenantId: number, farmId: number, name: string): Promise<void> {
-  await db.insert(houses).values({ tenantId, farmId, name });
+async function addHouse(_tenantId: number, farmId: number, name: string): Promise<void> {
+  const res = await request(app)
+    .post(`/api/farms/${String(farmId)}/houses`)
+    .set("Authorization", `Bearer ${ownerToken}`)
+    .send({ name });
+  expect(res.status).toBe(201);
 }
 
 beforeAll(async () => {
