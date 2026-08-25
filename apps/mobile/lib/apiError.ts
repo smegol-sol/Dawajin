@@ -21,18 +21,27 @@ export class LoginRequestError extends Error {
  *
  * في ملف مستقل عن `api.ts` عمدًا: هذا هو الجزء الحامل للمنطق، فيُفرَض عليه
  * حد تغطية 100% بينما تبقى أغلفة HTTP الرفيعة بلا حدّ مصطنع (القرار #63).
+ *
+ * **والتحويل مفصول عن الصنف الذي يغلّفه (القرار #132):** شاشات البنية
+ * التحتية تحتاج نفس التمييز (لا شبكة / 403 / 404) ولا تحتاج خطأ دخول. نسخ
+ * الدالة كان سيجعل «كيف يُقرأ فشل الطلب؟» سؤالًا بجوابين يتباعدان.
  */
-export function toLoginRequestError(error: unknown): LoginRequestError {
+export function toApiFailure(error: unknown): LoginFailure {
   if (axios.isAxiosError(error)) {
     const response = error.response;
-    if (!response) return new LoginRequestError({ status: null, code: null });
+    if (!response) return { status: null, code: null };
 
     const data: unknown = response.data;
     const code =
       typeof data === "object" && data !== null && "code" in data && typeof data.code === "string"
         ? data.code
         : null;
-    return new LoginRequestError({ status: response.status, code });
+    return { status: response.status, code };
   }
-  return new LoginRequestError({ status: null, code: null });
+  return { status: null, code: null };
+}
+
+/** يغلّف `toApiFailure` بخطأ تدفّق الدخول — الصنف يخصّ المصادقة، والتحويل لا. */
+export function toLoginRequestError(error: unknown): LoginRequestError {
+  return new LoginRequestError(toApiFailure(error));
 }
