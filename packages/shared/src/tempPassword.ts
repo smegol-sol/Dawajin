@@ -22,20 +22,53 @@ export const TEMP_PASSWORD_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789#@";
  */
 export const TEMP_PASSWORD_LENGTH = 12;
 
-/** يطابق الشكل المولَّد حصرًا — الطول والأبجدية معًا. */
+/**
+ * حجم كتلة العرض. الكلمة تُملى شفهيًا في عنبر أو تُنسخ من شاشة المشرف،
+ * و12 محرفًا متتاليًا تُخطَّأ كثيرًا. التقسيم لثلاث كتل (`K7RM-4XQP-2HTV`)
+ * يقلّص الخطأ لسببين: الذاكرة العاملة تتعامل مع 3 كتل لا 12 محرفًا مستقلًا،
+ * والشرطة **نقطة مزامنة** — من يخطئ في الكتلة الثانية يعرف أين يعود، ومن
+ * يملي يقول "شرطة" فاصلًا سمعيًا (القرار #105).
+ */
+export const TEMP_PASSWORD_GROUP_SIZE = 4;
+
+/** يطابق الشكل المولَّد حصرًا — الطول والأبجدية معًا، بلا شرطات. */
 const GENERATED_TEMP_PASSWORD_PATTERN = new RegExp(
   `^[${TEMP_PASSWORD_ALPHABET.replaceAll("#", "\\#").replaceAll("@", "\\@")}]{${String(TEMP_PASSWORD_LENGTH)}}$`
 );
+
+/**
+ * يحذف شرطات العرض ليعيد الشكل **القانوني** (12 محرفًا) المخزَّن والمُجزَّأ.
+ *
+ * الشرطات **زخرفة عرض لا جزء من التوليد**: لو أُدخلت في الأبجدية لصارت جزءًا
+ * من فضاء الاحتمالات وأفسدت حساب الـ60 بتّة. العشوائية تبقى 12 محرفًا من 32
+ * بالضبط، قبل التقسيم وبعده.
+ * @returns النص بلا شرطات
+ */
+export function normalizeTemporaryPassword(candidate: string): string {
+  return candidate.replaceAll("-", "");
+}
+
+/**
+ * يقسّم الشكل القانوني إلى كتل للعرض على شاشة المشرف فقط.
+ * @returns مثل `K7RM-4XQP-2HTV` — لا يُخزَّن ولا يُجزَّأ بهذا الشكل
+ */
+export function formatTemporaryPassword(canonical: string): string {
+  const groups = canonical.match(new RegExp(`.{1,${String(TEMP_PASSWORD_GROUP_SIZE)}}`, "g"));
+  return groups ? groups.join("-") : canonical;
+}
 
 /**
  * هل هذه الكلمة **مولَّدة** بالشكل المعتمد؟ حارس شكل لا حارس عشوائية —
  * لا يمكن لأي فحص إثبات أن قيمة ما خرجت من مولّد آمن، لكن رفض كل ما لا
  * يطابق الشكل يمنع الكلمات اليدوية القصيرة/المتكررة (`Temp1234`) وهي مصدر
  * الخطر الفعلي.
- * @returns true إن طابقت الطول والأبجدية المعتمدَين
+ *
+ * يقبل الشكلين (بشرطات وبدونها) لأن المستخدم قد ينسخها كما عُرضت أو يكتبها
+ * بلا شرطات — ورفض أحدهما بلاغُ «لا تعمل» لا أمان.
+ * @returns true إن طابقت الطول والأبجدية المعتمدَين بعد التطبيع
  */
 export function isGeneratedTemporaryPassword(candidate: string): boolean {
-  return GENERATED_TEMP_PASSWORD_PATTERN.test(candidate);
+  return GENERATED_TEMP_PASSWORD_PATTERN.test(normalizeTemporaryPassword(candidate));
 }
 
 /** رسالة الرفض عند تمرير كلمة مؤقتة غير مولَّدة. */

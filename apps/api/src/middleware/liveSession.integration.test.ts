@@ -28,7 +28,9 @@ let db: Database;
 let pool: ReturnType<typeof createDbClient>["pool"];
 let app: ReturnType<typeof createApp>;
 
-async function seedUser(mustChange: boolean): Promise<{ phone: string; id: number }> {
+async function seedUser(
+  mustChange: boolean
+): Promise<{ phone: string; id: number; tenantId: number }> {
   const env = loadEnv();
   const suffix = randomInt(100000, 999999).toString();
   const phone = `07${suffix}1`;
@@ -51,11 +53,15 @@ async function seedUser(mustChange: boolean): Promise<{ phone: string; id: numbe
     })
     .returning();
   if (!user) throw new Error("تعذّر إنشاء مستخدم الاختبار");
-  return { phone, id: user.id };
+  return { phone, id: user.id, tenantId: tenant.id };
 }
 
-async function tokenFor(phone: string, password: string): Promise<string> {
-  const res = await request(app).post("/api/auth/login").send({ phone, password });
+/**
+ * `tenantId` إلزامي منذ الشكل الرابع (القرار #106): الخادم يبحث عن صف واحد
+ * بالمفتاح `(tenant_id, phone_e164)` ولا يقارن الكلمة عبر مستأجرين.
+ */
+async function tokenFor(phone: string, password: string, tenantId: number): Promise<string> {
+  const res = await request(app).post("/api/auth/login").send({ phone, password, tenantId });
   return (res.body as { token: string }).token;
 }
 
@@ -76,26 +82,26 @@ afterAll(async () => {
 
 describe(`requireLiveSession — كلمة مؤقتة (${S})`, () => {
   it("تمنع مسار قراءة (GET /api/settings) بـ403", async () => {
-    const { phone } = await seedUser(true);
+    const { phone, tenantId } = await seedUser(true);
     const res = await request(app)
       .get("/api/settings")
-      .set("Authorization", `Bearer ${await tokenFor(phone, TEMP)}`);
+      .set("Authorization", `Bearer ${await tokenFor(phone, TEMP, tenantId)}`);
     expect(res.status).toBe(403);
     expect((res.body as { code: string }).code).toBe("password_change_required");
   });
 
   it("تمنع مسار كتابة آخر (POST /api/auth/register-push-token) بـ403", async () => {
-    const { phone } = await seedUser(true);
+    const { phone, tenantId } = await seedUser(true);
     const res = await request(app)
       .post("/api/auth/register-push-token")
-      .set("Authorization", `Bearer ${await tokenFor(phone, TEMP)}`)
+      .set("Authorization", `Bearer ${await tokenFor(phone, TEMP, tenantId)}`)
       .send({ expoPushToken: "ExponentPushToken[x]" });
     expect(res.status).toBe(403);
   });
 
   it("تسمح بـ/api/auth/me و/api/auth/change-password، وتفتح القفل بعد التغيير", async () => {
-    const { phone } = await seedUser(true);
-    const token = await tokenFor(phone, TEMP);
+    const { phone, tenantId } = await seedUser(true);
+    const token = await tokenFor(phone, TEMP, tenantId);
 
     expect(
       (await request(app).get("/api/auth/me").set("Authorization", `Bearer ${token}`)).status
@@ -109,15 +115,15 @@ describe(`requireLiveSession — كلمة مؤقتة (${S})`, () => {
 
     const after = await request(app)
       .get("/api/settings")
-      .set("Authorization", `Bearer ${await tokenFor(phone, "MyNewPass99")}`);
+      .set("Authorization", `Bearer ${await tokenFor(phone, "MyNewPass99", tenantId)}`);
     expect(after.status).toBe(200);
   });
 });
 
 describe(`requireLiveSession — تعطيل الحساب (${S})`, () => {
   it("رمز صالح صادر قبل التعطيل يُرفض 401 فورًا بلا إعادة دخول", async () => {
-    const { phone, id } = await seedUser(false);
-    const token = await tokenFor(phone, TEMP);
+    const { phone, id, tenantId } = await seedUser(false);
+    const token = await tokenFor(phone, TEMP, tenantId);
 
     expect(
       (await request(app).get("/api/settings").set("Authorization", `Bearer ${token}`)).status

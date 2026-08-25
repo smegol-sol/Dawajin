@@ -14,6 +14,24 @@ const babelJestEntry = jestExpoPreset.transform["\\.[jt]sx?$"];
 module.exports = {
   preset: "jest-expo",
   testMatch: ["**/*.rtl.test.tsx"],
+  /**
+   * التغطية على **ملفات المنطق** لا على الحزمة (نفس منطق القرار #63 و§7-ب
+   * البند 1): `authErrors`/`authFlow`/`roleRoutes` تحمل قرارات منتج (نص كل
+   * رسالة، وجهة كل دور) و`api` يحمل التمييز بين انقطاع الشبكة وخطأ الخادم —
+   * كسر أيٍّ منها يصل المستخدم مباشرة، فحدّها 100%.
+   *
+   * `session`/`rtl`/`bestEffort` أغلفة رفيعة على واجهات المنصة (SecureStore،
+   * I18nManager، document) بلا تفرّع منطقي — تُغطّى بتأكيدات التخطيط الحقيقية
+   * في `layout-tests/` لا باختبار وحدة يستبدل المنصة ثم يفحص الاستبدال.
+   */
+  collectCoverageFrom: ["lib/**/*.ts", "!lib/**/*.test.tsx"],
+  coverageThreshold: {
+    "lib/authErrors.ts": { statements: 100, branches: 100, functions: 100, lines: 100 },
+    "lib/authFlow.ts": { statements: 100, branches: 100, functions: 100, lines: 100 },
+    "lib/roleRoutes.ts": { statements: 100, branches: 100, functions: 100, lines: 100 },
+    "lib/pendingLogin.ts": { statements: 100, branches: 100, functions: 100, lines: 100 },
+    "lib/apiError.ts": { statements: 100, branches: 100, functions: 100, lines: 100 },
+  },
   transform: {
     ...jestExpoPreset.transform,
     "^.+\\.mjs$": babelJestEntry,

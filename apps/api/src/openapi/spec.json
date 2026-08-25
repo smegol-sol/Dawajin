@@ -6,6 +6,56 @@
     "description": "المصدر الوحيد لعقد الـ API (backend-technical-spec.md §18). كل مسار تحت /api يجب أن يُوثَّق هنا — الفاحص الآلي (scripts/checks/openapi-coverage.ts) يفشل البناء عند أي فرق."
   },
   "paths": {
+    "/api/auth/accounts": {
+      "post": {
+        "summary": "حسابات رقم جوال — الخطوة الأولى في تسجيل الدخول",
+        "description": "يعيد المستأجرين الذين لهذا الرقم حساب **نشط** لديهم، بلا كلمة مرور وبلا بيانات شخصية (القرار #106). الحسابات المعطَّلة تُخفى (القيد د). حدّ 3 طلبات/دقيقة — أشدّ من حدّ الدخول لأن الطلب أرخص (بلا bcrypt) فأنفع للتعداد (القيد ج).",
+        "tags": ["auth"],
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "قائمة الحسابات النشطة (قد تكون فارغة)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "بيانات غير صالحة",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "تجاوز حدّ المحاولات",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/auth/login": {
       "post": {
         "summary": "تسجيل الدخول برقم الجوال وكلمة المرور — بلا مصادقة مسبقة",
@@ -21,18 +71,11 @@
         },
         "responses": {
           "200": {
-            "description": "توكن ناجح، أو طلب اختيار مستأجر عند تعدّد الحسابات لنفس الجوال",
+            "description": "نجاح — رمز وملف المستخدم",
             "content": {
               "application/json": {
                 "schema": {
-                  "oneOf": [
-                    {
-                      "$ref": "#/components/schemas/LoginSuccess"
-                    },
-                    {
-                      "$ref": "#/components/schemas/LoginNeedsTenantSelection"
-                    }
-                  ]
+                  "$ref": "#/components/schemas/LoginSuccess"
                 }
               }
             }
@@ -42,6 +85,16 @@
           },
           "401": {
             "description": "رقم الجوال أو كلمة المرور غير صحيحة",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "كلمة المرور صحيحة والحساب معطَّل — يُميَّز بعد المطابقة حصرًا (decisions.md #84)",
             "content": {
               "application/json": {
                 "schema": {
@@ -238,7 +291,7 @@
     "schemas": {
       "LoginRequest": {
         "type": "object",
-        "required": ["phone", "password"],
+        "required": ["phone", "password", "tenantId"],
         "properties": {
           "phone": {
             "type": "string"
@@ -249,7 +302,7 @@
           "tenantId": {
             "type": "integer",
             "exclusiveMinimum": 0,
-            "description": "لحسم حساب واحد عند تعدّد المستأجرين لنفس الجوال (decisions.md #57)"
+            "description": "**إلزامي** (القيد أ، القرار #106) — الحساب المختار من POST /api/auth/accounts. جعله اختياريًا يعيد ثقب #98."
           }
         }
       },
@@ -262,33 +315,6 @@
           },
           "user": {
             "$ref": "#/components/schemas/CurrentUser"
-          }
-        }
-      },
-      "LoginNeedsTenantSelection": {
-        "type": "object",
-        "description": "الجوال وكلمة المرور يطابقان حسابات في أكثر من مستأجر — أعد الطلب مع tenantId (decisions.md #57)",
-        "required": ["needsTenantSelection", "accounts"],
-        "properties": {
-          "needsTenantSelection": {
-            "const": true
-          },
-          "accounts": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "tenantId": {
-                  "type": "integer"
-                },
-                "fullName": {
-                  "type": "string"
-                },
-                "role": {
-                  "type": "string"
-                }
-              }
-            }
           }
         }
       },
@@ -406,6 +432,39 @@
             "description": "عربية جاهزة للعرض دائمًا"
           },
           "details": {}
+        }
+      },
+      "AccountsRequest": {
+        "type": "object",
+        "required": ["phone"],
+        "properties": {
+          "phone": {
+            "type": "string",
+            "description": "رقم الجوال بأي صيغة — الخادم يطبّعه (§11)"
+          }
+        }
+      },
+      "AccountsResponse": {
+        "type": "object",
+        "required": ["accounts"],
+        "properties": {
+          "accounts": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["tenantId", "tenantName"],
+              "properties": {
+                "tenantId": {
+                  "type": "integer",
+                  "description": "يُرسَل ولا يُعرَض إطلاقًا (§12)"
+                },
+                "tenantName": {
+                  "type": "string"
+                }
+              },
+              "description": "**بلا اسم أو دور** — لا يُرجَعان قبل التحقق (القيد ب، #106)"
+            }
+          }
         }
       }
     },

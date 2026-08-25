@@ -29,6 +29,11 @@ interface CardProps {
    * من البطاقات (§8.3: "نمط حافة الحالة").
    */
   edgeTone?: BadgeTone;
+  /**
+   * معرّف الاختبار على حاوية البطاقة — نقطة الإمساك الوحيدة لتأكيدات
+   * التخطيط (`boundingBox`) في `layout-tests/`. لا أثر بصري له إطلاقًا.
+   */
+  testID?: string;
 }
 
 /** Card — بطاقة كيان (docs/app-complete-spec.md §8.3). بطاقة واحدة = كيان واحد = إجراء أساسي واحد. */
@@ -42,12 +47,14 @@ export function Card({
   onMorePress,
   variant = "default",
   edgeTone,
+  testID,
 }: CardProps) {
   const isIdentity = variant === "identity";
   const hasFooter = primaryActionLabel !== undefined || onMorePress !== undefined;
 
   return (
     <View
+      testID={testID}
       style={[
         styles.container,
         isIdentity ? styles.identityContainer : styles.defaultContainer,
@@ -55,7 +62,10 @@ export function Card({
         // RN لا يعكس خاصية فيزيائية تحت I18nManager.isRTL، فيبقى الحد على
         // يمين الشاشة بصريًا دائمًا (component.statusEdge.side في tokens.json).
         edgeTone
-          ? { borderRightWidth: component.statusEdge.width, borderRightColor: EDGE_TONE_COLOR[edgeTone] }
+          ? {
+              borderRightWidth: component.statusEdge.width,
+              borderRightColor: EDGE_TONE_COLOR[edgeTone],
+            }
           : null,
       ]}
     >

@@ -1,0 +1,13 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "types": ["node"],
+    // DOM لازمة هنا وحدها: تأكيدات التخطيط تُقيّم كودًا **داخل المتصفح**
+    // (`page.evaluate`) فتحتاج `getComputedStyle` و`Element`. بقية المستودع
+    // تبقى بلا DOM عمدًا — خادم Node وتطبيق React Native لا متصفح فيهما.
+    "lib": ["ES2022", "DOM"]
+  },
+  "include": ["**/*.ts"]
+}

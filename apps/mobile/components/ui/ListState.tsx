@@ -52,7 +52,12 @@ export function ListState(props: ListStateProps) {
           <Text style={styles.message}>{props.reason}</Text>
           {/* إعادة المحاولة إجراء آمن لا خطِر — ثانوي، لا أحمر ممتلئ (§7.1:
               الأحمر محصور بالخطر/النزاع/الرفض). */}
-          <Button label="إعادة المحاولة" variant="secondary" icon={RefreshCw} onPress={props.onRetry} />
+          <Button
+            label="إعادة المحاولة"
+            variant="secondary"
+            icon={RefreshCw}
+            onPress={props.onRetry}
+          />
         </View>
       );
   }

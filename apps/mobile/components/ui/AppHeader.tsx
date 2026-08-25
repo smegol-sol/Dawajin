@@ -30,19 +30,31 @@ export function AppHeader({
   onAccountPress,
 }: AppHeaderProps) {
   return (
-    <View style={styles.container}>
+    <View style={styles.container} testID="app-header">
       {variant === "sub" ? (
-        <Pressable onPress={onBackPress} accessibilityRole="button" hitSlop={8}>
+        <Pressable
+          onPress={onBackPress}
+          accessibilityRole="button"
+          accessibilityLabel="رجوع"
+          hitSlop={8}
+          testID="app-header-back"
+        >
           <ArrowRight color={color.brandPrimary} size={24} />
         </Pressable>
       ) : (
-        <Pressable onPress={onAccountPress} accessibilityRole="button" hitSlop={8}>
+        <Pressable
+          onPress={onAccountPress}
+          accessibilityRole="button"
+          accessibilityLabel="الحساب"
+          hitSlop={8}
+          testID="app-header-account"
+        >
           <CircleUser color={color.brandPrimary} size={28} />
         </Pressable>
       )}
 
       <View style={styles.titleBlock}>
-        <Text style={styles.title} numberOfLines={1}>
+        <Text style={styles.title} numberOfLines={1} testID="app-header-title">
           {title}
         </Text>
         {variant === "sub" && contextLine ? (
@@ -52,7 +64,14 @@ export function AppHeader({
         ) : null}
       </View>
 
-      <Pressable onPress={onBellPress} accessibilityRole="button" hitSlop={8} style={styles.bell}>
+      <Pressable
+        onPress={onBellPress}
+        accessibilityRole="button"
+        accessibilityLabel="الإشعارات"
+        hitSlop={8}
+        style={styles.bell}
+        testID="app-header-bell"
+      >
         <Bell color={color.brandPrimary} size={24} />
         {hasNotifications ? <View style={styles.bellDot} /> : null}
       </Pressable>

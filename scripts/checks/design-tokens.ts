@@ -11,6 +11,17 @@ import tokens from "../../apps/mobile/constants/tokens.json" with { type: "json"
  *
  * القيم المسموحة كلها تُقرأ من tokens.json/theme.ts — لا تُكرَّر كثوابت هنا،
  * فتعديل الرمز المركزي يكفي لتحديث الفاحص بلا تعارض بينهما.
+ *
+ * **الاستثناء الوحيد في فحص اللون هو صيغة «القرار #NNN»** (القرار #110،
+ * تضييقًا للقرار #107): مرجع قرار ثلاثي الخانات مثل `#106` هو لون سداسي
+ * مختصر صالح شكلًا، فكان الفاحص يبلّغ عن كل إشارة إلى قرار.
+ *
+ * النسخة الأولى من العلاج حذفت **التعليقات كلها** قبل فحص اللون، وكان ذلك
+ * أوسع من المشكلة: لون حقيقي في تعليق (`// كان #AB12CD سابقًا`) كان يمرّ —
+ * **مُثبَت بمخالفة متعمَّدة، لا مُستنتَجًا.** الاستثناء صار مقصورًا على نمط
+ * الإحالة نفسه، فيُفحص كل ما عداه في التعليقات كما في الكود.
+ *
+ * بقية الفحوص تبقى على النص كاملًا كما كانت — الإيموجي ممنوع في التعليقات.
  */
 
 const MOBILE_DIR = join(process.cwd(), "apps/mobile");
@@ -18,6 +29,17 @@ const EXEMPT_FILES = new Set(["constants/tokens.json", "constants/theme.ts"]);
 const SKIP_DIRS = new Set(["node_modules", ".expo", "dist", "assets"]);
 
 const HEX_COLOR = /#[0-9a-fA-F]{3,8}\b/g;
+/**
+ * **إحالة قرار وحدها** — لا التعليقات كلها (القرار #110 يضيّق #107):
+ * `القرار` (أو تثنيتها/جمعها) ثم `#` ثم رقم من ثلاث خانات فأقل، مع سلسلة
+ * أرقام تالية معطوفة. الكلمة قبل الرقم هي كل الفرق: بلا اشتراطها يصير
+ * الاستثناء لكل نصّ في تعليق، فيمرّ لون حقيقي مثل `// كان #AB12CD سابقًا`.
+ *
+ * ولذلك **صيغة الاستشهاد موحَّدة إلزامًا**: `القرار #NNN` لا `#NNN` وحدها
+ * ولا `في #NNN`. الفاحص يفرض التوحيد فرضًا — وقد أمسك ثلاثة مواضع مخالفة
+ * له عند تضييق النمط.
+ */
+const DECISION_REFERENCE = /القرار(?:ان|ين|ات)?\s*#\d{1,3}(?:\s*(?:،|و)\s*#\d{1,3})*/g;
 // نطاقات الإيموجي الشائعة (لا تلتقط علامات RTL أو رموز نصية عادية)
 const EMOJI = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{1F1E6}-\u{1F1FF}]/gu;
 const BORDER_RADIUS_LITERAL = /borderRadius:\s*(-?\d+(?:\.\d+)?)/g;
@@ -58,6 +80,14 @@ function extractFontLiteral(rawExpression: string): string | null {
   if (quoted) return quoted[1] ?? null;
   const bare = trimmed.match(/^([A-Za-z0-9_]+)/);
   return bare ? (bare[1] ?? null) : null;
+}
+
+/**
+ * النص الذي يُفحَص بحثًا عن لون حرفي: الملف كاملًا **عدا إحالات القرارات**
+ * (القرار #110). التعليقات تُفحَص كبقية الكود — لون حرفي فيها مخالفة أيضًا.
+ */
+function colorScannableText(content: string): string {
+  return content.replaceAll(DECISION_REFERENCE, "");
 }
 
 function collectAllowedHexColors(): Set<string> {
@@ -114,8 +144,7 @@ export function checkDesignTokens(): { ok: boolean; message: string } {
     if (EXEMPT_FILES.has(relPath)) continue;
 
     const content = readFileSync(file, "utf8");
-
-    for (const match of content.matchAll(HEX_COLOR)) {
+    for (const match of colorScannableText(content).matchAll(HEX_COLOR)) {
       const hex = match[0].toLowerCase();
       if (!allowedHex.has(hex)) {
         const reason = isGrayscaleLighterThanBody(hex)

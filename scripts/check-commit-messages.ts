@@ -9,6 +9,12 @@ import { spawnSync } from "node:child_process";
  * ما حدث فعليًا على الدفعة التي أدخلت البوابة (فشلت على نفسها). إعادة
  * كتابة تلك الرسائل مرفوضة: تغيّر كل SHA لتاريخ مدفوع فعلًا.
  *
+ * **commit الدمج يُعفى ببنيته لا بنصّه** (القرار #108): المعيار هو وجود أكثر
+ * من أب، لا أن تبدأ الرسالة بـ`Merge `. الصيغة النصّية كانت تعفي رسالة git
+ * التلقائية وحدها، فتفشل على رسالة دمج مكتوبة بالعربية تشرح **لماذا** جرى
+ * الدمج — وهي أنفع من التلقائية لا أسوأ. `merge` ليست نوعًا في conventional
+ * commits ولا يجوز أن تصير واحدًا لهذا السبب.
+ *
  * الاستخدام: tsx scripts/check-commit-messages.ts <base-ref>
  */
 const CONVENTIONAL =
@@ -42,7 +48,10 @@ function main(): void {
   }
 
   const sinceRef = resolveSinceRef(baseRef);
-  const log = git(["log", "--format=%H%x00%s", `${sinceRef}..HEAD`]);
+  // القصّ إلى 8 محارف مناسب لـSHA لا لاسم مرجع (`origin/main` كانت تُطبع `origin/m`)
+  const shownRef = /^[0-9a-f]{40}$/.test(sinceRef) ? sinceRef.slice(0, 8) : sinceRef;
+  // %P (الآباء) إلى جانب الموضوع: تمييز commit الدمج يكون ببنيته لا بنصّه
+  const log = git(["log", "--format=%H%x00%P%x00%s", `${sinceRef}..HEAD`]);
   if (!log.ok) {
     console.error(`تعذّر قراءة سجل git مقابل ${sinceRef}:\n${log.stderr}`);
     process.exit(2);
@@ -52,17 +61,19 @@ function main(): void {
     .split("\n")
     .filter(Boolean)
     .map((line) => {
-      const [sha, subject] = line.split("\0");
-      return { sha: sha ?? "", subject: subject ?? "" };
+      const [sha, parents, subject] = line.split("\0");
+      return {
+        sha: sha ?? "",
+        subject: subject ?? "",
+        // أكثر من أب = commit دمج، مهما كان نصّ رسالته
+        isMerge: (parents ?? "").trim().split(/\s+/).filter(Boolean).length > 1,
+      };
     });
 
-  const invalid = commits.filter(
-    // دمج الفروع يولّد رسالة تلقائية لا يتحكم بها الكاتب
-    (c) => !c.subject.startsWith("Merge ") && !CONVENTIONAL.test(c.subject)
-  );
+  const invalid = commits.filter((c) => !c.isMerge && !CONVENTIONAL.test(c.subject));
 
   if (invalid.length > 0) {
-    console.error(`رسائل commit لا تتبع conventional commits (المرجع: ${sinceRef.slice(0, 8)}):`);
+    console.error(`رسائل commit لا تتبع conventional commits (المرجع: ${shownRef}):`);
     for (const c of invalid) {
       console.error(`  ${c.sha.slice(0, 8)}  ${c.subject}`);
     }
@@ -72,9 +83,7 @@ function main(): void {
     process.exit(1);
   }
 
-  console.log(
-    `${commits.length} رسالة commit تتبع conventional commits (المرجع: ${sinceRef.slice(0, 8)})`
-  );
+  console.log(`${commits.length} رسالة commit تتبع conventional commits (المرجع: ${shownRef})`);
 }
 
 main();

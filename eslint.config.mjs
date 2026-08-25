@@ -138,6 +138,11 @@ export default tseslint.config(
     },
   },
   {
+    // خادم الملفات الثابت لتأكيدات التخطيط — سكربت Node خالص (URL, process).
+    files: ["layout-tests/**/*.mjs"],
+    languageOptions: { globals: globals.node },
+  },
+  {
     // أدوات سطر أوامر مخرجاتها للإنسان في الطرفية — pino (سجل JSON منظَّم
     // لخادم يخدم طلبات) ليس البديل الصحيح لها (القرار #65-ب).
     files: [
