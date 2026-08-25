@@ -1,13 +1,6 @@
 import { randomInt } from "node:crypto";
 
-import {
-  batches,
-  createDbClient,
-  type Database,
-  entityAuditLog,
-  houses,
-  userAssignments,
-} from "@dawajin/db";
+import { batches, createDbClient, type Database, entityAuditLog, houses } from "@dawajin/db";
 import { and, eq } from "drizzle-orm";
 import pino from "pino";
 import request from "supertest";
@@ -25,7 +18,8 @@ import { farmVia, houseVia, seedTenant, seedUser, siteVia } from "../test-suppor
  * وهنا يظهر فرق عن المواقع والمزارع: `enforceEntityAccess` المركَّب **بنمط
  * مسار** (`/api/houses/:houseId`) يفرض **الإسناد** — فالمربّي يقرأ عنابره
  * المُسندة وحدها، ويحصل على 403 لعنبر موجود غير مُسند له (المبدأ السادس).
- * والمشرف والطبيب خارج القيد مؤقتًا لنقص في النموذج لا لقرار — القرار #126.
+ * **والإسناد بمستويين (القرار #128):** المربّي بالعنبر، والمشرف والطبيب
+ * بالمزرعة — فصفٌّ واحد بـ`farm_id` يفتح كل عنابرها ولا يفتح ما خارجها.
  */
 const S = randomInt(100000, 999999).toString();
 
@@ -37,7 +31,6 @@ let farmAId: number;
 let farmA2Id: number;
 let ownerToken: string;
 let farmerToken: string;
-let farmerId: number;
 let supervisorToken: string;
 let vetToken: string;
 let ownerBToken: string;
@@ -71,7 +64,7 @@ beforeAll(async () => {
     role: "owner",
     secret: env.JWT_SECRET,
   }));
-  ({ id: farmerId, token: farmerToken } = await seedUser(db, {
+  ({ token: farmerToken } = await seedUser(db, {
     tenantId: tenantAId,
     role: "farmer",
     secret: env.JWT_SECRET,
@@ -216,74 +209,6 @@ describe(`GET العنابر — العزل والإسناد (${S})`, () => {
       .get("/api/houses/99999999")
       .set("Authorization", `Bearer ${ownerToken}`);
     expect(res.status).toBe(404);
-  });
-});
-
-describe(`GET العنابر — الإسناد داخل المستأجر (${S})`, () => {
-  it("المالك يقرأ أي عنبر في مستأجره ← 200", async () => {
-    const id = await houseVia(app, ownerToken, farmAId, `للمالك ${S}`);
-    const res = await request(app)
-      .get(`/api/houses/${String(id)}`)
-      .set("Authorization", `Bearer ${ownerToken}`);
-    expect(res.status).toBe(200);
-  });
-
-  it("المربّي يقرأ عنبرًا **مُسندًا** له ← 200", async () => {
-    const id = await houseVia(app, ownerToken, farmAId, `مُسند ${S}`);
-    await db.insert(userAssignments).values({ tenantId: tenantAId, userId: farmerId, houseId: id });
-
-    const res = await request(app)
-      .get(`/api/houses/${String(id)}`)
-      .set("Authorization", `Bearer ${farmerToken}`);
-    expect(res.status).toBe(200);
-  });
-
-  it("المربّي يقرأ عنبرًا **غير مُسند** له ← 403 (المبدأ السادس · القرار #126)", async () => {
-    const id = await houseVia(app, ownerToken, farmAId, `غير مُسند ${S}`);
-    const res = await request(app)
-      .get(`/api/houses/${String(id)}`)
-      .set("Authorization", `Bearer ${farmerToken}`);
-    expect(res.status).toBe(403);
-    expect((res.body as { code?: string }).code).toBe("forbidden");
-  });
-
-  /**
-   * **عطب مؤجَّل لا سلوك مقصود (القرار #126).** المشرف والطبيب مسؤولان عن
-   * **بعض** مزارع المستأجر يُسندها إليهما المالك — و`user_assignments` إسناد
-   * بالعنبر (`user_id · house_id`) لا يستوعب إسنادًا بالمزرعة. فنطاقهما مفتوح
-   * مؤقتًا على كل عنابر المستأجر. الاختبار يوثّق الواقع كي لا يُظن الحارس
-   * عاملًا عليهما — §7-ب البند 19، يُصلَح قبل شاشة المشرف (المرحلة 3).
-   */
-  it("المشرف والطبيب يقرآن عنبرًا غير مُسند ← 200 (نقص النموذج، لا قرار)", async () => {
-    const id = await houseVia(app, ownerToken, farmAId, `غير مُسند لمشرف ${S}`);
-    for (const token of [supervisorToken, vetToken]) {
-      const res = await request(app)
-        .get(`/api/houses/${String(id)}`)
-        .set("Authorization", `Bearer ${token}`);
-      expect(res.status).toBe(200);
-    }
-  });
-
-  it("المربّي وعنبر مستأجر آخر ← 404 لا 403 (الوجود قبل الإسناد)", async () => {
-    const res = await request(app)
-      .get(`/api/houses/${String(houseInTenantBId)}`)
-      .set("Authorization", `Bearer ${farmerToken}`);
-    expect(res.status).toBe(404);
-  });
-
-  it("سرد عنابر مزرعة ← 200 لكل الأدوار", async () => {
-    const res = await request(app)
-      .get(`/api/farms/${String(farmAId)}/houses`)
-      .set("Authorization", `Bearer ${supervisorToken}`);
-    expect(res.status).toBe(200);
-    expect(Array.isArray((res.body as { houses: unknown[] }).houses)).toBe(true);
-  });
-
-  it("معرّف ليس رقمًا ← 400 لا 500", async () => {
-    const res = await request(app)
-      .get("/api/houses/abc")
-      .set("Authorization", `Bearer ${ownerToken}`);
-    expect(res.status).toBe(400);
   });
 });
 

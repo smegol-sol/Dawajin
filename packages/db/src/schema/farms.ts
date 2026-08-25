@@ -153,13 +153,32 @@ export const batches = pgTable(
   ]
 );
 
-/** إسنادات تراكمية: مستخدم واحد لعدة عنابر بنفس المزرعة (decisions.md #24). */
+/**
+ * إسنادات تراكمية بمستويين (القرار #128).
+ *
+ * **المربّي يُسند بالعنبر** (`house_id`): مستخدم واحد لعدة عنابر بنفس المزرعة
+ * — حالة شائعة (decisions.md #24). **والمشرف والطبيب يُسندان بالمزرعة**
+ * (`farm_id`): مسؤولان عن بعض مزارع المستأجر يُسندها إليهما المالك، تصديقًا
+ * ميدانيًا. الجدول كان بالعنبر وحده فلم يستوعبهما، وكان نطاقهما مفتوحًا
+ * مؤقتًا على كل عنابر المستأجر (§7-ب البند 19 — مُغلَق بهذا).
+ *
+ * **صفٌّ واحد يحمل مستوى واحدًا لا أكثر** — `CHECK` يفرض أن أحد العمودين
+ * فارغ حتمًا. جدولان منفصلان كان أرخص بساعتين وأغلى دائمًا: مصدرا حقيقة
+ * لسؤال واحد («بماذا هذا المستخدم مُسند؟»)، ونسيان أحدهما **يفتح صامتًا لا
+ * يفشل صاخبًا**.
+ *
+ * **والتفرّد بفهرسين جزئيين لا بفهرس واحد:** الفهرس السابق على
+ * `(user_id, house_id)` صار — بعد أن قبِل العمود `NULL` — يعامل كل `NULL`
+ * كقيمة مميّزة، فيقبل **إسناد نفس المشرف لنفس المزرعة مرتين صامتًا**.
+ * الفهرسان الجزئيان يغلقان الثقب على المستويين معًا.
+ */
 export const userAssignments = pgTable(
   "user_assignments",
   {
     id: serial("id").primaryKey(),
     userId: integer("user_id").notNull(),
-    houseId: integer("house_id").notNull(),
+    houseId: integer("house_id"),
+    farmId: integer("farm_id"),
     tenantId: integer("tenant_id")
       .notNull()
       .references(() => tenants.id),
@@ -172,11 +191,27 @@ export const userAssignments = pgTable(
       name: "user_assignments_house_id_tenant_fk",
     }),
     foreignKey({
+      columns: [table.farmId, table.tenantId],
+      foreignColumns: [farms.id, farms.tenantId],
+      name: "user_assignments_farm_id_tenant_fk",
+    }),
+    foreignKey({
       columns: [table.userId, table.tenantId],
       foreignColumns: [users.id, users.tenantId],
       name: "user_assignments_user_id_tenant_fk",
     }),
-    // التكرار ← 409 (backend-technical-spec.md §7.1)
-    uniqueIndex("user_assignments_user_house_uq").on(table.userId, table.houseId),
+    // مستوى واحد لكل صف — لا صف بلا مستوى ولا صف بمستويين
+    check(
+      "user_assignments_one_level_ck",
+      sql`(${table.houseId} IS NULL) <> (${table.farmId} IS NULL)`
+    ),
+    // التكرار ← 409 (backend-technical-spec.md §7.1). جزئيان لأن NULL في
+    // فهرس فريد عادي «مميّزة دائمًا» فلا تمنع تكرار الصفوف الأخرى.
+    uniqueIndex("user_assignments_user_house_uq")
+      .on(table.userId, table.houseId)
+      .where(sql`${table.houseId} IS NOT NULL`),
+    uniqueIndex("user_assignments_user_farm_uq")
+      .on(table.userId, table.farmId)
+      .where(sql`${table.farmId} IS NOT NULL`),
   ]
 );
