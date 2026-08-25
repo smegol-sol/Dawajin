@@ -29,6 +29,7 @@ let tenantBId: number;
 let ownerToken: string;
 let farmerToken: string;
 let supervisorToken: string;
+let vetToken: string;
 let ownerBToken: string;
 let siteInTenantBId: number;
 
@@ -91,6 +92,7 @@ beforeAll(async () => {
   ownerToken = await tokenFor(tenantAId, "owner", env.JWT_SECRET);
   farmerToken = await tokenFor(tenantAId, "farmer", env.JWT_SECRET);
   supervisorToken = await tokenFor(tenantAId, "supervisor", env.JWT_SECRET);
+  vetToken = await tokenFor(tenantAId, "vet", env.JWT_SECRET);
   ownerBToken = await tokenFor(tenantBId, "owner", env.JWT_SECRET);
 
   siteInTenantBId = await createSiteVia(ownerBToken, `موقع المستأجر ب ${S}`);
@@ -115,6 +117,7 @@ describe(`POST /api/sites — الكتابة للمالك حصرًا (${S})`, ()
   it.each([
     ["farmer", () => farmerToken],
     ["supervisor", () => supervisorToken],
+    ["vet", () => vetToken],
   ])("الدور %s ← 403 (المشرف لا ينشئ مواقع رغم أنه يغيّر حالة العنبر)", async (_role, token) => {
     const res = await request(app)
       .post("/api/sites")
@@ -144,6 +147,28 @@ describe(`POST /api/sites — الكتابة للمالك حصرًا (${S})`, ()
       .send({ name });
     expect(res.status).toBe(409);
     expect((res.body as { code: string }).code).toBe("duplicate_name");
+  });
+});
+
+describe(`POST /api/sites — تكرار الاسم في المسارين (${S})`, () => {
+  /**
+   * **الثبات المطلوب: نفس الرمز والرسالة أيًّا كان المسار** — الفحص المسبق في
+   * طبقة الخدمة أو الفهرس الفريد خلفه (القرار #119). طلبان متزامنان قد يمرّان
+   * كلاهما من الفحص فيصطدم أحدهما بالفهرس؛ وقد يتسلسلان فيلتقط الفحصُ الثاني.
+   * **التأكيد على الثبات لا على أيّ المسارين وقع** — فيصحّ في الحالتين ولا يهتزّ.
+   */
+  it("طلبان متزامنان بنفس الاسم ← أحدهما 201 والآخر 409 duplicate_name دائمًا", async () => {
+    const name = `متزامن ${S}`;
+    const send = (): request.Test =>
+      request(app).post("/api/sites").set("Authorization", `Bearer ${ownerToken}`).send({ name });
+
+    const [a, b] = await Promise.all([send(), send()]);
+    const statuses = [a.status, b.status].sort((x, y) => x - y);
+    expect(statuses).toEqual([201, 409]);
+
+    const failed = a.status === 409 ? a : b;
+    expect((failed.body as { code: string }).code).toBe("duplicate_name");
+    expect((failed.body as { message: string }).message).toBe("يوجد موقع بهذا الاسم");
   });
 
   it("نفس الاسم في مستأجر آخر ← مسموح (العزل يعني استقلال الأسماء)", async () => {
