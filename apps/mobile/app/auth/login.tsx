@@ -5,6 +5,7 @@ import { StyleSheet, Text, View } from "react-native";
 import { AuthScreen } from "@/components/ui/AuthScreen";
 import { Button } from "@/components/ui/Button";
 import { FormField } from "@/components/ui/FormField";
+import { Logo } from "@/components/ui/Logo";
 import { color, font, radius, spacing } from "@/constants/theme";
 import { LoginRequestError, fetchAccountsForPhone } from "@/lib/api";
 import { LOGIN_VALIDATION, loginErrorView, type LoginErrorView } from "@/lib/authErrors";
@@ -55,7 +56,7 @@ export default function LoginScreen() {
       testID="login-screen"
       header={
         <View style={styles.brand}>
-          <Text style={styles.appName}>دواجن</Text>
+          <Logo variant="full" />
           <Text style={styles.tagline}>نظام إدارة مزارع دواجن التسمين</Text>
         </View>
       }
@@ -163,14 +164,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: spacing.xs,
     paddingTop: spacing.lg,
-  },
-  appName: {
-    // screenTitle لا heroNumber: heroNumber رمز دلالي لـ"الرقم البطل" (§8.5)
-    // وهو مؤشر رقمي لا اسم شاشة — استعارته هنا تُفرغه من دلالته
-    fontSize: font.size.screenTitle,
-    fontFamily: font.familyBold,
-    color: color.brandPrimary,
-    writingDirection: "rtl",
   },
   tagline: {
     fontSize: font.size.content,
