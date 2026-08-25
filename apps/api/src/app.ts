@@ -82,8 +82,18 @@ export function createApp(db: Database, env: Env, logger: Logger): Express {
   /**
    * أنماط المسارات التي تحمل معرّف كيان في الرابط — كل نمط يُركَّب عليه
    * `enforceEntityAccess`. `batchId` يُضاف مع مسارات الدفعات (المرحلة 2).
+   *
+   * **وكل مسار سرد جديد يُضاف هنا** — لا يكفي أن تفلتر الخدمة نتائجه: الفرض
+   * يقرّر «هل يصل هذه المزرعة أصلًا» والفلترة تقرّر «ماذا يرى داخلها»
+   * (`CLAUDE.md` — قاعدة السرد، القرار #129).
    */
-  const ENTITY_ID_PATH_PATTERNS = ["/api/houses/:houseId", "/api/batches/:batchId"] as const;
+  const ENTITY_ID_PATH_PATTERNS = [
+    "/api/houses/:houseId",
+    "/api/batches/:batchId",
+    // السرد يأخذ معرّف المزرعة لا العنبر — وبلا نمط له كان يمرّ بلا فحص
+    // إسناد إطلاقًا (§7-ب البند 20، مُغلَق بالقرار #129).
+    "/api/farms/:farmId/houses",
+  ] as const;
 
   const api = express.Router();
   api.use(

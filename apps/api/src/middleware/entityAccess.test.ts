@@ -38,6 +38,21 @@ describe("enforceEntityAccess — فروع دفاعية", () => {
     expect(error.status).toBe(401);
   });
 
+  it("401 عندما tenantId يساوي null على مسار **المزرعة** (نفس الفرع الدفاعي، مدخل آخر)", async () => {
+    const middleware = enforceEntityAccess(throwingDb() as never);
+    const next = vi.fn();
+
+    await middleware(
+      fakeRequest({ id: 1, tenantId: null, role: "supervisor" }, { farmId: "1" }),
+      {} as Response,
+      next
+    );
+
+    const error = next.mock.calls[0]?.[0] as HttpError;
+    expect(error).toBeInstanceOf(HttpError);
+    expect(error.status).toBe(401);
+  });
+
   it("401 عندما tenantId يساوي null لدور غير مالك/مدير منصة (المفروض ألا يُصادَف بعد requireTenant)", async () => {
     const middleware = enforceEntityAccess(throwingDb() as never);
     const next = vi.fn();
