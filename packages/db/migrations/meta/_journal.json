@@ -36,6 +36,13 @@
       "when": 1787609812834,
       "tag": "0004_invalidate_manual_temp_passwords",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1787623209212,
+      "tag": "0005_add_sites_level_and_farm_power",
+      "breakpoints": true
     }
   ]
 }

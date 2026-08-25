@@ -335,8 +335,27 @@ workspace/
 | last_active_at | timestamptz | |
 | created_at | timestamptz NOT NULL | |
 
+### `sites`
+| العمود | النوع | ملاحظات |
+|---|---|---|
+| id · tenant_id | FK | |
+| name | varchar(128) NOT NULL | |
+| created_at | timestamptz NOT NULL | |
+
+الموقع الجغرافي — المستوى الأعلى في الهرم (القرار #112). الموقع الواحد قد يضم
+أكثر من مزرعة. **لا علاقة له بـ`location_type`** في جداول المخزون: ذاك يعني
+«نوع موقع المخزون» (مخزن مقابل عنبر)، مفهوم مخزون لا مكان جغرافي (القرار #113).
+
 ### `farms`
-id · tenant_id FK · name · created_at
+| العمود | النوع | ملاحظات |
+|---|---|---|
+| id · tenant_id · site_id | FK | `site_id` NOT NULL |
+| name | varchar(128) NOT NULL | فريد داخل الموقع لا عبر المستأجر |
+| power_sources | power_source[] NOT NULL | `cardinality >= 1` — لا مزرعة بلا طاقة |
+| created_at | timestamptz NOT NULL | |
+
+**مصادر الطاقة على المزرعة لا العنبر** (القرار #112): المولّد يخدم مزرعة فيها
+أكثر من عنبر. قيمتان: شمسية · مولدات.
 
 ### `houses`
 | العمود | النوع | ملاحظات |
@@ -347,7 +366,6 @@ id · tenant_id FK · name · created_at
 | status | enum house_status NOT NULL DEFAULT 'جاهز للإسكان' | |
 | status_changed_at | timestamptz NOT NULL | |
 | water_tank_capacity_l | numeric(10,2) | NULL = حقل الماء مخفي |
-| power_sources | text[] | |
 | created_at | timestamptz | |
 
 ### `batches`
@@ -582,6 +600,8 @@ CREATE UNIQUE INDEX daily_logs_batch_date_uq
 
 UNIQUE (user_id, house_id)
 UNIQUE (farm_id, name)
+UNIQUE (tenant_id, name)      -- sites
+UNIQUE (site_id, name)        -- farms
 UNIQUE (tenant_id, breed, day)
 
 CREATE UNIQUE INDEX products_system_feed_uq
@@ -671,6 +691,9 @@ enforceEntityAccess → مسح params+query+body عن:
 | إنشاء دفعة | ❌ | ✅ | ❌ | ✅ | ❌ |
 | تصفية دفعة | ❌ | ❌ | ❌ | ✅ | ❌ |
 | إعادة فتح دفعة | ❌ | ❌ | ❌ | ✅ بسبب | ❌ |
+| إنشاء/تعديل موقع | ❌ | ❌ | ❌ | ✅ | ❌ |
+| إنشاء/تعديل مزرعة | ❌ | ❌ | ❌ | ✅ | ❌ |
+| إنشاء/تعديل عنبر | ❌ | ❌ | ❌ | ✅ | ❌ |
 | تغيير حالة عنبر | ❌ | ✅ | ❌ | ✅ | ❌ |
 | خطوة تجهيز | ✅ المسندة | ✅ | ❌ | ✅ | ❌ |
 | إدارة المستخدمين | ❌ | ✅ مرّبين فقط | ❌ | ✅ | ❌ |
@@ -859,7 +882,8 @@ GET /auth/me · POST /auth/change-password · POST /auth/register-push-token
 
 **المزارع والعنابر والدفعات**
 ```
-GET/POST /farms · PATCH/DELETE /farms/:farmId
+GET/POST /sites · PATCH /sites/:siteId
+GET/POST /sites/:siteId/farms · PATCH /farms/:farmId
 GET/POST /farms/:farmId/houses · PATCH /houses/:houseId
 PATCH /houses/:houseId/status · GET /houses/:houseId/history
 GET /houses/:houseId/batches · POST /batches

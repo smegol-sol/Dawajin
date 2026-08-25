@@ -1,10 +1,11 @@
-import { randomUUID } from "node:crypto";
+import { randomInt, randomUUID } from "node:crypto";
 
 import {
   createDbClient,
   type Database,
   tenants,
   farms,
+  sites,
   houses,
   products,
   inventoryMovements,
@@ -49,7 +50,12 @@ async function seedLedgerEntities(): Promise<void> {
   const farm = firstRow(
     await db
       .insert(farms)
-      .values({ tenantId, name: "مزرعة اختبار الدفتر" })
+      .values({
+        tenantId,
+        siteId: await seedSite(tenantId),
+        name: "مزرعة اختبار الدفتر",
+        powerSources: ["مولدات"],
+      })
       .returning({ id: farms.id })
   );
 
@@ -102,6 +108,19 @@ async function movement(input: {
     sourceType: "test_fixture",
     sourceUuid: randomUUID(),
   });
+}
+
+/**
+ * موقع اختبار فريد لكل مزرعة — الهرم صار الموقع ← المزرعة ← العنبر
+ * (القرار #112)، و`farms.site_id` إلزامي.
+ */
+async function seedSite(tenantId: number): Promise<number> {
+  const [site] = await db
+    .insert(sites)
+    .values({ tenantId, name: `موقع ${randomInt(100000, 999999).toString()}` })
+    .returning({ id: sites.id });
+  if (!site) throw new Error("تعذّر إنشاء موقع الاختبار");
+  return site.id;
 }
 
 beforeAll(async () => {

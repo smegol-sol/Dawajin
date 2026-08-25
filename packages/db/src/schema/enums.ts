@@ -4,6 +4,7 @@ import {
   BREED,
   HOUSE_STATUS,
   HOUSE_TYPE,
+  POWER_SOURCE,
   MORTALITY_CAUSE,
   REVIEW_STATUS,
   FEED_STAGE,
@@ -34,6 +35,7 @@ export const batchStatusEnum = pgEnum("batch_status", BATCH_STATUS);
 export const breedEnum = pgEnum("breed", BREED);
 export const houseStatusEnum = pgEnum("house_status", HOUSE_STATUS);
 export const houseTypeEnum = pgEnum("house_type", HOUSE_TYPE);
+export const powerSourceEnum = pgEnum("power_source", POWER_SOURCE);
 export const mortalityCauseEnum = pgEnum("mortality_cause", MORTALITY_CAUSE);
 export const reviewStatusEnum = pgEnum("review_status", REVIEW_STATUS);
 export const feedStageEnum = pgEnum("feed_stage", FEED_STAGE);

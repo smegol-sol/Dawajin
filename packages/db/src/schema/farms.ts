@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   pgTable,
   serial,
@@ -9,20 +10,66 @@ import {
   text,
   date,
   uniqueIndex,
+  check,
 } from "drizzle-orm/pg-core";
 
-import { houseTypeEnum, houseStatusEnum, breedEnum, batchStatusEnum } from "./enums";
+import {
+  houseTypeEnum,
+  houseStatusEnum,
+  breedEnum,
+  batchStatusEnum,
+  powerSourceEnum,
+} from "./enums";
 import { tenants } from "./tenants";
 import { users } from "./users";
 
-export const farms = pgTable("farms", {
-  id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id")
-    .notNull()
-    .references(() => tenants.id),
-  name: varchar("name", { length: 128 }).notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+/**
+ * الموقع الجغرافي — **المستوى الأعلى في الهرم** (القرار #112).
+ *
+ * سبعة مواقع في ميدان المالك (الجبل · الكرنة · الصعيد · الطويلة · الجاح ·
+ * الخماسية · الحمراء)، وقد يقوم في الموقع الواحد **أكثر من مزرعة**. الهرم:
+ * الموقع ← المزرعة ← العنبر.
+ *
+ * لا علاقة له بـ`location_type` في جداول المخزون — ذاك يعني «نوع موقع
+ * المخزون» (مخزن مقابل عنبر)، مفهوم مخزون لا مكان جغرافي (القرار #113).
+ */
+export const sites = pgTable(
+  "sites",
+  {
+    id: serial("id").primaryKey(),
+    tenantId: integer("tenant_id")
+      .notNull()
+      .references(() => tenants.id),
+    name: varchar("name", { length: 128 }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("sites_tenant_name_uq").on(table.tenantId, table.name)]
+);
+
+export const farms = pgTable(
+  "farms",
+  {
+    id: serial("id").primaryKey(),
+    tenantId: integer("tenant_id")
+      .notNull()
+      .references(() => tenants.id),
+    siteId: integer("site_id")
+      .notNull()
+      .references(() => sites.id),
+    name: varchar("name", { length: 128 }).notNull(),
+    // مصادر الطاقة على **المزرعة** لا العنبر: المولّد يخدم مزرعة فيها أكثر
+    // من عنبر (القرار #112). ولا مزرعة بلا طاقة — القيد في القاعدة.
+    powerSources: powerSourceEnum("power_sources").array().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    // اسم المزرعة فريد **داخل موقعها** لا عبر المستأجر: «مزرعة 1» في الجبل
+    // وفي الحمراء اسمان مشروعان
+    uniqueIndex("farms_site_name_uq").on(table.siteId, table.name),
+    // `NOT NULL` وحده يسمح بمصفوفة فارغة `{}` — وهي «مزرعة بلا طاقة» حرفيًا
+    check("farms_power_sources_not_empty", sql`cardinality(${table.powerSources}) >= 1`),
+  ]
+);
 
 /** العنبر — الوحدة الأساسية. سبع حالات دورة حياة (app-complete-spec.md §3.3). */
 export const houses = pgTable(
@@ -44,7 +91,6 @@ export const houses = pgTable(
       precision: 10,
       scale: 2,
     }),
-    powerSources: text("power_sources").array(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [uniqueIndex("houses_farm_name_uq").on(table.farmId, table.name)]
