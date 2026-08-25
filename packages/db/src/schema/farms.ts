@@ -11,6 +11,7 @@ import {
   date,
   uniqueIndex,
   check,
+  foreignKey,
 } from "drizzle-orm/pg-core";
 
 import {
@@ -43,7 +44,12 @@ export const sites = pgTable(
     name: varchar("name", { length: 128 }).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [uniqueIndex("sites_tenant_name_uq").on(table.tenantId, table.name)]
+  (table) => [
+    uniqueIndex("sites_tenant_name_uq").on(table.tenantId, table.name),
+    // مرجع لمفتاح المزرعة المركَّب أدناه — Postgres يشترط قيد تفرّد صريحًا
+    // على الأعمدة المُشار إليها ولو كان `id` مفتاحًا أساسيًا أصلًا
+    uniqueIndex("sites_id_tenant_uq").on(table.id, table.tenantId),
+  ]
 );
 
 export const farms = pgTable(
@@ -53,9 +59,8 @@ export const farms = pgTable(
     tenantId: integer("tenant_id")
       .notNull()
       .references(() => tenants.id),
-    siteId: integer("site_id")
-      .notNull()
-      .references(() => sites.id),
+    // بلا `.references()` مفردة — المفتاح المركَّب أدناه يغطّي العلاقة ويزيد
+    siteId: integer("site_id").notNull(),
     name: varchar("name", { length: 128 }).notNull(),
     // مصادر الطاقة على **المزرعة** لا العنبر: المولّد يخدم مزرعة فيها أكثر
     // من عنبر (القرار #112). ولا مزرعة بلا طاقة — القيد في القاعدة.
@@ -66,6 +71,20 @@ export const farms = pgTable(
     // اسم المزرعة فريد **داخل موقعها** لا عبر المستأجر: «مزرعة 1» في الجبل
     // وفي الحمراء اسمان مشروعان
     uniqueIndex("farms_site_name_uq").on(table.siteId, table.name),
+    /**
+     * **مفتاح مركَّب يفرض اتساق المستأجر بنيويًا** (القرار #120): مفتاح مفرد
+     * على `site_id` وحده يقبل مزرعة مستأجر داخل موقع مستأجر آخر — المفتاح
+     * راضٍ لأن الموقع موجود، وإن كان لغير صاحب المزرعة. **مُثبَت على القاعدة
+     * قبل الإصلاح**: صف مزرعة للمستأجر 1 داخل موقع المستأجر 2 قُبل صامتًا.
+     *
+     * الحارس في طبقة الخدمة كان يمنعه، لكنه حارس إجرائي: أي مسار كتابة جديد
+     * لا يمرّ به يُعيد الثقب. هذا يجعله قيدًا في القاعدة (المبدأ الأول).
+     */
+    foreignKey({
+      columns: [table.siteId, table.tenantId],
+      foreignColumns: [sites.id, sites.tenantId],
+      name: "farms_site_tenant_fk",
+    }),
     // `NOT NULL` وحده يسمح بمصفوفة فارغة `{}` — وهي «مزرعة بلا طاقة» حرفيًا
     check("farms_power_sources_not_empty", sql`cardinality(${table.powerSources}) >= 1`),
   ]
