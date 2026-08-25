@@ -50,6 +50,13 @@
       "when": 1787633984628,
       "tag": "0006_enforce_farm_site_tenant_consistency",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1787635430144,
+      "tag": "0007_composite_tenant_foreign_keys",
+      "breakpoints": true
     }
   ]
 }
