@@ -91,6 +91,24 @@ beforeAll(async () => {
   houseInTenantBId = await houseVia(app, ownerBToken, farmInTenantBId, `عنبر ب إسناد ${S}`);
 });
 
+/**
+ * يجمع كل قيمة أولية في الرد مهما عمق تداخلها — أساس فحص «غائب تمامًا».
+ *
+ * **قيمًا لا نصَّ JSON:** `JSON.stringify(...).toContain("83")` يمرّ على أي
+ * «83» في أي موضع — داخل معرّف آخر، أو داخل لاحقة عشوائية في اسم. الفحص هنا
+ * يقارن الرقم رقمًا والنصّ نصًّا، فلا يصطدم ولا يتساهل (القرار #130).
+ */
+function collectPrimitives(value: unknown, out: (string | number)[] = []): (string | number)[] {
+  if (typeof value === "string" || typeof value === "number") {
+    out.push(value);
+  } else if (Array.isArray(value)) {
+    for (const item of value) collectPrimitives(item, out);
+  } else if (value !== null && typeof value === "object") {
+    for (const item of Object.values(value)) collectPrimitives(item, out);
+  }
+  return out;
+}
+
 afterAll(async () => {
   await pool.end();
 });
@@ -225,12 +243,16 @@ describe(`GET /farms/:farmId/houses — فلترة السرد بالإسناد (
     const body = res.body as { houses: { id: number; name: string }[] };
     expect(body.houses.map((h) => h.id).sort()).toEqual(assigned.map((h) => h.id).sort());
 
-    // الغياب يُفحص على **الرد الخام** لا على الحقول المفكوكة: اسم مسرَّب داخل
-    // أي حقل آخر (رسالة، عدّاد، ترتيب) لا تكشفه مقارنة المعرّفات وحدها.
-    const raw = JSON.stringify(res.body);
+    // الغياب يُفحص على **كل قيمة في الرد** مهما عمق تداخلها، لا على الحقول
+    // المفكوكة وحدها: اسم مسرَّب داخل أي حقل آخر (رسالة، عدّاد، ترتيب) لا
+    // تكشفه مقارنة المعرّفات. والفحص على **القيم لا على نصّ JSON**: مطابقة
+    // سلسلة فرعية على رقم تصطدم بأي أرقام أخرى في الرد — وقع فعلًا في CI حين
+    // كان المعرّف المخفي 83 واللاحقة العشوائية 839734 تحتويه (القرار #130).
+    const values = collectPrimitives(res.body);
+    const texts = values.filter((v): v is string => typeof v === "string");
     for (const house of hidden) {
-      expect(raw).not.toContain(String(house.id));
-      expect(raw).not.toContain(house.name);
+      expect(values).not.toContain(house.id);
+      expect(texts.some((text) => text.includes(house.name))).toBe(false);
     }
   });
 
