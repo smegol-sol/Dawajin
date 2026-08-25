@@ -1,6 +1,6 @@
 import { batches, houses, userAssignments, type Database } from "@dawajin/db";
 import { HttpError } from "@dawajin/shared";
-import { and, eq } from "drizzle-orm";
+import { and, eq, or } from "drizzle-orm";
 import type { NextFunction, Request, Response } from "express";
 
 /** يلتقط أول قيمة أولية (نص/رقم) معرَّفة — يتجاهل الكائنات المتداخلة عمدًا (لا String([object]))، لا يُخمِّن شكلها. */
@@ -43,7 +43,14 @@ async function resolveHouseId(db: Database, req: Request): Promise<number | unde
   return batch.houseId;
 }
 
-/** الوجود قبل الإسناد دائمًا (المبدأ #6): 404 للعنبر غير الموجود، 403 للموجود غير المُسند. */
+/**
+ * الوجود قبل الإسناد دائمًا (المبدأ #6): 404 للعنبر غير الموجود، 403 للموجود
+ * غير المُسند.
+ *
+ * **والإسناد يُقرأ على مستويين (القرار #128):** صفٌّ بالعنبر نفسه (المربّي)،
+ * أو صفٌّ بمزرعة العنبر (المشرف والطبيب). استعلام واحد لا استعلامان — القراءة
+ * تجلب `farm_id` أصلًا للتحقق من الوجود، فالمستويان يُفحصان معًا.
+ */
 async function assertHouseAssignment(
   db: Database,
   user: AuthenticatedUser,
@@ -54,7 +61,7 @@ async function assertHouseAssignment(
   }
 
   const [house] = await db
-    .select({ id: houses.id })
+    .select({ id: houses.id, farmId: houses.farmId })
     .from(houses)
     .where(and(eq(houses.id, houseId), eq(houses.tenantId, user.tenantId)))
     .limit(1);
@@ -63,24 +70,30 @@ async function assertHouseAssignment(
   const [assignment] = await db
     .select({ id: userAssignments.id })
     .from(userAssignments)
-    .where(and(eq(userAssignments.userId, user.id), eq(userAssignments.houseId, houseId)))
+    .where(
+      and(
+        eq(userAssignments.userId, user.id),
+        or(eq(userAssignments.houseId, houseId), eq(userAssignments.farmId, house.farmId))
+      )
+    )
     .limit(1);
   if (!assignment) throw new HttpError(403, "forbidden", "غير مخوَّل بالوصول لهذا العنبر");
 }
 
 /**
- * الأدوار المقيَّدة بالإسناد (القرار #126).
+ * الأدوار المقيَّدة بالإسناد (القرار #126، ووُسِّعت بالقرار #128).
  *
- * **المربي وحده اليوم — وهذا تجاوز مؤقت لا تصميم.** المالك يرى كل عنابر
- * مستأجره بحكم دوره، ومدير المنصة لا يدخل مسارات المستأجرين أصلًا. أما
- * **المشرف والطبيب فمسؤولان عن بعض المزارع يُسندها إليهما المالك** (تصديق
- * ميداني) — و`user_assignments` إسناد **بالعنبر** (`user_id · house_id`) لا
- * يستوعب إسنادًا بالمزرعة. فنطاقهما مفتوح مؤقتًا على كل عنابر المستأجر.
+ * **ثلاثة أدوار: المربّي بالعنبر، والمشرف والطبيب بالمزرعة.** المالك يرى كل
+ * عنابر مستأجره بحكم دوره، ومدير المنصة لا يدخل مسارات المستأجرين أصلًا.
  *
- * **عطب مؤجَّل معروف يُصلَح قبل بناء شاشة المشرف (المرحلة 3)** — §7-ب البند 19
- * و`CLAUDE.md`. لا يُقرأ كقرار بأن نطاقهما مفتوح بطبيعة الدور.
+ * كانت `farmer` وحدها بين #126 و#128 — لا قرارًا بأن نطاق المشرف والطبيب
+ * مفتوح بطبيعة الدور، بل لأن `user_assignments` كان إسنادًا بالعنبر فقط ولا
+ * يستوعب إسنادهما. أُغلق العطب بإضافة مستوى المزرعة (§7-ب البند 19).
+ *
+ * **قائمة موجبة لا شرط سالب عمدًا:** دور جديد يُضاف للنظام لا يحصل على
+ * تجاوز صامت — يبقى خارج القيد حتى يُدرَج هنا بقرار مكتوب.
  */
-const ASSIGNMENT_SCOPED_ROLES = new Set<AuthenticatedUser["role"]>(["farmer"]);
+const ASSIGNMENT_SCOPED_ROLES = new Set<AuthenticatedUser["role"]>(["farmer", "supervisor", "vet"]);
 
 /**
  * enforceEntityAccess — الطبقة الثالثة والأخيرة في الفرض المركزي.
@@ -90,6 +103,9 @@ const ASSIGNMENT_SCOPED_ROLES = new Set<AuthenticatedUser["role"]>(["farmer"]);
  *
  * **والإسناد يقيّد القراءة كما يقيّد الكتابة** (القرار #126): مربٍّ يفتح بيانات
  * عنبر غير مُسند له اطّلاع على ما ليس له، سواء كتب فيه أم لا.
+ *
+ * **والإسناد بمستويين** (القرار #128): بالعنبر للمربّي، وبالمزرعة للمشرف
+ * والطبيب — وكلاهما يُفحص في نفس الاستعلام.
  *
  * **يُركَّب بنمط مسار لا عامًّا** (`api.use("/api/houses/:houseId", ...)`):
  * Express لا يملأ `req.params` في middleware مركَّب بلا نمط — كان الحارس

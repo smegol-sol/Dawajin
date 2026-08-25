@@ -42,6 +42,9 @@ const CONSTRAINT_MESSAGES: Record<string, string> = {
   users_platform_phone_unique: "رقم الجوال مستخدم بالفعل",
   daily_logs_batch_date_uq: "يوجد سجل محفوظ لهذا اليوم بالفعل",
   user_assignments_user_house_uq: "المستخدم مُسند لهذا العنبر بالفعل",
+  // مستوى المزرعة (القرار #128) — للمشرف والطبيب. فهرس جزئي مستقل عن
+  // فهرس العنبر، فرسالته مستقلة: «المزرعة» لا «العنبر».
+  user_assignments_user_farm_uq: "المستخدم مُسند لهذه المزرعة بالفعل",
   houses_farm_name_uq: "يوجد عنبر بهذا الاسم في المزرعة بالفعل",
   products_system_feed_uq: "يوجد صنف علف نظامي لهذه المرحلة بالفعل",
   breed_standards_tenant_breed_day_uq: "يوجد معيار لهذه السلالة واليوم بالفعل",
