@@ -31,6 +31,20 @@ module.exports = {
     "lib/roleRoutes.ts": { statements: 100, branches: 100, functions: 100, lines: 100 },
     "lib/pendingLogin.ts": { statements: 100, branches: 100, functions: 100, lines: 100 },
     "lib/apiError.ts": { statements: 100, branches: 100, functions: 100, lines: 100 },
+    // الأربعة أدناه من الدفعة 5 — تحمل **قرارات منتج** لا تفاصيل عرض:
+    // قاعدة التخطّي والرجوع · من يملك الإنشاء والتعديل · نصّ 403 مقابل 404 ·
+    // لون الحالة. انحدار تغطيتها انحدار في سلوك موصوف لا في تجميل.
+    // مضافة **عند مستواها الفعلي اليوم (100%)** لا عند سقف مرغوب — استثناء
+    // مصرَّح به من المالك ومقصور على هذه الإضافة (القرار #144).
+    "lib/infrastructureNavigation.ts": {
+      statements: 100,
+      branches: 100,
+      functions: 100,
+      lines: 100,
+    },
+    "lib/capabilities.ts": { statements: 100, branches: 100, functions: 100, lines: 100 },
+    "lib/infrastructureErrors.ts": { statements: 100, branches: 100, functions: 100, lines: 100 },
+    "lib/houseStatusTone.ts": { statements: 100, branches: 100, functions: 100, lines: 100 },
   },
   transform: {
     ...jestExpoPreset.transform,
