@@ -78,7 +78,12 @@ export function housesRouter(db: Database): Router {
     try {
       const user = requireTenantUser(req);
       const farmId = idSchema.parse(req.params.farmId);
-      res.json({ houses: await listHousesInFarm(db, user.tenantId, farmId) });
+      res.json({
+        houses: await listHousesInFarm(db, user.tenantId, farmId, {
+          id: user.id,
+          role: user.role,
+        }),
+      });
     } catch (error) {
       next(error);
     }

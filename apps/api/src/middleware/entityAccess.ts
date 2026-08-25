@@ -1,7 +1,9 @@
-import { batches, houses, userAssignments, type Database } from "@dawajin/db";
+import { batches, farms, houses, userAssignments, type Database } from "@dawajin/db";
 import { HttpError } from "@dawajin/shared";
 import { and, eq, or } from "drizzle-orm";
 import type { NextFunction, Request, Response } from "express";
+
+import { assignmentReachesFarm, isAssignmentScoped } from "../lib/entityScope";
 
 /** يلتقط أول قيمة أولية (نص/رقم) معرَّفة — يتجاهل الكائنات المتداخلة عمدًا (لا String([object]))، لا يُخمِّن شكلها. */
 function firstDefinedPrimitive(...values: unknown[]): string | undefined {
@@ -80,20 +82,52 @@ async function assertHouseAssignment(
   if (!assignment) throw new HttpError(403, "forbidden", "غير مخوَّل بالوصول لهذا العنبر");
 }
 
+/** `farmId` من الرابط أو الاستعلام أو الجسم — نفس ترتيب أولوية `houseId`. */
+function resolveFarmId(req: Request): number | undefined {
+  const raw = firstDefinedPrimitive(
+    req.params.farmId,
+    req.query.farmId,
+    (req.body as Record<string, unknown> | undefined)?.farmId
+  );
+  return raw ? Number(raw) : undefined;
+}
+
 /**
- * الأدوار المقيَّدة بالإسناد (القرار #126، ووُسِّعت بالقرار #128).
+ * وصول **المزرعة** لدور مقيَّد بالإسناد (القرار #129): يكفي أن يبلغها إسناده —
+ * إسناد المزرعة نفسها (المشرف والطبيب)، أو إسناد أي عنبر داخلها (المربّي).
  *
- * **ثلاثة أدوار: المربّي بالعنبر، والمشرف والطبيب بالمزرعة.** المالك يرى كل
- * عنابر مستأجره بحكم دوره، ومدير المنصة لا يدخل مسارات المستأجرين أصلًا.
+ * **وهذا فرض لا فلترة.** الفلترة تقرّر *ماذا يُعرض* داخل مزرعة يحقّ له
+ * الوصول إليها؛ هذا يقرّر *هل يصلها أصلًا*. مزرعة لا يبلغها إسناده تُرفض
+ * بـ403 لا تُعاد قائمةً فارغة — القائمة الفارغة تقول «لا عنابر هنا» وهي
+ * كذبة عن مزرعة مليئة بعنابر ليست له.
  *
- * كانت `farmer` وحدها بين #126 و#128 — لا قرارًا بأن نطاق المشرف والطبيب
- * مفتوح بطبيعة الدور، بل لأن `user_assignments` كان إسنادًا بالعنبر فقط ولا
- * يستوعب إسنادهما. أُغلق العطب بإضافة مستوى المزرعة (§7-ب البند 19).
- *
- * **قائمة موجبة لا شرط سالب عمدًا:** دور جديد يُضاف للنظام لا يحصل على
- * تجاوز صامت — يبقى خارج القيد حتى يُدرَج هنا بقرار مكتوب.
+ * الوجود قبل التعيين (المبدأ #6): 404 لمزرعة خارج المستأجر، 403 لموجودة
+ * لا يبلغها الإسناد.
  */
-const ASSIGNMENT_SCOPED_ROLES = new Set<AuthenticatedUser["role"]>(["farmer", "supervisor", "vet"]);
+async function assertFarmAssignment(
+  db: Database,
+  user: AuthenticatedUser,
+  farmId: number
+): Promise<void> {
+  if (user.tenantId == null) {
+    throw new HttpError(401, "unauthorized", "الحساب غير مرتبط بمستأجر");
+  }
+
+  const [farm] = await db
+    .select({ id: farms.id })
+    .from(farms)
+    .where(and(eq(farms.id, farmId), eq(farms.tenantId, user.tenantId)))
+    .limit(1);
+  if (!farm) throw new HttpError(404, "not_found", "المزرعة غير موجودة");
+
+  const [assignment] = await db
+    .select({ id: userAssignments.id })
+    .from(userAssignments)
+    .leftJoin(houses, eq(houses.id, userAssignments.houseId))
+    .where(assignmentReachesFarm(user.id, farmId))
+    .limit(1);
+  if (!assignment) throw new HttpError(403, "forbidden", "غير مخوَّل بالوصول لهذه المزرعة");
+}
 
 /**
  * enforceEntityAccess — الطبقة الثالثة والأخيرة في الفرض المركزي.
@@ -111,8 +145,11 @@ const ASSIGNMENT_SCOPED_ROLES = new Set<AuthenticatedUser["role"]>(["farmer", "s
  * Express لا يملأ `req.params` في middleware مركَّب بلا نمط — كان الحارس
  * أعمى تجاه معرّفات الرابط كلها (القرار #124، مُثبَت بتجربة مستقلة).
  *
- * مُنفَّذ حاليًا: houseId · batchId (يُحل لعنبره). farmId · fromHouseId ·
- * toHouseId ستُضاف عند بناء مسارات المخزون/التحويل (المرحلة 3).
+ * مُنفَّذ حاليًا: houseId · batchId (يُحل لعنبره) · farmId (القرار #129).
+ * fromHouseId · toHouseId ستُضافان عند بناء مسارات المخزون/التحويل (المرحلة 3).
+ *
+ * **و`houseId` يقصر الدائرة قبل `farmId`:** `POST /farms/:farmId/houses` يحمل
+ * الاثنين، والعنبر أدقّ نطاقًا فيُفحص وحده — لا يُجمعان.
  */
 export function enforceEntityAccess(db: Database) {
   return async function (req: Request, _res: Response, next: NextFunction) {
@@ -122,7 +159,7 @@ export function enforceEntityAccess(db: Database) {
         throw new HttpError(401, "unauthorized", "الرجاء تسجيل الدخول");
       }
 
-      if (!ASSIGNMENT_SCOPED_ROLES.has(user.role)) {
+      if (!isAssignmentScoped(user.role)) {
         next();
         return;
       }
@@ -130,6 +167,13 @@ export function enforceEntityAccess(db: Database) {
       const houseId = await resolveHouseId(db, req);
       if (houseId) {
         await assertHouseAssignment(db, user, houseId);
+        next();
+        return;
+      }
+
+      const farmId = resolveFarmId(req);
+      if (farmId) {
+        await assertFarmAssignment(db, user, farmId);
       }
 
       next();

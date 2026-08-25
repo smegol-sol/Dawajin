@@ -3,6 +3,7 @@ import { HttpError, type HouseStatus, type HouseType } from "@dawajin/shared";
 import { and, asc, eq, sql } from "drizzle-orm";
 
 import { writeAuditLog } from "../lib/auditLog";
+import { assignedHousesFilter, isAssignmentScoped, type Role } from "../lib/entityScope";
 
 /**
  * طبقة services للعنابر — الوحدة الأساسية وأدنى مستويات الهرم
@@ -50,20 +51,38 @@ async function assertFarmInTenant(exec: Reader, tenantId: number, farmId: number
   if (!farm) throw new HttpError(404, "not_found", "المزرعة غير موجودة");
 }
 
+/** ما تحتاجه الفلترة من المستخدم — لا `req` كاملًا في طبقة الخدمة. */
+export interface ListViewer {
+  id: number;
+  role: Role;
+}
+
 /**
- * يسرد عنابر مزرعة واحدة.
+ * يسرد عنابر مزرعة واحدة — **مفلترًا بالإسناد (القرار #129)**.
+ *
+ * المربّي يرى عنابره المُسندة له وحدها، والمشرف والطبيب عنابر مزارعهم
+ * المُسندة إليهم، والمالك كل عنابر مستأجره. **وما لا يخصّه غائب تمامًا من
+ * الرد — لا اسمًا ولا معرّفًا**، لا معروضًا مُعطَّلًا: «العنبر الشمالي»
+ * وحده يكشف بنية مزرعة ليست من اختصاصه.
+ *
+ * **والفلترة ليست الفرض.** `enforceEntityAccess` يرفض بـ403 مزرعة لا يبلغها
+ * إسناده أصلًا؛ هذه الدالة تقرّر ماذا يرى **داخل** مزرعة يحقّ له الوصول
+ * إليها. حذف أيٍّ منهما يترك ثقبًا مختلفًا.
+ *
  * @throws HttpError 404 إن لم توجد المزرعة داخل المستأجر
  */
 export async function listHousesInFarm(
   db: Database,
   tenantId: number,
-  farmId: number
+  farmId: number,
+  viewer: ListViewer
 ): Promise<House[]> {
   await assertFarmInTenant(db, tenantId, farmId);
+  const scope = isAssignmentScoped(viewer.role) ? assignedHousesFilter(viewer.id) : undefined;
   return db
     .select(HOUSE_COLUMNS)
     .from(houses)
-    .where(and(eq(houses.tenantId, tenantId), eq(houses.farmId, farmId)))
+    .where(and(eq(houses.tenantId, tenantId), eq(houses.farmId, farmId), scope))
     .orderBy(asc(houses.name));
 }
 
