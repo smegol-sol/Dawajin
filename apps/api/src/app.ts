@@ -79,6 +79,12 @@ export function createApp(db: Database, env: Env, logger: Logger): Express {
   // هذا يجعل شجرة توجيه Express قابلة للفحص البرمجي المباشر بلا حاجة
   // لإعادة بناء بادئة من regexp داخلي (scripts/lib/introspectRoutes.ts) —
   // لا اعتماد على اسم متغيّر ولا مطابقة نصية تفوّت مسارًا بالخطأ.
+  /**
+   * أنماط المسارات التي تحمل معرّف كيان في الرابط — كل نمط يُركَّب عليه
+   * `enforceEntityAccess`. `batchId` يُضاف مع مسارات الدفعات (المرحلة 2).
+   */
+  const ENTITY_ID_PATH_PATTERNS = ["/api/houses/:houseId", "/api/batches/:batchId"] as const;
+
   const api = express.Router();
   api.use(
     requireAuth(env.JWT_SECRET),
@@ -87,8 +93,17 @@ export function createApp(db: Database, env: Env, logger: Logger): Express {
     // لم تُغيَّر (القرار #99)
     requireLiveSession(db),
     requireTenant,
+    // يمسح query+body عن معرّفات الكيانات
     enforceEntityAccess(db)
   );
+
+  // ومعرّفات **الرابط** تحتاج تركيبًا بنمط مسار: Express لا يملأ `req.params`
+  // في middleware مركَّب بلا نمط، فكان الحارس أعمى تجاهها (القرار #124).
+  // يبقى هنا لا داخل الموجّهات — الفرض مركزي في موضع واحد (المبدأ #1)، وإضافة
+  // نمط جديد سطر واحد بجوار أخواته لا بحثٌ في كل ملف مسار.
+  for (const pattern of ENTITY_ID_PATH_PATTERNS) {
+    api.use(pattern, enforceEntityAccess(db));
+  }
   api.use(authProtectedRouter(db, env));
   api.use(settingsRouter(db));
   api.use(sitesRouter(db));
