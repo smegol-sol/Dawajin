@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
+import { act, configure, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 import { BackHandler } from "react-native";
 
 import OwnerFarmsHouses from "@/app/(owner)/farms-houses";
@@ -14,6 +14,19 @@ import * as session from "@/lib/session";
  * يُفحص أن الشاشة **تستدعيه بالبيانات الصحيحة**: التخطّي مبنيّ على العدد
  * **المرئي القادم من الخادم**، والرجوع لا يهبط في مستوى لم يُعرض.
  */
+
+/**
+ * **مهلة `waitFor` مرفوعة عمدًا — لا تجميلًا (القرار #133).**
+ *
+ * المهلة الافتراضية ثانية واحدة، وأول اختبار في هذا الملف يأخذ ~370ms على
+ * جهاز **ذاكرة تحويل babel فيه دافئة**. وفي CI الذاكرة **باردة دائمًا**
+ * (نسخة جديدة كل مرة)، فيتجاوز الثانية ويسقط — **حتميًا لا عشوائيًا**.
+ *
+ * مُثبَت: نفس الـcommit يمرّ محليًا ويسقط في نسخة نظيفة بتثبيت من القفل،
+ * بنفس أرقام التغطية التي أظهرها CI حرفيًا. والمهلة الأطول لا تُبطئ اختبارًا
+ * ناجحًا — `waitFor` تعود فور تحقق الشرط.
+ */
+configure({ asyncUtilTimeout: 20_000 });
 
 const mockBack = jest.fn();
 jest.mock("expo-router", () => ({
