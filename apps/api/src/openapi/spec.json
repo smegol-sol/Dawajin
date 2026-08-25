@@ -658,6 +658,222 @@
           }
         }
       }
+    },
+    "/api/farms/{farmId}/houses": {
+      "get": {
+        "summary": "سرد عنابر مزرعة — كل الأدوار",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "farmId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "عنابر المزرعة مرتّبة بالاسم",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HouseListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "post": {
+        "summary": "إنشاء عنبر تحت مزرعة (owner فقط)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "farmId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HouseCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "العنبر بعد الإنشاء",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/House"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          }
+        }
+      }
+    },
+    "/api/houses/{houseId}": {
+      "get": {
+        "summary": "قراءة عنبر واحد — كل الأدوار، والمربّي عنابره المُسندة فقط",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "houseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "العنبر",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/House"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "description": "عنبر موجود غير مُسند للمستخدم (المبدأ السادس)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "patch": {
+        "summary": "تعديل عنبر (owner فقط) — النقل بين المزارع مقيَّد بالقرار #123",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "houseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HouseUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "العنبر بعد التعديل",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/House"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "description": "اسم مكرَّر، أو نقل عنبر له دفعات (`house_has_batches`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -959,6 +1175,98 @@
             }
           },
           "siteId": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      },
+      "House": {
+        "type": "object",
+        "required": ["id", "farmId", "name", "type", "status", "waterTankCapacityL"],
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "farmId": {
+            "type": "integer",
+            "description": "المزرعة التي يقع فيها — يُرسَل ولا يُعرَض (§12)"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "type": {
+            "type": ["string", "null"],
+            "enum": ["مفتوح", "مغلق", "هجين", null]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "مشغول",
+              "تحت الإخلاء",
+              "تحت التنظيف والتطهير",
+              "في فترة الراحة",
+              "جاهز للإسكان",
+              "تحت الصيانة",
+              "معطّل"
+            ],
+            "description": "تُقرأ ولا تُكتب هنا — تغييرها مسار منفصل في المرحلة 3"
+          },
+          "waterTankCapacityL": {
+            "type": ["string", "null"],
+            "description": "NULL = الحقل مخفي في الواجهة (§7.1)"
+          }
+        }
+      },
+      "HouseListResponse": {
+        "type": "object",
+        "required": ["houses"],
+        "properties": {
+          "houses": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/House"
+            }
+          }
+        }
+      },
+      "HouseCreateRequest": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "type": {
+            "type": "string",
+            "enum": ["مفتوح", "مغلق", "هجين"]
+          },
+          "waterTankCapacityL": {
+            "type": ["number", "null"],
+            "exclusiveMinimum": 0
+          }
+        }
+      },
+      "HouseUpdateRequest": {
+        "type": "object",
+        "description": "حقل واحد على الأقل. `farmId` يُرفض 409 إن كان للعنبر دفعة فأكثر (القرار #123). الحالة غير قابلة للتعديل هنا.",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "type": {
+            "type": "string",
+            "enum": ["مفتوح", "مغلق", "هجين"]
+          },
+          "waterTankCapacityL": {
+            "type": ["number", "null"],
+            "exclusiveMinimum": 0
+          },
+          "farmId": {
             "type": "integer",
             "minimum": 1
           }
