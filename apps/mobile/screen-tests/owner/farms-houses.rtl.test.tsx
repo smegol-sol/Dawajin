@@ -48,14 +48,33 @@ function house(id: number, name: string): infra.HouseCard {
   return { id, farmId: 1, name, type: null, status: "جاهز للإسكان", waterTankCapacityL: null };
 }
 
+/** عملاء react-query المنشأون في هذا الملف — يُنظَّفون بعد كل اختبار. */
+const clients: QueryClient[] = [];
+
+/**
+ * `gcTime: 0` و`clear()` بعد كل اختبار **ضروريان لا تجميل**: عميل
+ * react-query الافتراضي يحمل مؤقّت جمع مهملات خمس دقائق، فيبقى حيًّا بعد
+ * انتهاء الاختبار ويمنع عامل jest من الخروج بلطف. ظهر ذلك تحذيرًا محليًا
+ * وفشلًا في CI (القرار #133).
+ */
 function renderScreen() {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false, gcTime: 0, staleTime: 0 } },
+  });
+  clients.push(client);
   return render(
     <QueryClientProvider client={client}>
       <OwnerFarmsHouses />
     </QueryClientProvider>
   );
 }
+
+afterEach(() => {
+  for (const client of clients.splice(0)) {
+    client.clear();
+    client.unmount();
+  }
+});
 
 /**
  * يضغط أول مطابقة لنصّ — الشاشة تعرض عدة بطاقات بنفس نصّ الزر، و`getByText`
