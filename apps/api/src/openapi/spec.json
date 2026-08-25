@@ -289,7 +289,7 @@
         ],
         "responses": {
           "200": {
-            "description": "قائمة المواقع مرتّبة بالاسم (قد تكون فارغة)",
+            "description": "مواقع المستأجر **المرئية لهذا المستخدم** مرتّبة بالاسم (قد تكون فارغة)",
             "content": {
               "application/json": {
                 "schema": {
@@ -471,7 +471,7 @@
         ],
         "responses": {
           "200": {
-            "description": "مزارع الموقع مرتّبة بالاسم",
+            "description": "مزارع الموقع **المرئية لهذا المستخدم** مرتّبة بالاسم",
             "content": {
               "application/json": {
                 "schema": {
@@ -1084,7 +1084,7 @@
           "sites": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/Site"
+              "$ref": "#/components/schemas/SiteCard"
             }
           }
         }
@@ -1133,7 +1133,7 @@
           "farms": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/Farm"
+              "$ref": "#/components/schemas/FarmCard"
             }
           }
         }
@@ -1269,6 +1269,85 @@
           "farmId": {
             "type": "integer",
             "minimum": 1
+          }
+        }
+      },
+      "SiteCard": {
+        "type": "object",
+        "required": ["id", "name", "farmCount", "houseCount"],
+        "description": "بطاقة الموقع في السرد — العدّادان محسوبان **تحت فلتر الإسناد نفسه**، فيعدّان ما يراه هذا المستخدم لا ما في الموقع (القرار #131).",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "معرّف داخلي — يُرسَل ولا يُعرَض (§12)"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "farmCount": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "المزارع المرئية لهذا المستخدم في هذا الموقع"
+          },
+          "houseCount": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "العنابر المرئية له داخل تلك المزارع"
+          }
+        }
+      },
+      "FarmCard": {
+        "type": "object",
+        "required": ["id", "siteId", "name", "powerSources", "houseCount", "houseStatusCounts"],
+        "description": "بطاقة المزرعة في السرد — العدّادات تحت فلتر الإسناد نفسه (القرار #131).",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "siteId": {
+            "type": "integer",
+            "description": "الموقع الذي تقع فيه — يُرسَل ولا يُعرَض (§12)"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "powerSources": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "enum": ["شمسية", "مولدات"]
+            },
+            "description": "لا مزرعة بلا مصدر طاقة (القرار #112)"
+          },
+          "houseCount": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "العنابر المرئية لهذا المستخدم في هذه المزرعة"
+          },
+          "houseStatusCounts": {
+            "type": "object",
+            "required": ["occupied", "ready", "other"],
+            "description": "توزيع حالات العنابر المرئية — ثلاث مجموعات لا سبع حالات (قرار المالك).",
+            "properties": {
+              "occupied": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "مشغول"
+              },
+              "ready": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "جاهز للإسكان"
+              },
+              "other": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "ما عداهما — يُحسب طرحًا فلا يفترق عن الإجمالي"
+              }
+            }
           }
         }
       }

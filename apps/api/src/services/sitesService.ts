@@ -1,8 +1,14 @@
-import { entityAuditLog, sites, type Database } from "@dawajin/db";
+import { entityAuditLog, farms, houses, sites, type Database } from "@dawajin/db";
 import { HttpError } from "@dawajin/shared";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 
 import { writeAuditLog } from "../lib/auditLog";
+import {
+  isAssignmentScoped,
+  visibleFarmCondition,
+  visibleHouseCondition,
+  type Viewer,
+} from "../lib/entityScope";
 
 /**
  * طبقة services للمواقع الجغرافية — المستوى الأعلى في الهرم
@@ -18,16 +24,61 @@ export interface Site {
   name: string;
 }
 
+/** بطاقة الموقع في السرد — العدّادان **مرئيان لهذا المستخدم** لا مطلقان. */
+export interface SiteCard extends Site {
+  farmCount: number;
+  houseCount: number;
+}
+
 /**
- * يسرد مواقع المستأجر مرتّبة بالاسم.
+ * يسرد مواقع المستأجر المرئية لهذا المستخدم، مرتّبة بالاسم (القرار #131).
+ *
+ * **عزل المستأجر أولًا وقبل أي فلتر آخر** — `sites.tenant_id` في `WHERE`،
+ * والانضمامات كلها مقيَّدة بنفس المستأجر. فلتر الإسناد يضيّق داخل المستأجر
+ * ولا يوسّع خارجه أبدًا.
+ *
+ * **والموقع يظهر بوجود مزرعة مرئية فيه** لدور مقيَّد بالإسناد — `HAVING`
+ * على العدّاد نفسه لا شرط منفصل، فلا يمكن أن يفترقا. المالك يرى مواقعه كلها
+ * ولو كانت فارغة.
+ *
+ * **والعدّادان محسوبان تحت الفلتر نفسه في نفس الاستعلام** — لا استعلام لكل
+ * صف ولا حساب لاحق. عدّاد يعدّ ما لا يراه المستخدم **تسريب لا تحسين**:
+ * «موقعك فيه خمس مزارع» لمن يرى واحدة يكشف ما حُجب عنه.
+ *
  * @returns قائمة قد تكون فارغة — لا خطأ: «لا مواقع بعد» حالة مشروعة
  */
-export async function listSites(db: Database, tenantId: number): Promise<Site[]> {
-  return db
-    .select({ id: sites.id, name: sites.name })
+export async function listSites(
+  db: Database,
+  tenantId: number,
+  viewer: Viewer
+): Promise<SiteCard[]> {
+  const farmVisible = visibleFarmCondition(viewer);
+  const houseVisible = visibleHouseCondition(viewer);
+  const farmCount = sql<number>`count(distinct ${farms.id})::int`;
+
+  const query = db
+    .select({
+      id: sites.id,
+      name: sites.name,
+      farmCount,
+      houseCount: sql<number>`count(distinct ${houses.id})::int`,
+    })
     .from(sites)
+    .leftJoin(
+      farms,
+      and(eq(farms.siteId, sites.id), eq(farms.tenantId, sites.tenantId), farmVisible)
+    )
+    .leftJoin(
+      houses,
+      and(eq(houses.farmId, farms.id), eq(houses.tenantId, sites.tenantId), houseVisible)
+    )
     .where(eq(sites.tenantId, tenantId))
-    .orderBy(asc(sites.name));
+    .groupBy(sites.id, sites.name);
+
+  const scoped = isAssignmentScoped(viewer.role);
+  return scoped
+    ? query.having(sql`count(distinct ${farms.id}) > 0`).orderBy(asc(sites.name))
+    : query.orderBy(asc(sites.name));
 }
 
 /**

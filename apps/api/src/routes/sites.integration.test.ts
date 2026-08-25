@@ -193,11 +193,16 @@ describe(`POST /api/sites — تكرار الاسم في المسارين (${S})
   });
 });
 
-describe(`GET /api/sites — القراءة لكل الأدوار، والعزل مطلق (${S})`, () => {
-  it("المربي يقرأ القائمة ← 200 (لا يحتاج دور المالك للقراءة)", async () => {
+describe(`GET /api/sites — الإسناد والعزل (${S})`, () => {
+  /**
+   * **قُلب بالقرار #131.** كان يوثّق «القراءة لكل الأدوار» فيمرّ بمجرد كون
+   * الرد مصفوفة. السرد مفلتر الآن: مربٍّ بلا إسناد يرى **قائمة فارغة** —
+   * وهنا الفارغة صحيحة لأنها جواب «مواقعك» لا «مواقع المستأجر».
+   */
+  it("المربي بلا إسناد ← 200 وقائمة فارغة لا كل المواقع", async () => {
     const res = await request(app).get("/api/sites").set("Authorization", `Bearer ${farmerToken}`);
     expect(res.status).toBe(200);
-    expect(Array.isArray((res.body as { sites: unknown[] }).sites)).toBe(true);
+    expect((res.body as { sites: unknown[] }).sites).toEqual([]);
   });
 
   it("لا يظهر أي موقع من مستأجر آخر إطلاقًا", async () => {

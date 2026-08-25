@@ -1,5 +1,5 @@
-import { houses, userAssignments } from "@dawajin/db";
-import { and, eq, or, sql, type SQL } from "drizzle-orm";
+import { farms, houses, userAssignments } from "@dawajin/db";
+import { sql, type SQL } from "drizzle-orm";
 import type { Request } from "express";
 
 /** دور المستخدم كما يصل من الرمز — مصدره تعريف `Request["user"]`. */
@@ -48,13 +48,55 @@ export function assignedHousesFilter(userId: number): SQL {
   )`;
 }
 
+/** ما يحتاجه أي حساب رؤية من المستخدم — لا `req` كاملًا في طبقة الخدمة. */
+export interface Viewer {
+  id: number;
+  role: Role;
+}
+
 /**
- * شرط مطابقة إسناد يبلغ **مزرعة بعينها** — إسناد المزرعة نفسها، أو إسناد أي
- * عنبر داخلها. يُستعمل في فرض الوصول إلى `/farms/:farmId/...`.
+ * **المزارع المرئية — والقاعدة تختلف بالدور عمدًا ولا تُوحَّد (القرار #131):**
+ *
+ * - **المالك:** كل مزارع مستأجره — لا شرط.
+ * - **المشرف والطبيب:** المزارع **المُسندة إليهما** (`user_assignments.farm_id`).
+ * - **المربّي:** المزرعة **الحاوية لعنبر مُسند إليه** — لا إسناد مزرعة له أصلًا.
+ *
+ * توحيدها في شرط واحد بـ`OR` يبدو أنظف ويغيّر المعنى: يصير إسنادُ عنبر واحد
+ * كافيًا ليرى المشرف مزرعة لم تُسند إليه. **القاعدة قرار مالك لا اختصار
+ * هندسي.**
+ *
+ * @returns شرط على `farms` — أو `undefined` لدور غير مقيَّد (يعني: بلا قيد)
  */
-export function assignmentReachesFarm(userId: number, farmId: number): SQL | undefined {
-  return and(
-    eq(userAssignments.userId, userId),
-    or(eq(userAssignments.farmId, farmId), eq(houses.farmId, farmId))
-  );
+export function visibleFarmCondition(viewer: Viewer): SQL | undefined {
+  if (!isAssignmentScoped(viewer.role)) return undefined;
+
+  if (viewer.role === "farmer") {
+    return sql`EXISTS (
+      SELECT 1 FROM ${userAssignments} ua
+      JOIN ${houses} assigned_house ON assigned_house.id = ua.house_id
+      WHERE ua.user_id = ${viewer.id} AND assigned_house.farm_id = ${farms.id}
+    )`;
+  }
+
+  return sql`EXISTS (
+    SELECT 1 FROM ${userAssignments} ua
+    WHERE ua.user_id = ${viewer.id} AND ua.farm_id = ${farms.id}
+  )`;
+}
+
+/**
+ * **العنابر المرئية داخل مزرعة مرئية أصلًا** — تكملة `visibleFarmCondition`
+ * لا بديل عنها: تُطبَّق بعد أن تكون المزرعة قد مرّت الفلتر.
+ *
+ * - **المالك والمشرف والطبيب:** كل عنابر تلك المزارع — لا شرط إضافي.
+ * - **المربّي:** عنابره المُسندة وحدها.
+ *
+ * @returns شرط على `houses` — أو `undefined` حين لا قيد إضافي
+ */
+export function visibleHouseCondition(viewer: Viewer): SQL | undefined {
+  if (viewer.role !== "farmer") return undefined;
+  return sql`EXISTS (
+    SELECT 1 FROM ${userAssignments} ua
+    WHERE ua.user_id = ${viewer.id} AND ua.house_id = ${houses.id}
+  )`;
 }

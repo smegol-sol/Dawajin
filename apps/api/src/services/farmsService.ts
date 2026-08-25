@@ -1,8 +1,9 @@
 import { entityAuditLog, farms, houses, sites, type Database } from "@dawajin/db";
-import { HttpError, type PowerSource } from "@dawajin/shared";
+import { HttpError, type HouseStatus, type PowerSource } from "@dawajin/shared";
 import { and, asc, eq, sql } from "drizzle-orm";
 
 import { writeAuditLog } from "../lib/auditLog";
+import { visibleFarmCondition, visibleHouseCondition, type Viewer } from "../lib/entityScope";
 
 /**
  * طبقة services للمزارع — المستوى الأوسط في الهرم (الموقع ← المزرعة ← العنبر،
@@ -42,20 +43,73 @@ async function assertSiteInTenant(exec: Reader, tenantId: number, siteId: number
 }
 
 /**
- * يسرد مزارع موقع واحد.
+ * ثلاث مجموعات لا سبعًا (قرار المالك): مشغول · جاهز وشاغر · غير ذلك. الحالات
+ * السبع تفصيل يخصّ شاشة العنبر لا بطاقة المزرعة.
+ *
+ * القيمتان مكتوبتان بنوع `HouseStatus` لا بنصّ حرّ — إعادة تسمية قيمة في
+ * الثابت المشترك تُسقط `typecheck` هنا بدل أن تصمت وتُصفِّر العدّاد.
+ */
+const OCCUPIED: HouseStatus = "مشغول";
+const READY: HouseStatus = "جاهز للإسكان";
+
+/** توزيع حالات العنابر المرئية داخل مزرعة — ثلاث مجموعات. */
+export interface HouseStatusCounts {
+  occupied: number;
+  ready: number;
+  other: number;
+}
+
+/** بطاقة المزرعة في السرد — العدّادات **مرئية لهذا المستخدم** لا مطلقة. */
+export interface FarmCard extends Farm {
+  houseCount: number;
+  houseStatusCounts: HouseStatusCounts;
+}
+
+/**
+ * يسرد مزارع موقع واحد **المرئية لهذا المستخدم** (القرار #131).
+ *
+ * **عزل المستأجر أولًا:** `assertSiteInTenant` يرفض موقع مستأجر آخر بـ404
+ * قبل أي فلتر إسناد، و`farms.tenant_id` في `WHERE`. الإسناد يضيّق داخل
+ * المستأجر ولا يوسّع خارجه.
+ *
+ * **والعدّادات تحت الفلتر نفسه وفي نفس الاستعلام** — `count ... FILTER`
+ * تجميع واحد، لا استعلام لكل مزرعة. و«غير ذلك» يُحسب طرحًا لا بشرط ثالث،
+ * فلا يمكن أن تفترق المجموعات الثلاث عن الإجمالي.
+ *
  * @throws HttpError 404 إن لم يوجد الموقع داخل المستأجر
  */
 export async function listFarmsInSite(
   db: Database,
   tenantId: number,
-  siteId: number
-): Promise<Farm[]> {
+  siteId: number,
+  viewer: Viewer
+): Promise<FarmCard[]> {
   await assertSiteInTenant(db, tenantId, siteId);
-  return db
-    .select(FARM_COLUMNS)
+  const houseVisible = visibleHouseCondition(viewer);
+
+  const rows = await db
+    .select({
+      ...FARM_COLUMNS,
+      houseCount: sql<number>`count(${houses.id})::int`,
+      occupied: sql<number>`(count(${houses.id}) filter (where ${houses.status} = ${OCCUPIED}))::int`,
+      ready: sql<number>`(count(${houses.id}) filter (where ${houses.status} = ${READY}))::int`,
+    })
     .from(farms)
-    .where(and(eq(farms.tenantId, tenantId), eq(farms.siteId, siteId)))
+    .leftJoin(
+      houses,
+      and(eq(houses.farmId, farms.id), eq(houses.tenantId, farms.tenantId), houseVisible)
+    )
+    .where(
+      and(eq(farms.tenantId, tenantId), eq(farms.siteId, siteId), visibleFarmCondition(viewer))
+    )
+    .groupBy(farms.id, farms.siteId, farms.name, farms.powerSources)
     .orderBy(asc(farms.name));
+
+  return rows.map(({ occupied, ready, houseCount, ...farm }) => ({
+    ...farm,
+    houseCount,
+    houseStatusCounts: { occupied, ready, other: houseCount - occupied - ready },
+  }));
 }
 
 /**

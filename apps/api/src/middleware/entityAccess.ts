@@ -1,9 +1,9 @@
-import { batches, farms, houses, userAssignments, type Database } from "@dawajin/db";
+import { batches, farms, houses, sites, userAssignments, type Database } from "@dawajin/db";
 import { HttpError } from "@dawajin/shared";
 import { and, eq, or } from "drizzle-orm";
 import type { NextFunction, Request, Response } from "express";
 
-import { assignmentReachesFarm, isAssignmentScoped } from "../lib/entityScope";
+import { isAssignmentScoped, visibleFarmCondition } from "../lib/entityScope";
 
 /** يلتقط أول قيمة أولية (نص/رقم) معرَّفة — يتجاهل الكائنات المتداخلة عمدًا (لا String([object]))، لا يُخمِّن شكلها. */
 function firstDefinedPrimitive(...values: unknown[]): string | undefined {
@@ -120,13 +120,54 @@ async function assertFarmAssignment(
     .limit(1);
   if (!farm) throw new HttpError(404, "not_found", "المزرعة غير موجودة");
 
-  const [assignment] = await db
-    .select({ id: userAssignments.id })
-    .from(userAssignments)
-    .leftJoin(houses, eq(houses.id, userAssignments.houseId))
-    .where(assignmentReachesFarm(user.id, farmId))
+  const [visible] = await db
+    .select({ id: farms.id })
+    .from(farms)
+    .where(and(eq(farms.id, farmId), visibleFarmCondition(user)))
     .limit(1);
-  if (!assignment) throw new HttpError(403, "forbidden", "غير مخوَّل بالوصول لهذه المزرعة");
+  if (!visible) throw new HttpError(403, "forbidden", "غير مخوَّل بالوصول لهذه المزرعة");
+}
+
+/** `siteId` من الرابط أو الاستعلام أو الجسم — نفس ترتيب أولوية `houseId`. */
+function resolveSiteId(req: Request): number | undefined {
+  const raw = firstDefinedPrimitive(
+    req.params.siteId,
+    req.query.siteId,
+    (req.body as Record<string, unknown> | undefined)?.siteId
+  );
+  return raw ? Number(raw) : undefined;
+}
+
+/**
+ * وصول **الموقع** لدور مقيَّد بالإسناد (القرار #131): يظهر الموقع بوجود
+ * **مزرعة مرئية واحدة على الأقل** فيه — بنفس تعريف الرؤية الذي يستعمله
+ * السرد، لا بتعريف ثانٍ بجواره.
+ *
+ * الوجود قبل التعيين (المبدأ #6): 404 لموقع خارج المستأجر، 403 لموجود بلا
+ * مزرعة مرئية.
+ */
+async function assertSiteAssignment(
+  db: Database,
+  user: AuthenticatedUser,
+  siteId: number
+): Promise<void> {
+  if (user.tenantId == null) {
+    throw new HttpError(401, "unauthorized", "الحساب غير مرتبط بمستأجر");
+  }
+
+  const [site] = await db
+    .select({ id: sites.id })
+    .from(sites)
+    .where(and(eq(sites.id, siteId), eq(sites.tenantId, user.tenantId)))
+    .limit(1);
+  if (!site) throw new HttpError(404, "not_found", "الموقع غير موجود");
+
+  const [visible] = await db
+    .select({ id: farms.id })
+    .from(farms)
+    .where(and(eq(farms.siteId, siteId), visibleFarmCondition(user)))
+    .limit(1);
+  if (!visible) throw new HttpError(403, "forbidden", "غير مخوَّل بالوصول لهذا الموقع");
 }
 
 /**
@@ -174,6 +215,13 @@ export function enforceEntityAccess(db: Database) {
       const farmId = resolveFarmId(req);
       if (farmId) {
         await assertFarmAssignment(db, user, farmId);
+        next();
+        return;
+      }
+
+      const siteId = resolveSiteId(req);
+      if (siteId) {
+        await assertSiteAssignment(db, user, siteId);
       }
 
       next();

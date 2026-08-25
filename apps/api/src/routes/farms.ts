@@ -50,7 +50,9 @@ export function farmsRouter(db: Database): Router {
     try {
       const user = requireTenantUser(req);
       const siteId = idSchema.parse(req.params.siteId);
-      res.json({ farms: await listFarmsInSite(db, user.tenantId, siteId) });
+      res.json({
+        farms: await listFarmsInSite(db, user.tenantId, siteId, { id: user.id, role: user.role }),
+      });
     } catch (error) {
       next(error);
     }

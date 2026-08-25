@@ -93,6 +93,9 @@ export function createApp(db: Database, env: Env, logger: Logger): Express {
     // السرد يأخذ معرّف المزرعة لا العنبر — وبلا نمط له كان يمرّ بلا فحص
     // إسناد إطلاقًا (§7-ب البند 20، مُغلَق بالقرار #129).
     "/api/farms/:farmId/houses",
+    // نمط واحد يغطي `/api/sites/:siteId` و`/api/sites/:siteId/farms` معًا —
+    // `api.use(pattern)` يطابق البادئة لا المسار الكامل (القرار #131).
+    "/api/sites/:siteId",
   ] as const;
 
   const api = express.Router();
