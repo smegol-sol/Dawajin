@@ -11,7 +11,8 @@ export function translatePgError(error: unknown): HttpError | null {
   const pgError = error as { code?: string; constraint?: string; table?: string };
 
   if (pgError.code === "23505") {
-    return new HttpError(409, "duplicate", constraintMessage(pgError.constraint), {
+    const response = constraintResponse(pgError.constraint);
+    return new HttpError(409, response.code, response.message, {
       constraint: pgError.constraint,
       table: pgError.table,
     });
@@ -19,6 +20,22 @@ export function translatePgError(error: unknown): HttpError | null {
 
   return null;
 }
+
+/**
+ * رسالة كل قيد، ورمزه حين يختلف عن الافتراضي.
+ *
+ * **الرمز المخصَّص يوجد ليتطابق مساران** يؤديان لنفس الموقف: فحص مسبق في
+ * طبقة الخدمة يعطي رسالة واضحة، والفهرس الفريد خلفه حارسًا أخيرًا. بلا
+ * التطابق يرى المستخدم رسالتين مختلفتين لنفس الخطأ بحسب التوقيت — والفرق
+ * يظهر تحت التزامن وحده، فلا يكشفه اختبار عادي (القرار #119).
+ */
+interface ConstraintResponse {
+  message: string;
+  /** الافتراضي `duplicate`؛ يُخصَّص حين يقابله فحص مسبق برمز أدقّ. */
+  code: string;
+}
+
+const DEFAULT_DUPLICATE_CODE = "duplicate";
 
 const CONSTRAINT_MESSAGES: Record<string, string> = {
   users_tenant_phone_uq: "رقم الجوال مستخدم بالفعل لمستخدم آخر في هذا الحساب",
@@ -31,9 +48,25 @@ const CONSTRAINT_MESSAGES: Record<string, string> = {
   breed_standards_global_breed_day_uq: "يوجد معيار عالمي لهذه السلالة واليوم بالفعل",
 };
 
-function constraintMessage(constraint: string | undefined): string {
-  if (constraint && CONSTRAINT_MESSAGES[constraint]) {
-    return CONSTRAINT_MESSAGES[constraint];
+/** القيود التي يقابلها فحص مسبق في طبقة الخدمة — الرمز والرسالة يتطابقان. */
+const CONSTRAINT_OVERRIDES: Record<string, ConstraintResponse> = {
+  sites_tenant_name_uq: { code: "duplicate_name", message: "يوجد موقع بهذا الاسم" },
+  farms_site_name_uq: {
+    code: "duplicate_name",
+    message: "توجد مزرعة بهذا الاسم في هذا الموقع",
+  },
+};
+
+function constraintResponse(constraint: string | undefined): ConstraintResponse {
+  if (constraint === undefined) {
+    return { code: DEFAULT_DUPLICATE_CODE, message: FALLBACK_MESSAGE };
   }
-  return "قيمة مكررة — يوجد سجل بنفس البيانات بالفعل";
+  const override = CONSTRAINT_OVERRIDES[constraint];
+  if (override) return override;
+  return {
+    code: DEFAULT_DUPLICATE_CODE,
+    message: CONSTRAINT_MESSAGES[constraint] ?? FALLBACK_MESSAGE,
+  };
 }
+
+const FALLBACK_MESSAGE = "قيمة مكررة — يوجد سجل بنفس البيانات بالفعل";

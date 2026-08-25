@@ -19,6 +19,7 @@ import { authProtectedRouter } from "./routes/authProtected";
 import { authPublicRouter } from "./routes/authPublic";
 import { healthRouter } from "./routes/health";
 import { settingsRouter } from "./routes/settings";
+import { sitesRouter } from "./routes/sites";
 
 /**
  * يبني تطبيق Express كاملًا: الفرض المركزي الثلاثي (المبدأ #1 و#7)، كل
@@ -88,6 +89,7 @@ export function createApp(db: Database, env: Env, logger: Logger): Express {
   );
   api.use(authProtectedRouter(db, env));
   api.use(settingsRouter(db));
+  api.use(sitesRouter(db));
   app.use(api);
 
   app.use(errorHandler(logger));

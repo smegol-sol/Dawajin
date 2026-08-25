@@ -22,6 +22,24 @@ interface SpecEntry {
   path: string;
 }
 
+/**
+ * يوحّد صيغة معاملات المسار قبل المقارنة (القرار #117): Express يكتبها
+ * `:siteId` وOpenAPI يكتبها `{siteId}` — وكلاهما صحيح في موضعه. المقارنة
+ * الحرفية كانت تعتبر `GET /api/sites/:siteId` و`GET /api/sites/{siteId}`
+ * مسارين مختلفين، فتُبلّغ عن **الأول غير موثَّق والثاني بلا خادم معًا**.
+ *
+ * لم يظهر العطب قبل الآن لأن كل المسارات السابقة كانت ثابتة بلا معاملات —
+ * أول مسار بمعامل حقيقي كشفه.
+ */
+function normalizePath(path: string): string {
+  return path.replace(/\{([^}]+)\}/g, ":$1");
+}
+
+/** مفتاح المقارنة الموحَّد لمسار واحد. */
+function routeKey(entry: SpecEntry): string {
+  return `${entry.method} ${normalizePath(entry.path)}`;
+}
+
 function collectSpecPaths(spec: unknown): SpecEntry[] {
   const entries: SpecEntry[] = [];
   const paths = (spec as { paths?: Record<string, Record<string, unknown>> }).paths ?? {};
@@ -42,11 +60,11 @@ export async function checkOpenApiCoverage(): Promise<{ ok: boolean; message: st
   const expressRoutes = (await introspectRoutes()).filter((r) => !EXEMPT_PATHS.has(r.path));
   const specRoutes = collectSpecPaths(spec);
 
-  const expressKeys = new Set(expressRoutes.map((r) => `${r.method} ${r.path}`));
-  const specKeys = new Set(specRoutes.map((r) => `${r.method} ${r.path}`));
+  const expressKeys = new Set(expressRoutes.map(routeKey));
+  const specKeys = new Set(specRoutes.map(routeKey));
 
-  const undocumented = expressRoutes.filter((r) => !specKeys.has(`${r.method} ${r.path}`));
-  const phantom = specRoutes.filter((r) => !expressKeys.has(`${r.method} ${r.path}`));
+  const undocumented = expressRoutes.filter((r) => !specKeys.has(routeKey(r)));
+  const phantom = specRoutes.filter((r) => !expressKeys.has(routeKey(r)));
 
   if (undocumented.length > 0 || phantom.length > 0) {
     const lines: string[] = [];
