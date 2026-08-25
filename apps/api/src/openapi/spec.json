@@ -449,6 +449,215 @@
           }
         }
       }
+    },
+    "/api/sites/{siteId}/farms": {
+      "get": {
+        "summary": "سرد مزارع موقع — كل الأدوار",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "siteId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "مزارع الموقع مرتّبة بالاسم",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FarmListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "post": {
+        "summary": "إنشاء مزرعة تحت موقع (owner فقط)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "siteId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FarmCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "المزرعة بعد الإنشاء",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Farm"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          }
+        }
+      }
+    },
+    "/api/farms/{farmId}": {
+      "get": {
+        "summary": "قراءة مزرعة واحدة — كل الأدوار",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "farmId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "المزرعة",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Farm"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "patch": {
+        "summary": "تعديل مزرعة (owner فقط) — النقل بين المواقع مقيَّد بالقرار #114",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "farmId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FarmUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "المزرعة بعد التعديل",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Farm"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "description": "اسم مكرَّر، أو نقل مزرعة لها عنابر (`farm_has_houses`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -672,6 +881,86 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 128
+          }
+        }
+      },
+      "Farm": {
+        "type": "object",
+        "required": ["id", "siteId", "name", "powerSources"],
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "siteId": {
+            "type": "integer",
+            "description": "الموقع الذي تقع فيه — يُرسَل ولا يُعرَض (§12)"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "powerSources": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "enum": ["شمسية", "مولدات"]
+            },
+            "description": "لا مزرعة بلا مصدر طاقة (القرار #112)"
+          }
+        }
+      },
+      "FarmListResponse": {
+        "type": "object",
+        "required": ["farms"],
+        "properties": {
+          "farms": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Farm"
+            }
+          }
+        }
+      },
+      "FarmCreateRequest": {
+        "type": "object",
+        "required": ["name", "powerSources"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "powerSources": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "enum": ["شمسية", "مولدات"]
+            }
+          }
+        }
+      },
+      "FarmUpdateRequest": {
+        "type": "object",
+        "description": "حقل واحد على الأقل. `siteId` يُرفض 409 إن كان للمزرعة عنبر فأكثر (القرار #114).",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "powerSources": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "enum": ["شمسية", "مولدات"]
+            }
+          },
+          "siteId": {
+            "type": "integer",
+            "minimum": 1
           }
         }
       }

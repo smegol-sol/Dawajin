@@ -17,6 +17,7 @@ import { requestId } from "./middleware/requestId";
 import { requireTenant } from "./middleware/tenant";
 import { authProtectedRouter } from "./routes/authProtected";
 import { authPublicRouter } from "./routes/authPublic";
+import { farmsRouter } from "./routes/farms";
 import { healthRouter } from "./routes/health";
 import { settingsRouter } from "./routes/settings";
 import { sitesRouter } from "./routes/sites";
@@ -90,6 +91,7 @@ export function createApp(db: Database, env: Env, logger: Logger): Express {
   api.use(authProtectedRouter(db, env));
   api.use(settingsRouter(db));
   api.use(sitesRouter(db));
+  api.use(farmsRouter(db));
   app.use(api);
 
   app.use(errorHandler(logger));
