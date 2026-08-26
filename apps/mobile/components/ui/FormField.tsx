@@ -291,7 +291,10 @@ const styles = StyleSheet.create({
     writingDirection: "rtl",
   },
   ltrInput: {
-    direction: "ltr",
+    // `writingDirection` وحدها — **و`direction` ليست خاصية نمط في React
+    // Native** (القرار #167): تُرفض وقت التشغيل بـ«Invalid style property
+    // of "direction"». وrn-web يترجم `writingDirection` إلى `direction` في
+    // CSS، فالسلوك على الويب واحد بلا الخطأ.
     writingDirection: "ltr",
   },
   textInputLong: {
