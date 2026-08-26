@@ -1,3 +1,15 @@
+import {
+  Ban,
+  CircleCheckBig,
+  CircleHelp,
+  DoorClosed,
+  DoorOpen,
+  Hourglass,
+  Sparkles,
+  Wrench,
+  type LucideIcon,
+} from "lucide-react-native";
+
 import type { BadgeTone } from "@/components/ui/Badge";
 
 /**
@@ -20,4 +32,26 @@ const STATUS_TONE: Record<string, BadgeTone> = {
 
 export function houseStatusTone(status: string): BadgeTone {
   return STATUS_TONE[status] ?? "warning";
+}
+
+/**
+ * أيقونة حالة العنبر — **جدول ثانٍ بنفس مفاتيح الأول**، لأن شارة الحالة
+ * تحمل لونًا وأيقونة ونصًّا معًا دائمًا (§8.1، §11: الاعتماد على اللون وحده
+ * ممنوع لأن عمى الألوان شائع).
+ *
+ * والقيمة غير المعروفة تأخذ علامة استفهام لا أيقونة سليمة — تلفت ولا تمرّ،
+ * كما في `houseStatusTone`.
+ */
+const STATUS_ICON: Record<string, LucideIcon> = {
+  مشغول: DoorClosed,
+  "تحت الإخلاء": DoorOpen,
+  "تحت التنظيف والتطهير": Sparkles,
+  "في فترة الراحة": Hourglass,
+  "جاهز للإسكان": CircleCheckBig,
+  "تحت الصيانة": Wrench,
+  معطّل: Ban,
+};
+
+export function houseStatusIcon(status: string): LucideIcon {
+  return STATUS_ICON[status] ?? CircleHelp;
 }

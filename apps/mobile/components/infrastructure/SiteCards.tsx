@@ -1,6 +1,7 @@
+import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { StatTile } from "@/components/ui/StatTile";
-import { houseStatusTone } from "@/lib/houseStatusTone";
+import { houseStatusIcon, houseStatusTone } from "@/lib/houseStatusTone";
 import type { FarmCard, HouseCard, SiteCard } from "@/lib/infrastructureApi";
 
 /**
@@ -74,7 +75,11 @@ export function HouseRow({
       testID={`house-card-${String(house.id)}`}
       {...(onEdit ? { onMorePress: onEdit } : {})}
     >
-      <StatTile label="الحالة" value={house.status} />
+      <Badge
+        tone={houseStatusTone(house.status)}
+        icon={houseStatusIcon(house.status)}
+        label={house.status}
+      />
     </Card>
   );
 }
