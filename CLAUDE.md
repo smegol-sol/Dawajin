@@ -38,13 +38,38 @@ cp .env.example .env   # مرة واحدة — القيم الافتراضية �
 set -a && source .env && set +a   # في كل جلسة/طرفية جديدة قبل أي أمر يلمس القاعدة
 ```
 
-تأكيدات تخطيط RTL (`check:all` الفحص الحادي عشر) تحتاج متصفحًا مطابقًا لنسخة Playwright. في حاوية
+**وقاعدة `dawajin_test` تحتاج تجهيزًا صريحًا قبل أول `check:all` على جهاز نظيف** — الترحيلات ثم
+جدول العلامة، بـ`DATABASE_URL` موجَّهًا إليها لا إلى قاعدة التطوير (نفس ما يفعله CI في خطوتين
+منفصلتين). بلا ذلك يرفض حارس `testGuard` التشغيل بـ«جدول العلامة `__test_marker__` غير موجود»،
+فتسقط اختبارات التكامل، **فتفشل بوابة التغطية لسبب بيئي بحت لا كودي**:
+
+```bash
+DATABASE_URL="$TEST_DATABASE_URL" NODE_ENV=test pnpm --filter @dawajin/db run migrate
+DATABASE_URL="$TEST_DATABASE_URL" NODE_ENV=test pnpm --filter @dawajin/db run setup:test-db
+```
+
+تأكيدات تخطيط RTL (`check:all` الفحص الحادي عشر) تحتاج متصفحًا مطابقًا لنسخة Playwright. في بيئة
 تحمل نسخة مثبَّتة مسبقًا لا تطابقها (فتفشل بـ`Executable doesn't exist`)، صدّر المسار الموجود بدل
 `playwright install` (القرار #103):
 
 ```bash
+# حاوية لينكس
 export PLAYWRIGHT_CHROMIUM_EXECUTABLE=/opt/pw-browsers/chromium-1194/chrome-linux/chrome
+
+# macOS — المسار مختلف تمامًا
+export PLAYWRIGHT_CHROMIUM_EXECUTABLE="$HOME/Library/Caches/ms-playwright/chromium_headless_shell-1208/chrome-headless-shell-mac-arm64/chrome-headless-shell"
 ```
+
+**والرقم في اسم المجلد يتبع نسخة Playwright فيتغيّر مع كل ترقية — فالقاعدة «صدّر المسار الموجود
+عندك» لا نسخ رقم من هنا.** اقرأه من الجهاز نفسه:
+
+```bash
+ls ~/Library/Caches/ms-playwright/     # macOS
+ls /opt/pw-browsers/                   # حاوية لينكس
+```
+
+**ورسالة الفشل تسمّي النسخة المتوقَّعة لا الموجودة** (`chromium_headless_shell-1234` مثلًا بينما
+المثبَّت `1208`) — فالفارق بين الرقمين هو العرَض، والعلاج تصدير الموجود لا مطاردة المتوقَّع.
 
 `.env` مُستبعَد بـ`.gitignore` (`.env` و`.env.*`) ولا يُلتزم أبدًا — القرار #67 في `docs/decisions.md`
 دقّق كل تاريخ المستودع للتأكد من عدم تسرّب سرّ حقيقي واحد.
