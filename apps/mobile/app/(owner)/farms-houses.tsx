@@ -6,9 +6,11 @@ import { BackHandler, ScrollView, StyleSheet, View } from "react-native";
 import { FarmsLevel } from "@/components/infrastructure/FarmsLevel";
 import { HousesLevel } from "@/components/infrastructure/HousesLevel";
 import { SitesLevel } from "@/components/infrastructure/SitesLevel";
+import { AccountSheet } from "@/components/ui/AccountSheet";
 import { AppHeader } from "@/components/ui/AppHeader";
 import { ListState } from "@/components/ui/ListState";
 import { spacing } from "@/constants/theme";
+import { useAccountSheet } from "@/lib/account";
 import { fetchCurrentUser } from "@/lib/api";
 import { infrastructureCapabilitiesFor } from "@/lib/capabilities";
 import type { FarmCard, SiteCard } from "@/lib/infrastructureApi";
@@ -58,6 +60,7 @@ export default function OwnerFarmsHouses() {
   }, [router]);
 
   useHardwareBack(trail, back);
+  const account = useAccountSheet();
 
   const openSite = useCallback((site: SiteCard, automatic: boolean) => {
     setTrail((current) =>
@@ -73,6 +76,7 @@ export default function OwnerFarmsHouses() {
         title={headerTitle(level)}
         variant={trail.length === 1 ? "main" : "sub"}
         onBackPress={back}
+        onAccountPress={account.open}
         {...(line === undefined ? {} : { contextLine: line })}
       />
       <ScrollView contentContainerStyle={styles.body}>
@@ -88,6 +92,12 @@ export default function OwnerFarmsHouses() {
           />
         )}
       </ScrollView>
+      <AccountSheet
+        visible={account.visible}
+        onClose={account.close}
+        identity={account.identity}
+        onLogout={account.logout}
+      />
     </View>
   );
 }

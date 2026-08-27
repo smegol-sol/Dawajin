@@ -83,7 +83,7 @@ export async function listHousesInFarm(
     .select(HOUSE_COLUMNS)
     .from(houses)
     .where(and(eq(houses.tenantId, tenantId), eq(houses.farmId, farmId), scope))
-    .orderBy(asc(houses.name));
+    .orderBy(asc(houses.name), asc(houses.id));
 }
 
 /**

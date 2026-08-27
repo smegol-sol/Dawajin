@@ -103,7 +103,7 @@ export async function listFarmsInSite(
       and(eq(farms.tenantId, tenantId), eq(farms.siteId, siteId), visibleFarmCondition(viewer))
     )
     .groupBy(farms.id, farms.siteId, farms.name, farms.powerSources)
-    .orderBy(asc(farms.name));
+    .orderBy(asc(farms.name), asc(farms.id));
 
   return rows.map(({ occupied, ready, houseCount, ...farm }) => ({
     ...farm,

@@ -77,8 +77,8 @@ export async function listSites(
 
   const scoped = isAssignmentScoped(viewer.role);
   return scoped
-    ? query.having(sql`count(distinct ${farms.id}) > 0`).orderBy(asc(sites.name))
-    : query.orderBy(asc(sites.name));
+    ? query.having(sql`count(distinct ${farms.id}) > 0`).orderBy(asc(sites.name), asc(sites.id))
+    : query.orderBy(asc(sites.name), asc(sites.id));
 }
 
 /**

@@ -10,7 +10,10 @@ export default function OwnerLayout() {
       <Tabs.Screen name="index" options={{ title: "الرئيسية", tabBarIcon: tabIcon(Home) }} />
       <Tabs.Screen
         name="farms-houses"
-        options={{ title: "المزارع والعنابر", tabBarIcon: tabIcon(Building2) }}
+        // «المزارع» لا «المزارع والعنابر»: الأخيرة تُقتطع في شريط
+        // خماسي على عرض 390 (القرار #168) — والشاشة نفسها تسمّي المستوى
+        // في ترويستها (المواقع · المزارع · العنابر) فلا يضيع المعنى.
+        options={{ title: "المزارع", tabBarIcon: tabIcon(Building2) }}
       />
       <Tabs.Screen name="users" options={{ title: "المستخدمون", tabBarIcon: tabIcon(Users) }} />
       <Tabs.Screen name="reports" options={{ title: "التقارير", tabBarIcon: tabIcon(BarChart3) }} />
