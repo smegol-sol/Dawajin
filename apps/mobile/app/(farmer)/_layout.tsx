@@ -1,7 +1,7 @@
 import { Tabs } from "expo-router";
 import { Home, ClipboardList, HeartPulse, PackageCheck, FileText } from "lucide-react-native";
 
-import { tabBarScreenOptions, tabIcon } from "@/components/ui/tabBarOptions";
+import { useTabBarScreenOptions, tabIcon } from "@/components/ui/tabBarOptions";
 
 /**
  * تخطيط المربي — 5 تبويبات (docs/app-complete-spec.md §4).
@@ -9,7 +9,7 @@ import { tabBarScreenOptions, tabIcon } from "@/components/ui/tabBarOptions";
  */
 export default function FarmerLayout() {
   return (
-    <Tabs screenOptions={tabBarScreenOptions}>
+    <Tabs screenOptions={useTabBarScreenOptions()}>
       <Tabs.Screen name="index" options={{ title: "الرئيسية", tabBarIcon: tabIcon(Home) }} />
       <Tabs.Screen
         name="daily-log"

@@ -1,6 +1,9 @@
-import { render, screen } from "@testing-library/react-native";
+import { screen } from "@testing-library/react-native";
 
 import { PlaceholderScreen } from "./PlaceholderScreen";
+
+import { renderWithSafeArea } from "@/test-utils/rtl";
+
 
 jest.mock("@/lib/account", () => ({
   roleLabel: (role: string) => role,
@@ -21,7 +24,7 @@ jest.mock("@/lib/account", () => ({
  */
 describe("الشاشة النائبة", () => {
   it("تحمل ترويسة فيها أيقونة الحساب", () => {
-    render(<PlaceholderScreen title="الرئيسية — المربي" />);
+    renderWithSafeArea(<PlaceholderScreen title="الرئيسية — المربي" />);
 
     expect(screen.getByTestId("app-header")).toBeTruthy();
     expect(screen.getByTestId("app-header-account")).toBeTruthy();

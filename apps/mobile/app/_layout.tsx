@@ -6,6 +6,7 @@ import * as Font from "expo-font";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect, useState } from "react";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { color } from "@/constants/theme";
 import { bestEffort } from "@/lib/bestEffort";
@@ -43,25 +44,30 @@ export default function RootLayout() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <Stack
-        screenOptions={{
-          headerShown: false,
-          contentStyle: { backgroundColor: color.surfacePage },
-        }}
-      >
-        <Stack.Screen name="auth/login" />
-        <Stack.Screen name="auth/select-account" />
-        <Stack.Screen name="auth/password" />
-        {/* بلا إيماءة رجوع: التغيير إجباري ولا يُتجاوَز (زر رجوع أندرويد
-            معترَض داخل الشاشة نفسها أيضًا) */}
-        <Stack.Screen name="auth/change-password" options={{ gestureEnabled: false }} />
-        <Stack.Screen name="design-system" />
-        <Stack.Screen name="(farmer)" />
-        <Stack.Screen name="(supervisor)" />
-        <Stack.Screen name="(vet)" />
-        <Stack.Screen name="(owner)" />
-        <Stack.Screen name="platform" />
-      </Stack>
+      {/* أندرويد 15+ يفرض edge-to-edge على كل تطبيق يستهدف API 35 فأعلى، ولا
+          انسحاب منه في 36 — فالمحتوى يُرسم تحت شريطَي النظام ما لم تُقرأ
+          المناطق الآمنة. المزوّد هنا هو مصدرها الوحيد (القرار #171). */}
+      <SafeAreaProvider>
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            contentStyle: { backgroundColor: color.surfacePage },
+          }}
+        >
+          <Stack.Screen name="auth/login" />
+          <Stack.Screen name="auth/select-account" />
+          <Stack.Screen name="auth/password" />
+          {/* بلا إيماءة رجوع: التغيير إجباري ولا يُتجاوَز (زر رجوع أندرويد
+              معترَض داخل الشاشة نفسها أيضًا) */}
+          <Stack.Screen name="auth/change-password" options={{ gestureEnabled: false }} />
+          <Stack.Screen name="design-system" />
+          <Stack.Screen name="(farmer)" />
+          <Stack.Screen name="(supervisor)" />
+          <Stack.Screen name="(vet)" />
+          <Stack.Screen name="(owner)" />
+          <Stack.Screen name="platform" />
+        </Stack>
+      </SafeAreaProvider>
     </QueryClientProvider>
   );
 }

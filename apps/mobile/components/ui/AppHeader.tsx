@@ -1,5 +1,6 @@
 import { ArrowRight, Bell, CircleUser } from "lucide-react-native";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { color, font, radius, spacing, touchTarget } from "@/constants/theme";
 
@@ -29,8 +30,16 @@ export function AppHeader({
   onBackPress,
   onAccountPress,
 }: AppHeaderProps) {
+  // شريط الحالة يُرسم فوق الترويسة تحت edge-to-edge المفروض من أندرويد 15+
+  // (القرار #171) — الحشو يُضاف إلى `paddingVertical` لا يستبدله، فالمسافة
+  // الداخلية تبقى كما هي والإزاحة وحدها هي الجديدة. على الويب القيمة صفر.
+  const insets = useSafeAreaInsets();
+
   return (
-    <View style={styles.container} testID="app-header">
+    <View
+      style={[styles.container, { paddingTop: spacing.md + insets.top }]}
+      testID="app-header"
+    >
       {variant === "sub" ? (
         <Pressable
           onPress={onBackPress}

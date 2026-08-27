@@ -1,7 +1,7 @@
 import { Tabs } from "expo-router";
 import { LayoutDashboard, Building, CreditCard, Activity, History } from "lucide-react-native";
 
-import { tabBarScreenOptions, tabIcon } from "@/components/ui/tabBarOptions";
+import { useTabBarScreenOptions, tabIcon } from "@/components/ui/tabBarOptions";
 
 /**
  * مدير المنصة — مسار دخول منفصل تمامًا (app-complete-spec.md §4، §5-هـ).
@@ -9,7 +9,7 @@ import { tabBarScreenOptions, tabIcon } from "@/components/ui/tabBarOptions";
  */
 export default function PlatformLayout() {
   return (
-    <Tabs screenOptions={tabBarScreenOptions}>
+    <Tabs screenOptions={useTabBarScreenOptions()}>
       <Tabs.Screen
         name="index"
         options={{ title: "نظرة عامة", tabBarIcon: tabIcon(LayoutDashboard) }}
