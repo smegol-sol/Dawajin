@@ -56,3 +56,6 @@ coverage/
 # تأكيدات التخطيط — مخرَج ونتائج مولَّدة
 test-results/
 playwright-report/
+
+# ملف أنواع مولَّد بالكامل من Expo — يُعاد إنشاؤه في كل تشغيل (القرار #169)
+apps/mobile/expo-env.d.ts
