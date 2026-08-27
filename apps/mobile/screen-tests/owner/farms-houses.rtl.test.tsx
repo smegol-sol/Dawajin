@@ -1,11 +1,12 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, configure, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
+import { act, configure, fireEvent, screen, waitFor } from "@testing-library/react-native";
 import { BackHandler } from "react-native";
 
 import OwnerFarmsHouses from "@/app/(owner)/farms-houses";
 import * as api from "@/lib/api";
 import * as infra from "@/lib/infrastructureApi";
 import * as session from "@/lib/session";
+import { renderWithSafeArea } from "@/test-utils/rtl";
 
 /**
  * شاشة المواقع والمزارع والعنابر — **التخطّي والرجوع من طرف إلى طرف**.
@@ -75,7 +76,7 @@ function renderScreen() {
     defaultOptions: { queries: { retry: false, gcTime: 0, staleTime: 0 } },
   });
   clients.push(client);
-  return render(
+  return renderWithSafeArea(
     <QueryClientProvider client={client}>
       <OwnerFarmsHouses />
     </QueryClientProvider>

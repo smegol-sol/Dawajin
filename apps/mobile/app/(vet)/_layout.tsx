@@ -1,12 +1,12 @@
 import { Tabs } from "expo-router";
 import { Home, AlertTriangle, Pill, BarChart3, MoreHorizontal } from "lucide-react-native";
 
-import { tabBarScreenOptions, tabIcon } from "@/components/ui/tabBarOptions";
+import { useTabBarScreenOptions, tabIcon } from "@/components/ui/tabBarOptions";
 
 /** تخطيط الطبيب — 5 تبويبات. */
 export default function VetLayout() {
   return (
-    <Tabs screenOptions={tabBarScreenOptions}>
+    <Tabs screenOptions={useTabBarScreenOptions()}>
       <Tabs.Screen name="index" options={{ title: "الرئيسية", tabBarIcon: tabIcon(Home) }} />
       <Tabs.Screen
         name="observations"
