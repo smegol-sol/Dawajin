@@ -1,21 +1,32 @@
 import { houseStatusIcon, houseStatusTone } from "@/lib/houseStatusTone";
 
-/** لون حالة العنبر — الحالات السبع، وحالةٌ لا يعرفها التطبيق. */
-describe("لون حالة العنبر", () => {
+/**
+ * فئة حالة العنبر على **محور الإنتاج** لا الإنذار (القرار رقم 178) — الحالات
+ * السبع، وحالةٌ لا يعرفها التطبيق.
+ */
+describe("فئة حالة العنبر", () => {
   it.each([
-    ["مشغول", "info"],
-    ["تحت الإخلاء", "warning"],
-    ["تحت التنظيف والتطهير", "warning"],
-    ["في فترة الراحة", "warning"],
-    ["جاهز للإسكان", "success"],
-    ["تحت الصيانة", "critical"],
-    ["معطّل", "critical"],
+    ["مشغول", "producing"],
+    ["تحت الإخلاء", "preparing"],
+    ["تحت التنظيف والتطهير", "preparing"],
+    ["في فترة الراحة", "idle"],
+    ["جاهز للإسكان", "idle"],
+    ["تحت الصيانة", "outOfService"],
+    ["معطّل", "outOfService"],
   ])("%s ← %s", (status, tone) => {
     expect(houseStatusTone(status)).toBe(tone);
   });
 
-  it("حالة غير معروفة ← تنبيه لا لون سليم", () => {
-    expect(houseStatusTone("حالة لم تُبنَ بعد")).toBe("warning");
+  it("حالة غير معروفة ← فئة تلفت لا «يُنتج»", () => {
+    expect(houseStatusTone("حالة لم تُبنَ بعد")).toBe("preparing");
+  });
+
+  it("الأحمر خارج الشبكة — لا فئة تعني خطرًا", () => {
+    // الأحمر محجوز لما يستدعي تدخّلًا فعليًّا، لا لعنبر خارج الإنتاج مؤقتًا
+    const tones = ["مشغول", "تحت الإخلاء", "في فترة الراحة", "تحت الصيانة", "معطّل"].map(
+      houseStatusTone
+    );
+    expect(tones).not.toContain("critical");
   });
 });
 
