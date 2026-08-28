@@ -113,10 +113,20 @@ export async function changePassword(
     });
 }
 
-/** `GET /auth/me` — يستعيد جلسة محفوظة ويتحقق أن رمزها ما زال مقبولًا. */
-export async function fetchCurrentUser(token: string): Promise<AuthenticatedUser> {
+/**
+ * `GET /auth/me` — يستعيد جلسة محفوظة ويتحقق أن رمزها ما زال مقبولًا.
+ * @param signal إشارة إلغاء اختيارية — استعادة الجلسة تفرض مهلتها الخاصة
+ *               بـ`AbortController` (القرار رقم 177) فوق مهلة العميل العامة
+ */
+export async function fetchCurrentUser(
+  token: string,
+  signal?: AbortSignal
+): Promise<AuthenticatedUser> {
   const response = await apiClient
-    .get<AuthenticatedUser>("/auth/me", { headers: { Authorization: `Bearer ${token}` } })
+    .get<AuthenticatedUser>("/auth/me", {
+      headers: { Authorization: `Bearer ${token}` },
+      ...(signal ? { signal } : {}),
+    })
     .catch((error: unknown) => {
       throw toLoginRequestError(error);
     });
