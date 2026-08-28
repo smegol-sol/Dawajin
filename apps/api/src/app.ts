@@ -13,6 +13,7 @@ import { requireAuth } from "./middleware/auth";
 import { enforceEntityAccess } from "./middleware/entityAccess";
 import { errorHandler } from "./middleware/errorHandler";
 import { requireLiveSession } from "./middleware/liveSession";
+import { noStore } from "./middleware/noStore";
 import { requestId } from "./middleware/requestId";
 import { requireTenant } from "./middleware/tenant";
 import { authProtectedRouter } from "./routes/authProtected";
@@ -71,6 +72,9 @@ export function createApp(db: Database, env: Env, logger: Logger): Express {
 
   // علني بلا مصادقة عمدًا — POST /auth/login لا يملك توكن مسبقًا ليدخل
   // سلسلة requireAuth (backend-technical-spec.md §17).
+  // مقصور على مسارات المصادقة وحدها — لا سياسة تخزين عامة للـAPI.
+  // بادئة مسار لا تركيب على الموجّه: كل ملف مسار يكتب مساره الكامل.
+  app.use("/api/auth", noStore);
   app.use(authPublicRouter(db, env));
 
   // كل شيء تحت /api يمر بالفرض المركزي الثلاثي (المبدأ #1 و#7).

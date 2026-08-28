@@ -5,13 +5,20 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import * as Font from "expo-font";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
+import { StyleSheet, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
+import { ListState } from "@/components/ui/ListState";
 import { color } from "@/constants/theme";
 import { bestEffort } from "@/lib/bestEffort";
+import { beginRestore, restoreSnapshot, retryRestore, subscribeRestore } from "@/lib/sessionRestore";
 
 bestEffort(SplashScreen.preventAutoHideAsync());
+
+// **يبدأ عند الاستيراد، على نطاق وحدة الجذر** — لا داخل مؤثّر شاشة (القرار
+// رقم 177). هذا هو النطاق الوحيد الذي ثبت تنفيذه بالقياس.
+beginRestore();
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -21,7 +28,7 @@ const queryClient = new QueryClient({
 
 export default function RootLayout() {
   const [fontsLoaded, setFontsLoaded] = useState(false);
-
+  const session = useSyncExternalStore(subscribeRestore, restoreSnapshot);
   useEffect(() => {
     bestEffort(
       Font.loadAsync({
@@ -38,9 +45,35 @@ export default function RootLayout() {
     );
   }, []);
 
-  if (!fontsLoaded) {
-    return null;
-  }
+  /**
+   * **بوّابة الانتظار طبقة فوق المُنقِّل لا بديلًا عنه.**
+   *
+   * الجذر **يصيّر مُنقِّلًا في أول طلاء دائمًا**، وإرجاع `null` بدله يعني أن
+   * لا مُنقِّل وقتها — فلا تُطلى الشاشة الأولى أصلًا. فالبوّابة تُصيَّر **فوق**
+   * `Stack` وتحجب ما تحته حجبًا تامًّا، و`Stack` مركَّب طوال الوقت.
+   *
+   * **والجذر لا يوجّه**: التوجيه إعلاني في المسار نفسه (`app/index.tsx`).
+   * `router.replace` من داخل تخطيط الجذر هو ما ترفضه expo-router صراحةً
+   * برسالة «Attempted to navigate before mounting the Root Layout component»
+   * — مُقاس على الجهاز، لا مُستنتَج (القرار رقم 177).
+   *
+   * والنتيجة المطلوبة قائمة: **لا يرى المستخدم أي شاشة — ولا شاشة الدخول —
+   * قبل أن تستقرّ الاستعادة.**
+   */
+  const gate =
+    !fontsLoaded || session.status === "pending" ? (
+      <View style={styles.gate} />
+    ) : session.outcome.kind === "unreachable" ? (
+      // تعذّر الاتصال ليس خروجًا: الرمز باقٍ، والمعروض إعادة محاولة لا
+      // مطالبة بكلمة مرور (القرار رقم 177).
+      <View style={[styles.gate, styles.gateCentered]}>
+        <ListState
+          state="error"
+          reason="تعذّر الاتصال بالخادم — تحقّق من الشبكة ثم أعد المحاولة"
+          onRetry={retryRestore}
+        />
+      </View>
+    ) : null;
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -54,6 +87,13 @@ export default function RootLayout() {
             contentStyle: { backgroundColor: color.surfacePage },
           }}
         >
+          {/* **`index` أوّل معلَن — وموضعه هو ما يحسم شاشة البدء.**
+              expo-router يرتّب شاشات المُنقِّل من إعلانات `<Stack.Screen>` نفسها
+              متى وُجدت (`useScreens.js:54`)، ويُلحق غير المعلَن في الذيل. وكان
+              `index` غير معلَن، فوقع آخر القائمة و`routeNames[0]` صار
+              `auth/login` — **فبدأ المُنقِّل على شاشة الدخول رغم أن الرابط
+              جذري** (مُقاس: `stack-names_…-idx_0-active_auth/login`). */}
+          <Stack.Screen name="index" />
           <Stack.Screen name="auth/login" />
           <Stack.Screen name="auth/select-account" />
           <Stack.Screen name="auth/password" />
@@ -67,7 +107,18 @@ export default function RootLayout() {
           <Stack.Screen name="(owner)" />
           <Stack.Screen name="platform" />
         </Stack>
+        {gate}
       </SafeAreaProvider>
     </QueryClientProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  gate: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: color.surfacePage,
+  },
+  gateCentered: {
+    justifyContent: "center",
+  },
+});

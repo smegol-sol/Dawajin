@@ -1,75 +1,38 @@
 import { Redirect } from "expo-router";
-import type { Href } from "expo-router";
-import { useEffect, useState } from "react";
-import { ActivityIndicator, StyleSheet, View } from "react-native";
+import { useSyncExternalStore } from "react";
 
-import { color } from "@/constants/theme";
-import { LoginRequestError, fetchCurrentUser } from "@/lib/api";
 import { homeRouteForRole } from "@/lib/roleRoutes";
-import { clearToken, readToken } from "@/lib/session";
+import { restoreSnapshot, subscribeRestore } from "@/lib/sessionRestore";
 
 /**
- * نقطة الدخول — تستعيد جلسة محفوظة في expo-secure-store وتوجّه لتبويبات
- * الدور، أو لشاشة الدخول إن لم توجد جلسة صالحة.
+ * نقطة الدخول — **توجيه إعلاني ومستهلك رفيع** (القرار رقم 177).
  *
- * **الرمز وحده لا يكفي**: يُتحقق منه بـ`GET /auth/me` قبل التوجيه. رمز
- * لم يعد مقبولًا (منتهٍ، أو حساب عُطِّل) يُمحى فورًا بدل توجيه المستخدم
- * لشاشة ستفشل كل طلباتها.
+ * **لا منطق شبكة هنا ولا استعادة**: كلاهما في `lib/sessionRestore.ts` ويبدأ
+ * على نطاق الوحدة عند الاستيراد من الجذر، فينجو من تفكيك أي مكوّن. هذه
+ * الشاشة تقرأ الحصيلة الجاهزة وتصيّر `<Redirect>` — لا أكثر.
+ *
+ * **والتوجيه إعلاني لا أمري**: `router.replace` من تخطيط الجذر ترفضه
+ * expo-router برسالة صريحة، والبديل الذي تسمّيه الرسالة نفسها هو مُنقِّل
+ * مركَّب من أول طلاء وتوجيه في المسار — وهو هذا.
+ *
+ * وحين تُطلى هذه الشاشة تكون الاستعادة قد استقرّت: بوّابة الجذر تحجب كل شيء
+ * قبل ذلك.
  */
 export default function Index() {
-  const [target, setTarget] = useState<Href | null>(null);
+  const session = useSyncExternalStore(subscribeRestore, restoreSnapshot);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    async function restore(): Promise<void> {
-      const token = await readToken();
-      if (token === null) {
-        if (!cancelled) setTarget("/auth/login");
-        return;
-      }
-
-      try {
-        const user = await fetchCurrentUser(token);
-        if (cancelled) return;
-
-        if (user.mustChangePassword) {
-          setTarget("/auth/change-password");
-          return;
-        }
-        setTarget(homeRouteForRole(user.role) ?? "/auth/login");
-      } catch (caught: unknown) {
-        // انقطاع شبكة (status === null) ليس رمزًا باطلًا — لا تُمحى الجلسة
-        // بسببه، وإلا خرج المربي من التطبيق كلما ضعفت الشبكة في العنبر
-        const isRejectedToken =
-          caught instanceof LoginRequestError && caught.failure.status !== null;
-        if (isRejectedToken) await clearToken();
-        if (!cancelled) setTarget("/auth/login");
-      }
-    }
-
-    void restore();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  if (target === null) {
-    return (
-      <View style={styles.loading}>
-        <ActivityIndicator color={color.brandPrimary} />
-      </View>
-    );
+  // الجذر يحجب ما قبل الاستقرار وحالة تعذّر الاتصال — فلا يصلان هنا
+  if (session.status !== "settled" || session.outcome.kind === "unreachable") {
+    return null;
   }
 
-  return <Redirect href={target} />;
-}
+  const { outcome } = session;
+  if (outcome.kind === "signed-in") {
+    if (outcome.user.mustChangePassword) {
+      return <Redirect href="/auth/change-password" />;
+    }
+    return <Redirect href={homeRouteForRole(outcome.user.role) ?? "/auth/login"} />;
+  }
 
-const styles = StyleSheet.create({
-  loading: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: color.surfacePage,
-  },
-});
+  return <Redirect href="/auth/login" />;
+}
