@@ -1,6 +1,7 @@
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { StatTile } from "@/components/ui/StatTile";
+import { StatusDistributionBar } from "@/components/ui/StatusDistributionBar";
 import { houseStatusIcon, houseStatusTone } from "@/lib/houseStatusTone";
 import type { FarmCard, HouseCard, SiteCard } from "@/lib/infrastructureApi";
 
@@ -53,9 +54,11 @@ export function FarmRow({
       testID={`farm-card-${String(farm.id)}`}
       {...(onEdit ? { onMorePress: onEdit } : {})}
     >
-      <StatTile label="مشغول" value={occupied} />
-      <StatTile label="جاهز وشاغر" value={ready} />
-      <StatTile label="غير ذلك" value={other} />
+      <StatusDistributionBar
+        counts={{ occupied, ready, other }}
+        emptyLabel="لا عنابر في هذه المزرعة بعد"
+        testID={`farm-status-${String(farm.id)}`}
+      />
     </Card>
   );
 }
