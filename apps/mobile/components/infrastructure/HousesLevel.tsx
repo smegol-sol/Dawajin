@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { LevelList } from "@/components/infrastructure/LevelList";
 import { NameSheet } from "@/components/infrastructure/NameSheet";
-import { HouseRow } from "@/components/infrastructure/SiteCards";
+import { HouseTile } from "@/components/infrastructure/SiteCards";
 import type { InfrastructureCapabilities } from "@/lib/capabilities";
 import { createHouse, fetchHouses, renameHouse, type HouseCard } from "@/lib/infrastructureApi";
 import { infrastructureErrorMessage } from "@/lib/infrastructureErrors";
@@ -11,6 +11,10 @@ import { useEntitySheet } from "@/lib/useEntitySheet";
 /**
  * المستوى الثالث — عنابر المزرعة المرئية. **لا تخطّي بعده**: العنبر هو
  * الوحدة الأساسية، وما تحته (الدفعات والسجلات) خارج هذه الشاشة.
+ *
+ * **وشبكة لا قائمة** (§5-د/2، القرار رقم 178): `layout="grid"` وحده يغيّر
+ * الترتيب، والحالات الأربع تبقى في `LevelList` مشتركة مع المستويين الآخرين.
+ * وهذا المستوى وحده يمرّرها.
  */
 export function HousesLevel({
   token,
@@ -45,8 +49,9 @@ export function HousesLevel({
           ? { createLabel: "إضافة عنبر", onCreate: form.openCreate }
           : {})}
         keyOf={(house) => house.id}
+        layout="grid"
         renderItem={(house) => (
-          <HouseRow
+          <HouseTile
             house={house}
             onEdit={
               capabilities.canEdit

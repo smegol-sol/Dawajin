@@ -33,10 +33,17 @@ export interface SiteFixture {
   readonly farms: readonly FarmFixture[];
 }
 
-/** عنابر مرقَّمة بنمط واحد — الاختلاف في النوع والسعة لا في التسمية. */
-function houses(farmLabel: string, specs: readonly [HouseType, number][]): HouseFixture[] {
+/**
+ * عنابر مرقَّمة بنمط واحد — الاختلاف في النوع والسعة لا في التسمية.
+ *
+ * **ولا بادئة باسم المزرعة** (القرار رقم 178): العنبر يُعرض داخل مزرعته دائمًا،
+ * فتكرار اسمها في كل عنبر حشوٌ يبتلع مربّع الشبكة ويكسر الاسم سطرين. **والعلاج
+ * في بيانات العرض لا في الواجهة** — اسم المستخدم يُعرض كما أدخله، ومعالجته في
+ * العرض تلاعب ببياناته.
+ */
+function houses(_farmLabel: string, specs: readonly [HouseType, number][]): HouseFixture[] {
   return specs.map(([type, waterTankCapacityL], index) => ({
-    name: `${farmLabel} — عنبر ${(index + 1).toString()}`,
+    name: `عنبر ${(index + 1).toString()}`,
     type,
     waterTankCapacityL,
   }));

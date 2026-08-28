@@ -36,6 +36,30 @@ export function withAlpha(hex: string, alpha: number): string {
   return `${hex}${alphaHex}`;
 }
 
+/**
+ * **تعبئة مربّع شبكة العنابر — على محور الإنتاج لا الإنذار** (القرار رقم 178):
+ * يُنتج · يُجهَّز · جاهز وساكن · خارج الخدمة.
+ *
+ * **والأحمر `#C0392B` خارج الشبكة عمدًا**: يُحجز لما يستدعي تدخّلًا فعليًّا،
+ * لا لعنبر خارج الإنتاج مؤقتًا.
+ *
+ * والنصّ عليها أبيض فيلزم ≥4.5 مع الأبيض (WCAG 1.4.3؛ و15px وزن 700 **نصٌّ
+ * عادي** لا عريض: عتبة العريض 14 نقطة = 18.66px). ويحرسها فحص آلي.
+ *
+ * **و`preparing` ليس `status.warning`**: الأخير `#B37714` يقيس 3.77 فيسقط،
+ * و`#8A5A0F` يقيس 5.92 — وهو تعبئة للشبكة لا بديل عن الرمز، الذي يبقى كما
+ * هو في الشارات على خلفية بيضاء.
+ *
+ * **و`outOfService` رمز حشوة محايد مستقل لا `text.body`**: استعمال رمز نصّ
+ * حشوةً خلط أدوار (القرار #175).
+ */
+export const statusFill = {
+  producing: tokens.color.statusFill.producing,
+  preparing: tokens.color.statusFill.preparing,
+  idle: tokens.color.statusFill.idle,
+  outOfService: tokens.color.statusFill.outOfService,
+} as const;
+
 const STATUS_TONE_COLOR = {
   success: tokens.color.accent.success,
   critical: tokens.color.status.critical,

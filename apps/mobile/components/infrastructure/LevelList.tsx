@@ -16,6 +16,12 @@ interface LevelListProps<T> {
   onCreate?: () => void;
   renderItem: (item: T) => ReactNode;
   keyOf: (item: T) => number;
+  /**
+   * ترتيب العناصر وحده — **والحالات الأربع تبقى هنا مشتركة كما هي**.
+   * `list` قائمة رأسية ببطاقات كاملة العرض (الافتراضي، المواقع والمزارع)،
+   * و`grid` شبكة ثلاثة أعمدة (العنابر — §5-د/2).
+   */
+  layout?: "list" | "grid";
 }
 
 /**
@@ -37,6 +43,7 @@ export function LevelList<T>({
   onCreate,
   renderItem,
   keyOf,
+  layout = "list",
 }: LevelListProps<T>) {
   if (isLoading) return <ListState state="loading" />;
   if (error !== null) return <ListState state="error" reason={error} onRetry={onRetry} />;
@@ -60,8 +67,39 @@ export function LevelList<T>({
       {createLabel !== undefined && onCreate !== undefined ? (
         <Button label={createLabel} variant="secondary" onPress={onCreate} />
       ) : null}
+      <LevelRows rows={rows} layout={layout} renderItem={renderItem} keyOf={keyOf} />
+    </View>
+  );
+}
+
+/** ترتيب الصفوف وحده — مفصول كي يبقى `LevelList` حاملًا للحالات الأربع فقط. */
+function LevelRows<T>({
+  rows,
+  layout,
+  renderItem,
+  keyOf,
+}: {
+  rows: T[];
+  layout: "list" | "grid";
+  renderItem: (item: T) => ReactNode;
+  keyOf: (item: T) => number;
+}) {
+  if (layout === "list") {
+    return (
+      <>
+        {rows.map((item) => (
+          <View key={keyOf(item)}>{renderItem(item)}</View>
+        ))}
+      </>
+    );
+  }
+
+  return (
+    <View style={styles.grid}>
       {rows.map((item) => (
-        <View key={keyOf(item)}>{renderItem(item)}</View>
+        <View key={keyOf(item)} style={styles.gridCell}>
+          {renderItem(item)}
+        </View>
       ))}
     </View>
   );
@@ -69,4 +107,12 @@ export function LevelList<T>({
 
 const styles = StyleSheet.create({
   list: { gap: spacing.md },
+  /**
+   * ثلاثة أعمدة (قرار المالك، القرار رقم 178). `flexBasis: 30%` يمنع دخول
+   * عنصر رابع في الصف (4×30% يتجاوز 100%)، و`flexGrow` يوزّع الباقي فتملأ
+   * الثلاثة العرض. و`alignItems` الافتراضي `stretch` **يساوي ارتفاعات
+   * مربّعات الصف** فلا يتفاوت المربّع الذي التفّ نصّه سطرين عن جاره.
+   */
+  grid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.xs },
+  gridCell: { flexBasis: "30%", flexGrow: 1 },
 });
