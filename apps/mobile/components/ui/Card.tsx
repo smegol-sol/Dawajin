@@ -117,8 +117,12 @@ function CardFooter({
   return (
     <View style={styles.footerRow}>
       {primaryActionLabel ? (
-        <Pressable onPress={onPrimaryAction} accessibilityRole="button">
-          <Text style={[styles.primaryAction, dark && styles.titleOnDark]}>
+        <Pressable
+          onPress={onPrimaryAction}
+          accessibilityRole="button"
+          style={styles.primaryActionPress}
+        >
+          <Text numberOfLines={1} style={[styles.primaryAction, dark && styles.titleOnDark]}>
             {primaryActionLabel}
           </Text>
         </Pressable>
@@ -190,6 +194,15 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+  },
+  /**
+   * الصندوق يأخذ العرض المتاح لا العرض المقاس للنصّ (القرار #173). بلا هذا
+   * يساوي الصندوقُ ما قاسه المُقاس بالضبط، فخطأ قياس ببكسل واحد يكسر السطر
+   * عند المسافة — وارتفاعُ سطرٍ واحد يجعل الكسر **قصًّا صامتًا** لا التفافًا
+   * ظاهرًا. والفائض هنا يبتلع خطأ القياس (963 متاحة مقابل ~250 مطلوبة).
+   */
+  primaryActionPress: {
+    flex: 1,
   },
   primaryAction: {
     fontSize: font.size.content,
