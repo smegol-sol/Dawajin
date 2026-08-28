@@ -1,8 +1,9 @@
+import { StatusBar } from "expo-status-bar";
 import { ArrowRight, Bell, CircleUser } from "lucide-react-native";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { color, font, radius, spacing, touchTarget } from "@/constants/theme";
+import { color, font, radius, spacing, touchTarget, withAlpha } from "@/constants/theme";
 
 interface AppHeaderProps {
   title: string;
@@ -21,6 +22,46 @@ interface AppHeaderProps {
  * محاذاته يمين حصرًا (§10 قاعدة 4)، وترتيب الأبناء [يمين → وسط → يسار]
  * يعتمد على انعكاس flexDirection: row التلقائي تحت I18nManager.forceRTL.
  */
+/**
+ * العنصر الأول في الرأس: سهم الرجوع في المتغيّر الفرعي، وأيقونة الحساب في
+ * الرئيسي (§8.8). استُخرج لأن `AppHeader` بلغ حدّ `max-lines-per-function`،
+ * والقسمة بالمعنى لا اعتباطًا (نمط القرار #65).
+ */
+function LeadingAction({
+  variant,
+  onBackPress,
+  onAccountPress,
+}: {
+  variant: "main" | "sub";
+  onBackPress?: (() => void) | undefined;
+  onAccountPress?: (() => void) | undefined;
+}) {
+  if (variant === "sub") {
+    return (
+      <Pressable
+        onPress={onBackPress}
+        accessibilityRole="button"
+        accessibilityLabel="رجوع"
+        hitSlop={8}
+        testID="app-header-back"
+      >
+        <ArrowRight color={color.textOnDark} size={24} />
+      </Pressable>
+    );
+  }
+  return (
+    <Pressable
+      onPress={onAccountPress}
+      accessibilityRole="button"
+      accessibilityLabel="الحساب"
+      hitSlop={8}
+      testID="app-header-account"
+    >
+      <CircleUser color={color.textOnDark} size={28} />
+    </Pressable>
+  );
+}
+
 export function AppHeader({
   title,
   contextLine,
@@ -40,27 +81,11 @@ export function AppHeader({
       style={[styles.container, { paddingTop: spacing.md + insets.top }]}
       testID="app-header"
     >
-      {variant === "sub" ? (
-        <Pressable
-          onPress={onBackPress}
-          accessibilityRole="button"
-          accessibilityLabel="رجوع"
-          hitSlop={8}
-          testID="app-header-back"
-        >
-          <ArrowRight color={color.brandPrimary} size={24} />
-        </Pressable>
-      ) : (
-        <Pressable
-          onPress={onAccountPress}
-          accessibilityRole="button"
-          accessibilityLabel="الحساب"
-          hitSlop={8}
-          testID="app-header-account"
-        >
-          <CircleUser color={color.brandPrimary} size={28} />
-        </Pressable>
-      )}
+      {/* أيقونات النظام فوق الترويسة الخضراء: داكنة عليها 1.28:1 وبيضاء
+          12.72:1 (القرار #175). والضبط هنا لا على الجذر لأن شاشات المصادقة
+          بلا ترويسة وخلفيتها فاتحة — فتحتاج العكس. */}
+      <StatusBar style="light" />
+      <LeadingAction variant={variant} onBackPress={onBackPress} onAccountPress={onAccountPress} />
 
       <View style={styles.titleBlock}>
         <Text style={styles.title} numberOfLines={1} testID="app-header-title">
@@ -81,7 +106,7 @@ export function AppHeader({
         style={styles.bell}
         testID="app-header-bell"
       >
-        <Bell color={color.brandPrimary} size={24} />
+        <Bell color={color.textOnDark} size={24} />
         {hasNotifications ? <View style={styles.bellDot} /> : null}
       </Pressable>
     </View>
@@ -96,7 +121,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
     minHeight: touchTarget.minimum,
-    backgroundColor: color.surfaceRaised,
+    backgroundColor: color.brandPrimary,
   },
   titleBlock: {
     flex: 1,
@@ -105,14 +130,14 @@ const styles = StyleSheet.create({
   title: {
     fontSize: font.size.screenTitle,
     fontFamily: font.familyBold,
-    color: color.brandPrimary,
+    color: color.textOnDark,
     writingDirection: "rtl",
     textAlign: "right",
   },
   contextLine: {
     fontSize: font.size.content,
     fontFamily: font.familyRegular,
-    color: color.textBody,
+    color: withAlpha(color.textOnDark, 0.72),
     writingDirection: "rtl",
     textAlign: "right",
   },

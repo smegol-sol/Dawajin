@@ -20,6 +20,13 @@ export function useTabBarScreenOptions(): BottomTabNavigationOptions {
 
   return {
     headerShown: false,
+    /**
+     * خلفية مشهد التبويب (القرار #175). بلا هذا تُرى خلفية React Navigation
+     * الافتراضية `rgb(242,242,242)` — `contentStyle` مضبوط على المكدّس الجذر
+     * ولا يصل مشاهد التبويبات. عطبٌ عمره من عمر التبويبات، أخفته البطاقة
+     * البيضاء بفارق 1.12:1 ولم يظهر إلا بقياس بكسل على جهاز.
+     */
+    sceneStyle: { backgroundColor: color.surfacePage },
     tabBarActiveTintColor: color.accentSuccess,
     tabBarInactiveTintColor: color.textBody,
     tabBarStyle: {
