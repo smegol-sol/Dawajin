@@ -1,3 +1,4 @@
+import { StatusBar } from "expo-status-bar";
 import type { ReactNode } from "react";
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from "react-native";
 
@@ -32,6 +33,10 @@ export function AuthScreen({ header, children, footer, testID }: AuthScreenProps
       behavior={Platform.OS === "ios" ? "padding" : undefined}
       testID={testID}
     >
+      {/* شاشات المصادقة بلا ترويسة (القرار #93) وخلفيتها `surfacePage`
+          الفاتحة — فأيقونات النظام تحتاج الداكن، عكس ما تحتاجه فوق الترويسة
+          الخضراء. ولهذا الضبط لكل سياق لا مرة واحدة على الجذر (القرار #175). */}
+      <StatusBar style="dark" />
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         <View testID="auth-header">{header}</View>
         {/* مِرساة عامة لتأكيدات التخطيط: تقيس الفجوة بين المحتوى والإجراء

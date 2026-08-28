@@ -145,9 +145,14 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     gap: spacing.xxs,
   },
+  /**
+   * البطاقة الكيانية «كبرى» فتأخذ `surface.raised` — §7.1 تعرّف الأدوار
+   * و§8.3 كانت تصف حالة، وحُسم التعارض للتعريف (القرار #175). والأبيض يبقى
+   * للكتلة الداخلية كما يعرّفه الجدول.
+   */
   defaultContainer: {
-    backgroundColor: color.surfaceCard,
-    borderColor: color.borderSubtle,
+    backgroundColor: color.surfaceRaised,
+    borderColor: color.borderCard,
   },
   identityContainer: {
     backgroundColor: color.brandPrimary,
