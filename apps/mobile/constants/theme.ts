@@ -22,13 +22,6 @@ export const color = {
   surfaceCard: tokens.color.surface.card,
   surfaceSunken: tokens.color.surface.sunken,
   borderSubtle: tokens.color.border.subtle,
-  /**
-   * حدّ بطاقة الكيان — مشتقّ من الهوية لا لونًا مستقلًا (القرار #175). البطاقة
-   * صارت كريمية على صفحة كريمية، فـ`borderSubtle` (‏1.09:1 مع الصفحة) لا يفصلها.
-   * و`borderSubtle` يبقى بلا مساس لبقية العناصر — الحقول والأزرار والشرائح
-   * وشريط التبويبات، أربعة عشر موضعًا لا يجوز أن تثقُل معها.
-   */
-  borderCard: withAlpha(tokens.color.brand.primary, tokens.color.$derived.cardBorderAlpha),
 } as const;
 
 /**
