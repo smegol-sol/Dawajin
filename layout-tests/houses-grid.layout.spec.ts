@@ -108,11 +108,17 @@ async function reachHousesGrid(page: Page): Promise<void> {
   await page.getByRole("tab", { name: "المزارع" }).click();
 
   // **التنقّل بالبطاقة لا بزرّ داخلها** (القرار رقم 180). وموقع واحد بمزرعة
-  // واحدة قد يُتخطّى تلقائيًا (القرار #132)، فتُضغط البطاقة إن ظهرت أصلًا
+  // واحدة قد يُتخطّى تلقائيًا (القرار #132)، فتُضغط البطاقة إن ظهرت أصلًا.
+  //
+  // **والانتظار يسبق القرار** (القرار رقم 185): يُنتظر ظهور أحد الاثنين —
+  // البطاقة إن كان مستوى المواقع قائمًا، أو الشبكة إن كان قد تُخطّي — فلا
+  // يُبنى قرار التدفّق على فحص لحظي قبل أن تستقرّ الشاشة.
   const siteCard = page.getByTestId("site-card-3");
-  if (await siteCard.isVisible().catch(() => false)) await siteCard.click();
+  const houseTile = page.getByTestId("house-tile-1");
+  await expect(siteCard.or(houseTile)).toBeVisible();
+  if (await siteCard.isVisible()) await siteCard.click();
 
-  await expect(page.getByTestId("house-tile-1")).toBeVisible();
+  await expect(houseTile).toBeVisible();
 }
 
 /** قياس نصّ: الفيض الأفقي والرأسي وعدد الأسطر المرئية. */
