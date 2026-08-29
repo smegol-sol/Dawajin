@@ -30,6 +30,36 @@ export function isAssignmentScoped(role: Role): boolean {
 }
 
 /**
+ * الأدوار ذات الرؤية الكاملة داخل المستأجر (القرار 184، و§7-ب البند 32).
+ *
+ * **المالك وحده اليوم.** ومدير المنصة **ليس منها**: لا يدخل مسارات المستأجرين
+ * أصلًا (القراران #146 و#147)، وإدراجه هنا يعطيه رؤية لم تُقرَّر له.
+ *
+ * **قائمة موجبة لا شرط سالب — بنفس منطق `ASSIGNMENT_SCOPED_ROLES`:** كان
+ * الحارس يقول «من ليس مقيَّدًا بالإسناد فلا شرط عليه»، **و«لا شرط» تعني «كل
+ * شيء»** — فأي دور جديد يُضاف للنظام كان يرث رؤية كل مزارع المستأجر **بالسكوت**.
+ * فقُلب: **من ليس في قائمة معلومة لا يرى شيئًا**، ودورٌ يُنسى فيُحجب أهون من
+ * دورٍ يُنسى فيرى كل شيء (القرار #161).
+ */
+export const FULL_VISIBILITY_ROLES = new Set<Role>(["owner"]);
+
+export function hasFullVisibility(role: Role): boolean {
+  return FULL_VISIBILITY_ROLES.has(role);
+}
+
+/**
+ * طرفا الشرط — **دالّتان لا ثابتان**: كائن `SQL` واحد مُشارَك بين استعلامات
+ * متعددة يخاطر بحالة داخلية مشتركة، والإنشاء عند كل نداء بلا كلفة تُذكر.
+ */
+function allowAll(): SQL {
+  return sql`true`;
+}
+
+function denyAll(): SQL {
+  return sql`false`;
+}
+
+/**
  * شرط `WHERE` يحصر صفوف `houses` بما هو مُسند للمستخدم — **بالمستويين معًا**:
  * العنبر نفسه (المربّي)، أو مزرعته (المشرف والطبيب).
  *
@@ -65,10 +95,16 @@ export interface Viewer {
  * كافيًا ليرى المشرف مزرعة لم تُسند إليه. **القاعدة قرار مالك لا اختصار
  * هندسي.**
  *
- * @returns شرط على `farms` — أو `undefined` لدور غير مقيَّد (يعني: بلا قيد)
+ * **ويُرجع شرطًا دائمًا لا `undefined`** (القرار 184): النوع `SQL | undefined`
+ * هو ما يسمح بالنسيان — كل مستدعٍ جديد قد يهمل الشرط ولا يكشفه المترجم. والشرط
+ * الدائم يجعل الفرض مركزيًّا لا استدعاءً يدويًّا (المبدأ الأول).
+ *
+ * @returns شرط على `farms` — `true` لصاحب الرؤية الكاملة، و`false` لدور مجهول
  */
-export function visibleFarmCondition(viewer: Viewer): SQL | undefined {
-  if (!isAssignmentScoped(viewer.role)) return undefined;
+export function visibleFarmCondition(viewer: Viewer): SQL {
+  if (hasFullVisibility(viewer.role)) return allowAll();
+  // **دور خارج القائمتين لا يرى شيئًا** — لا يُترك بلا شرط
+  if (!isAssignmentScoped(viewer.role)) return denyAll();
 
   if (viewer.role === "farmer") {
     return sql`EXISTS (
@@ -91,12 +127,33 @@ export function visibleFarmCondition(viewer: Viewer): SQL | undefined {
  * - **المالك والمشرف والطبيب:** كل عنابر تلك المزارع — لا شرط إضافي.
  * - **المربّي:** عنابره المُسندة وحدها.
  *
- * @returns شرط على `houses` — أو `undefined` حين لا قيد إضافي
+ * **ودور مجهول يُمنع هنا صراحةً** (القرار 184) ولا يُترك متّكئًا على أن فلتر
+ * المزرعة سيمنعه: **الاتّكال يسقط أول ما يُستدعى الشرط وحده في مسار جديد**.
+ *
+ * @returns شرط على `houses` — `true` حين لا قيد إضافي، و`false` لدور مجهول
  */
-export function visibleHouseCondition(viewer: Viewer): SQL | undefined {
-  if (viewer.role !== "farmer") return undefined;
-  return sql`EXISTS (
-    SELECT 1 FROM ${userAssignments} ua
-    WHERE ua.user_id = ${viewer.id} AND ua.house_id = ${houses.id}
-  )`;
+export function visibleHouseCondition(viewer: Viewer): SQL {
+  if (viewer.role === "farmer") {
+    return sql`EXISTS (
+      SELECT 1 FROM ${userAssignments} ua
+      WHERE ua.user_id = ${viewer.id} AND ua.house_id = ${houses.id}
+    )`;
+  }
+  // المالك: رؤية كاملة · المشرف والطبيب: كل عنابر مزارعهم المُسندة
+  if (hasFullVisibility(viewer.role) || isAssignmentScoped(viewer.role)) return allowAll();
+  return denyAll();
+}
+
+/**
+ * نطاق سرد العنابر داخل مزرعة — **نفس القلب مطبَّقًا على `housesService`**
+ * (القرار 184). كان السطر هناك `isAssignmentScoped(role) ? filter : undefined`،
+ * **وهو نفس النمط حرفيًّا: دور مجهول بلا فلتر** — فنُقل الحكم إلى هنا كي لا
+ * يبقى ثقبٌ ثالث خارج المصدر الواحد.
+ *
+ * @returns شرط على `houses` — يُرجع شرطًا دائمًا لا `undefined`
+ */
+export function visibleHouseScope(viewer: Viewer): SQL {
+  if (hasFullVisibility(viewer.role)) return allowAll();
+  if (isAssignmentScoped(viewer.role)) return assignedHousesFilter(viewer.id);
+  return denyAll();
 }
