@@ -5,12 +5,18 @@ import { HttpError } from "@dawajin/shared";
  * باسم القيد (backend-technical-spec.md §9: "الخادم يحّول 23505 إلى رسالة
  * مفهومة مقيَّدة باسم القيد"). أي دالة كتابة تلتقط أخطاء pg يجب أن تمرّر
  * الخطأ عبر هذه الدالة قبل next(error).
+ *
+ * **و23P01 (exclusion_violation) معه بعد الإسناد بمدة** (القرار #158، والقرار
+ * 190): الفهرسان الفريدان على الإسناد استُبدلا بقيدَي استبعاد تداخل، **فصار
+ * السبب الحقيقي «تتداخل المدّتان» لا «مُسند بالفعل»**، **واسم القيد الذي
+ * تُطابَق عليه الرسالة تغيّر** — فبلا هذا الفرع تسقط المطابقة صامتة ويرى
+ * المستخدم رسالة عامة لا تقول له ما المشكلة.
  */
 export function translatePgError(error: unknown): HttpError | null {
   if (!error || typeof error !== "object") return null;
   const pgError = error as { code?: string; constraint?: string; table?: string };
 
-  if (pgError.code === "23505") {
+  if (pgError.code === "23505" || pgError.code === "23P01") {
     const response = constraintResponse(pgError.constraint);
     return new HttpError(409, response.code, response.message, {
       constraint: pgError.constraint,
@@ -41,10 +47,14 @@ const CONSTRAINT_MESSAGES: Record<string, string> = {
   users_tenant_phone_uq: "رقم الجوال مستخدم بالفعل لمستخدم آخر في هذا الحساب",
   users_platform_phone_unique: "رقم الجوال مستخدم بالفعل",
   daily_logs_batch_date_uq: "يوجد سجل محفوظ لهذا اليوم بالفعل",
-  user_assignments_user_house_uq: "المستخدم مُسند لهذا العنبر بالفعل",
-  // مستوى المزرعة (القرار #128) — للمشرف والطبيب. فهرس جزئي مستقل عن
-  // فهرس العنبر، فرسالته مستقلة: «المزرعة» لا «العنبر».
-  user_assignments_user_farm_uq: "المستخدم مُسند لهذه المزرعة بالفعل",
+  // **قيدا استبعاد التداخل، لا فهرسان فريدان** (القرار #158 حكم ٢، والقرار
+  // 190): الصفّ الثاني لنفس المستخدم على نفس العنبر **مشروع الآن** إن كانت
+  // مدّته لا تتداخل — مربٍّ يعود في مارس بعد غياب يناير. **فالرسالة تقول ما
+  // مُنع فعلًا: التداخل، لا التكرار.**
+  user_assignments_house_period_ex: "للمستخدم إسناد على هذا العنبر في مدة متداخلة",
+  // مستوى المزرعة (القرار #128) — للمشرف والطبيب. قيد مستقل عن قيد العنبر،
+  // فرسالته مستقلة: «المزرعة» لا «العنبر».
+  user_assignments_farm_period_ex: "للمستخدم إسناد على هذه المزرعة في مدة متداخلة",
   houses_farm_name_uq: "يوجد عنبر بهذا الاسم في المزرعة بالفعل",
   products_system_feed_uq: "يوجد صنف علف نظامي لهذه المرحلة بالفعل",
   breed_standards_tenant_breed_day_uq: "يوجد معيار لهذه السلالة واليوم بالفعل",

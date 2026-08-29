@@ -1,7 +1,7 @@
 import { type Database, tenants, userAssignments, users } from "@dawajin/db";
 import { normalizePhoneE164 } from "@dawajin/shared";
 import bcrypt from "bcryptjs";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 import { DEMO_ACCOUNTS, type DemoAccount } from "./fixtures";
 
@@ -160,10 +160,19 @@ export async function assignDemoScope(
   houseIds: readonly number[]
 ): Promise<void> {
   const { db, tenantId, supervisorId, vetId, farmerId } = input;
+  // **البداية `CURRENT_DATE` صراحةً لا افتراضًا** (القرار 190): العمود بلا قيمة
+  // افتراضية عمدًا، **و«اليوم» تاريخ القاعدة لا تاريخ الخادم** — نفس ساعة القيد
+  // الذي يحرس التداخل. والنهاية مفتوحة: إسناد بلا أجل.
   const rows = [
-    ...farmIds.slice(0, 4).map((farmId) => ({ userId: supervisorId, farmId, tenantId })),
-    ...farmIds.slice(4, 7).map((farmId) => ({ userId: vetId, farmId, tenantId })),
-    ...houseIds.slice(0, 2).map((houseId) => ({ userId: farmerId, houseId, tenantId })),
+    ...farmIds
+      .slice(0, 4)
+      .map((farmId) => ({ userId: supervisorId, farmId, tenantId, startDate: sql`CURRENT_DATE` })),
+    ...farmIds
+      .slice(4, 7)
+      .map((farmId) => ({ userId: vetId, farmId, tenantId, startDate: sql`CURRENT_DATE` })),
+    ...houseIds
+      .slice(0, 2)
+      .map((houseId) => ({ userId: farmerId, houseId, tenantId, startDate: sql`CURRENT_DATE` })),
   ];
   await db.insert(userAssignments).values(rows).onConflictDoNothing();
 }

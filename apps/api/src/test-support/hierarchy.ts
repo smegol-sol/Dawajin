@@ -2,6 +2,7 @@ import { randomInt } from "node:crypto";
 
 import { type Database, tenants, users } from "@dawajin/db";
 import { normalizePhoneE164, type UserRole } from "@dawajin/shared";
+import { sql, type SQL } from "drizzle-orm";
 import request from "supertest";
 
 import { signAccessToken } from "../lib/jwt";
@@ -17,6 +18,34 @@ import { signAccessToken } from "../lib/jwt";
  */
 
 type App = Parameters<typeof request>[0];
+
+/**
+ * **بداية إسناد سارية اليوم — بتاريخ القاعدة لا بتاريخ العملية** (القرار 190).
+ *
+ * `start_date` بلا قيمة افتراضية عمدًا، **فكل إدراج إسناد يختار بدايته**؛
+ * وهذه هي البداية الشائعة في التجهيزات: من اليوم وبلا نهاية.
+ *
+ * **ودالّة لا ثابتًا:** كائن `SQL` واحد مُشارَك بين إدراجات متعددة يخاطر بحالة
+ * داخلية مشتركة — نفس علّة `allowAll`/`denyAll` في `entityScope.ts`.
+ */
+export function today(): SQL {
+  return sql`CURRENT_DATE`;
+}
+
+/**
+ * يومٌ مضى بتاريخ القاعدة — لمدد انتهت أو بدأت قبل اليوم.
+ *
+ * **والعدد يُصرَّح نوعه:** `CURRENT_DATE - $1` بمعامل بلا نوع يجعل `date + ?`
+ * غير محسوم (`operator is not unique`)، فتفشل العبارة بلا علاقة بما تختبره.
+ */
+export function daysAgo(days: number): SQL {
+  return sql`CURRENT_DATE - CAST(${days} AS integer)`;
+}
+
+/** يومٌ قادم بتاريخ القاعدة — لإسناد لم يبدأ بعد. */
+export function daysAhead(days: number): SQL {
+  return sql`CURRENT_DATE + CAST(${days} AS integer)`;
+}
 
 export function firstRow<T>(rows: T[]): T {
   const row = rows[0];

@@ -48,6 +48,33 @@ export function hasFullVisibility(role: Role): boolean {
 }
 
 /**
+ * **«سارٍ اليوم» — شرط المدّة مكتوبًا مرة واحدة** (القرار #158 حكم ٣، والقرار 190).
+ *
+ * الإسناد صار بمدة، **فسؤال كل استعلام تغيّر من «هل يوجد صفّ؟» إلى «هل يوجد
+ * صفّ سارٍ اليوم؟»**. وصفٌّ منتهٍ يقرؤه الفرض ساريًا **ثغرةُ صلاحيات لا خلل
+ * عرض**: الإسناد يقيّد القراءة كما يقيّد الكتابة (#126).
+ *
+ * **ويُكتب هنا مرة واحدة ويُستعمل في الخمسة** — المبدأ الأول: الفرض في طبقة
+ * واحدة لا باستدعاء يدوي متكرر. **وشرطٌ منسوخ خمس مرات يُنسى في السادس.**
+ *
+ * **و«اليوم» تاريخ القاعدة (`CURRENT_DATE`) لا تاريخ الخادم:** خادم بمنطقة
+ * زمنية مختلفة يُنهي إسنادًا قبل أوانه أو يمدّه، **والقيد الذي يحرس التداخل في
+ * القاعدة يقيس بساعتها** — فيقيس السؤال بها كذلك.
+ *
+ * **و`end_date` آخر يوم مسؤولية شاملًا** لا أول يوم بعدها، فالمقارنة `>=`.
+ *
+ * **ويُصدَّر لأن خامسها في `middleware/entityAccess.ts`** — مصدرٌ واحد يقرؤه
+ * الفرض المركزي وطبقة الخدمة معًا، كما `ASSIGNMENT_SCOPED_ROLES` أعلاه.
+ *
+ * @param alias اسم الجدول داخل الاستعلام — الشرط يُركَّب داخل `EXISTS` باسم
+ *   مستعار (`ua`)، ويُستعمل في بانية drizzle باسم الجدول نفسه وهو الافتراضي.
+ */
+export function assignmentActiveToday(alias = "user_assignments"): SQL {
+  return sql`${sql.raw(alias)}.start_date <= CURRENT_DATE
+      AND (${sql.raw(alias)}.end_date IS NULL OR ${sql.raw(alias)}.end_date >= CURRENT_DATE)`;
+}
+
+/**
  * طرفا الشرط — **دالّتان لا ثابتان**: كائن `SQL` واحد مُشارَك بين استعلامات
  * متعددة يخاطر بحالة داخلية مشتركة، والإنشاء عند كل نداء بلا كلفة تُذكر.
  */
@@ -75,6 +102,7 @@ export function assignedHousesFilter(userId: number): SQL {
     SELECT 1 FROM ${userAssignments} ua
     WHERE ua.user_id = ${userId}
       AND (ua.house_id = ${houses.id} OR ua.farm_id = ${houses.farmId})
+      AND ${assignmentActiveToday("ua")}
   )`;
 }
 
@@ -111,12 +139,14 @@ export function visibleFarmCondition(viewer: Viewer): SQL {
       SELECT 1 FROM ${userAssignments} ua
       JOIN ${houses} assigned_house ON assigned_house.id = ua.house_id
       WHERE ua.user_id = ${viewer.id} AND assigned_house.farm_id = ${farms.id}
+        AND ${assignmentActiveToday("ua")}
     )`;
   }
 
   return sql`EXISTS (
     SELECT 1 FROM ${userAssignments} ua
     WHERE ua.user_id = ${viewer.id} AND ua.farm_id = ${farms.id}
+      AND ${assignmentActiveToday("ua")}
   )`;
 }
 
@@ -137,6 +167,7 @@ export function visibleHouseCondition(viewer: Viewer): SQL {
     return sql`EXISTS (
       SELECT 1 FROM ${userAssignments} ua
       WHERE ua.user_id = ${viewer.id} AND ua.house_id = ${houses.id}
+        AND ${assignmentActiveToday("ua")}
     )`;
   }
   // المالك: رؤية كاملة · المشرف والطبيب: كل عنابر مزارعهم المُسندة

@@ -3,7 +3,11 @@ import { HttpError } from "@dawajin/shared";
 import { and, eq, or } from "drizzle-orm";
 import type { NextFunction, Request, Response } from "express";
 
-import { isAssignmentScoped, visibleFarmCondition } from "../lib/entityScope";
+import {
+  assignmentActiveToday,
+  isAssignmentScoped,
+  visibleFarmCondition,
+} from "../lib/entityScope";
 
 /** يلتقط أول قيمة أولية (نص/رقم) معرَّفة — يتجاهل الكائنات المتداخلة عمدًا (لا String([object]))، لا يُخمِّن شكلها. */
 function firstDefinedPrimitive(...values: unknown[]): string | undefined {
@@ -52,6 +56,10 @@ async function resolveHouseId(db: Database, req: Request): Promise<number | unde
  * **والإسناد يُقرأ على مستويين (القرار #128):** صفٌّ بالعنبر نفسه (المربّي)،
  * أو صفٌّ بمزرعة العنبر (المشرف والطبيب). استعلام واحد لا استعلامان — القراءة
  * تجلب `farm_id` أصلًا للتحقق من الوجود، فالمستويان يُفحصان معًا.
+ *
+ * **والصفّ يجب أن يكون ساريًا اليوم لا موجودًا فحسب** (القرار #158، والقرار
+ * 190): مربٍّ انتهت مدته **يبقى يرى عنبره ويكتب فيه** لولا الشرط — **وهي ثغرة
+ * صلاحيات لا خلل عرض**.
  */
 async function assertHouseAssignment(
   db: Database,
@@ -75,7 +83,10 @@ async function assertHouseAssignment(
     .where(
       and(
         eq(userAssignments.userId, user.id),
-        or(eq(userAssignments.houseId, houseId), eq(userAssignments.farmId, house.farmId))
+        or(eq(userAssignments.houseId, houseId), eq(userAssignments.farmId, house.farmId)),
+        // **سارٍ اليوم لا موجود فحسب** (القرار #158 حكم ٣، والقرار 190) —
+        // والشرط من `entityScope` لا منسوخًا هنا: مصدر واحد للخمسة.
+        assignmentActiveToday()
       )
     )
     .limit(1);
