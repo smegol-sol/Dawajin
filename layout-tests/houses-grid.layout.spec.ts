@@ -162,7 +162,7 @@ async function reachSitesLevel(page: Page): Promise<void> {
 }
 
 test.describe("شبكة العنابر — §5-د/2", () => {
-  test("ثلاثة أعمدة على عرض 390", async ({ page }) => {
+  test("ثلاثة أعمدة في شبكة العنابر", async ({ page }) => {
     await reachHousesGrid(page);
 
     const boxes = await Promise.all(HOUSES.map((h) => tileBox(page, h.id)));
@@ -218,7 +218,7 @@ test.describe("شبكة العنابر — اللمس والارتفاع", () =>
    * بيانات العرض›». وهو الزرّ الذي رُصد فيه نقصٌ على الجهاز (§7-ب البند 35)،
    * فيُقاس هنا بالهندسة لا بوجود النصّ.
    */
-  test("نصّ زرّ الإضافة يظهر كاملًا بلا اقتطاع على 390", async ({ page }) => {
+  test("نصّ زرّ الإضافة يظهر كاملًا بلا اقتطاع", async ({ page }) => {
     await reachHousesGrid(page);
 
     const add = page.getByTestId("level-add");
