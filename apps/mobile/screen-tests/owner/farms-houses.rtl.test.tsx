@@ -94,10 +94,12 @@ afterEach(() => {
  * يضغط أول مطابقة لنصّ — الشاشة تعرض عدة بطاقات بنفس نصّ الزر، و`getByText`
  * تفشل عندها. الرمي الصريح أوضح من `!` لأنه يسمّي النص المفقود في الرسالة.
  */
-function pressFirst(text: string): void {
-  const [first] = screen.getAllByText(text);
-  if (first === undefined) throw new Error(`لا عنصر بالنص: ${text}`);
-  fireEvent.press(first);
+/**
+ * **التنقّل بالبطاقة لا بزرّ داخلها** (القرار رقم 180) — فالدخول إلى موقع
+ * صار ضغطًا على بطاقته، ولم يعد زرّ «عرض المزارع» موجودًا.
+ */
+function pressSiteCard(siteId: number): void {
+  fireEvent.press(screen.getByTestId(`site-card-${String(siteId)}`));
 }
 
 type BackHandlerCallback = () => boolean;
@@ -211,10 +213,10 @@ describe("الرجوع لا يهبط في مستوى متخطّى", () => {
     renderScreen();
 
     await waitFor(() => {
-      expect(screen.getAllByText("عرض المزارع")).toHaveLength(2);
+      expect(screen.getByTestId("site-card-1")).toBeTruthy();
     });
     // اختيار موقع بيده — فالمواقع **ليست** متخطّاة
-    pressFirst("عرض المزارع");
+    pressSiteCard(1);
 
     // المزرعة واحدة ← تُخطّى المزارع تلقائيًا ونصل العنابر
     await waitFor(() => {
@@ -267,9 +269,9 @@ describe("القدرات لا الأدوار، والحالات لا الانه�
     renderScreen();
 
     await waitFor(() => {
-      expect(screen.getAllByText("عرض المزارع")).toHaveLength(2);
+      expect(screen.getByTestId("site-card-1")).toBeTruthy();
     });
-    pressFirst("عرض المزارع");
+    pressSiteCard(1);
 
     await waitFor(() => {
       expect(screen.getByText("لم يعد هذا ضمن ما أُسند إليك — عد للقائمة السابقة")).toBeTruthy();

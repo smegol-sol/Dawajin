@@ -1,6 +1,6 @@
 import { MoreVertical } from "lucide-react-native";
 import type { ReactNode } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View, type GestureResponderEvent } from "react-native";
 
 import type { BadgeTone } from "@/components/ui/Badge";
 import { color, component, font, radius, spacing } from "@/constants/theme";
@@ -12,15 +12,14 @@ const EDGE_TONE_COLOR: Record<BadgeTone, string> = {
   info: color.statusInfo,
 };
 
-interface CardProps {
+interface CardBaseProps {
   title: string;
   subtitle?: string;
   /** شارة الحالة (docs/app-complete-spec.md §8.1) — يمينًا مع العنوان. */
   badge?: ReactNode;
   /** صف المؤشرات — عادة StatTile متعددة. */
   children?: ReactNode;
-  primaryActionLabel?: string;
-  onPrimaryAction?: () => void;
+  /** ⋮ في صفّ العنوان — وضغطه **لا يُطلق تنقّل البطاقة** (القرار رقم 180). */
   onMorePress?: () => void;
   /** بطاقة الهوية الداكنة لرأس شاشة تفاصيل الدفعة (§8.3). */
   variant?: "default" | "identity";
@@ -36,6 +35,22 @@ interface CardProps {
   testID?: string;
 }
 
+/**
+ * **«بطاقة واحدة = إجراء أساسي واحد» — غير قابلة للتمثيل لا وصيةً في تعليق**
+ * (القرار رقم 180). اتحاد مميَّز يرفضه المترجم إن مُرِّر الإجراءان معًا:
+ *
+ * - `onPress`: **البطاقة كلها هي الإجراء** — التنقّل بالضغط عليها.
+ * - `primaryActionLabel` + `onPrimaryAction`: زرّ إجراء داخل التذييل.
+ *
+ * وكان الشرط تعليقًا يُقرأ ولا يُفرض، **فصار نوعًا يفشل عند الترجمة**.
+ */
+type CardActionProps =
+  | { onPress?: undefined; primaryActionLabel?: undefined; onPrimaryAction?: undefined }
+  | { onPress: () => void; primaryActionLabel?: undefined; onPrimaryAction?: undefined }
+  | { onPress?: undefined; primaryActionLabel: string; onPrimaryAction: () => void };
+
+type CardProps = CardBaseProps & CardActionProps;
+
 /** Card — بطاقة كيان (docs/app-complete-spec.md §8.3). بطاقة واحدة = كيان واحد = إجراء أساسي واحد. */
 export function Card({
   title,
@@ -44,16 +59,22 @@ export function Card({
   children,
   primaryActionLabel,
   onPrimaryAction,
+  onPress,
   onMorePress,
   variant = "default",
   edgeTone,
   testID,
 }: CardProps) {
   const isIdentity = variant === "identity";
-  const hasFooter = primaryActionLabel !== undefined || onMorePress !== undefined;
+  // ⋮ انتقل إلى صفّ العنوان، فالتذييل لم يعد يحمل إلا الإجراء الأساسي
+  const hasFooter = primaryActionLabel !== undefined;
+  const Container = onPress === undefined ? View : Pressable;
 
   return (
-    <View
+    <Container
+      {...(onPress === undefined
+        ? {}
+        : { onPress, accessibilityRole: "button" as const, accessibilityLabel: title })}
       testID={testID}
       style={[
         styles.container,
@@ -69,10 +90,13 @@ export function Card({
           : null,
       ]}
     >
-      <View style={styles.headerRow}>
-        <Text style={[styles.title, isIdentity && styles.titleOnDark]}>{title}</Text>
-        {badge}
-      </View>
+      <CardHeader
+        title={title}
+        badge={badge}
+        isIdentity={isIdentity}
+        onMorePress={onMorePress}
+        testID={testID}
+      />
       {subtitle ? (
         <Text style={[styles.subtitle, isIdentity && styles.subtitleOnDark]}>{subtitle}</Text>
       ) : null}
@@ -85,17 +109,76 @@ export function Card({
       ) : null}
 
       {hasFooter ? (
-        <>
-          <Divider dark={isIdentity} />
-          <CardFooter
-            dark={isIdentity}
-            primaryActionLabel={primaryActionLabel}
-            onPrimaryAction={onPrimaryAction}
-            onMorePress={onMorePress}
-          />
-        </>
+        <FooterBlock
+          dark={isIdentity}
+          primaryActionLabel={primaryActionLabel}
+          onPrimaryAction={onPrimaryAction}
+        />
       ) : null}
+    </Container>
+  );
+}
+
+/** صفّ العنوان: الاسم، ثم الشارة و⋮ — مفصول كي يبقى `Card` مقروءًا. */
+function CardHeader({
+  title,
+  badge,
+  isIdentity,
+  onMorePress,
+  testID,
+}: {
+  title: string;
+  badge?: ReactNode;
+  isIdentity: boolean;
+  onMorePress?: (() => void) | undefined;
+  testID?: string | undefined;
+}) {
+  return (
+      <View style={styles.headerRow}>
+      <Text style={[styles.title, isIdentity && styles.titleOnDark]}>{title}</Text>
+      <View style={styles.headerEnd}>
+        {badge}
+        {onMorePress ? (
+          <Pressable
+            onPress={(event?: GestureResponderEvent) => {
+              // **الضغط على ⋮ لا يُطلق تنقّل البطاقة** — الإيقاف صريح لا
+              // اتّكالًا على أن RN يمنح الاستجابة للأعمق (القرار رقم 180).
+              // والحدث قد يغيب (بيئة اختبار أو حدث مُصنَّع) فلا يُفترض وجوده.
+              event?.stopPropagation();
+              onMorePress();
+            }}
+            accessibilityRole="button"
+            accessibilityLabel={`خيارات ${title}`}
+            testID={testID === undefined ? undefined : `${testID}-more`}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          >
+            <MoreVertical color={isIdentity ? color.textOnDark : color.textBody} size={20} />
+          </Pressable>
+        ) : null}
+      </View>
     </View>
+  );
+}
+
+/** الفاصل والتذييل معًا — كتلة واحدة تُبقي `Card` دون حدّ الأسطر. */
+function FooterBlock({
+  dark,
+  primaryActionLabel,
+  onPrimaryAction,
+}: {
+  dark: boolean;
+  primaryActionLabel?: string | undefined;
+  onPrimaryAction?: (() => void) | undefined;
+}) {
+  return (
+    <>
+      <Divider dark={dark} />
+      <CardFooter
+        dark={dark}
+        primaryActionLabel={primaryActionLabel}
+        onPrimaryAction={onPrimaryAction}
+      />
+    </>
   );
 }
 
@@ -107,12 +190,10 @@ function CardFooter({
   dark,
   primaryActionLabel,
   onPrimaryAction,
-  onMorePress,
 }: {
   dark: boolean;
   primaryActionLabel?: string | undefined;
   onPrimaryAction?: (() => void) | undefined;
-  onMorePress?: (() => void) | undefined;
 }) {
   return (
     <View style={styles.footerRow}>
@@ -129,11 +210,6 @@ function CardFooter({
       ) : (
         <View />
       )}
-      {onMorePress ? (
-        <Pressable onPress={onMorePress} accessibilityRole="button" hitSlop={8}>
-          <MoreVertical color={dark ? color.textOnDark : color.textBody} size={20} />
-        </Pressable>
-      ) : null}
     </View>
   );
 }
@@ -155,8 +231,26 @@ const styles = StyleSheet.create({
   },
   headerRow: {
     flexDirection: "row",
+    /**
+     * **`center` لا `baseline`** (القرار رقم 180). النموذج يضع في هذا الصفّ
+     * **نصّين** فيصحّ فيه `baseline`؛ ونحن نضع **نصًّا وأيقونة**، و`<View>`
+     * لا يملك خطّ قاعدة نصّي — فتأخذ Yoga حافته السفلى قاعدةً له، **فيهبط
+     * الصندوق كله** حتى تلامس حافته السفلى قاعدة العنوان.
+     *
+     * وأثره على الجهاز: ⋮ أسفل الاسم بنحو 26px ملتصقًا بالفاصل، **وسطر كامل
+     * يشغله وحده** فتطول البطاقة بلا معلومة.
+     *
+     * **ولم يكشفه مخرَج الويب**: `react-native-web` يحسب خطّ القاعدة بقواعد
+     * CSS لا بـYoga، فيُحاذي المركز صدفةً — ولهذا مرّ العطب من البوابات.
+     */
     alignItems: "center",
     justifyContent: "space-between",
+    gap: spacing.xs,
+  },
+  headerEnd: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
   },
   title: {
     fontSize: font.size.subtitle,

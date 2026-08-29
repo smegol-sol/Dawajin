@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { StyleSheet, View } from "react-native";
 
-import { Button } from "@/components/ui/Button";
+import { AddButton } from "@/components/ui/AddButton";
 import { ListState } from "@/components/ui/ListState";
 import { spacing } from "@/constants/theme";
 
@@ -65,7 +65,7 @@ export function LevelList<T>({
   return (
     <View style={styles.list}>
       {createLabel !== undefined && onCreate !== undefined ? (
-        <Button label={createLabel} variant="secondary" onPress={onCreate} />
+        <AddButton label={createLabel} onPress={onCreate} testID="level-add" />
       ) : null}
       <LevelRows rows={rows} layout={layout} renderItem={renderItem} keyOf={keyOf} />
     </View>
