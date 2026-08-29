@@ -3,7 +3,7 @@ import { HttpError, type HouseStatus, type HouseType } from "@dawajin/shared";
 import { and, asc, eq, sql } from "drizzle-orm";
 
 import { writeAuditLog } from "../lib/auditLog";
-import { assignedHousesFilter, isAssignmentScoped, type Role } from "../lib/entityScope";
+import { visibleHouseScope, type Role } from "../lib/entityScope";
 
 /**
  * طبقة services للعنابر — الوحدة الأساسية وأدنى مستويات الهرم
@@ -78,7 +78,8 @@ export async function listHousesInFarm(
   viewer: ListViewer
 ): Promise<House[]> {
   await assertFarmInTenant(db, tenantId, farmId);
-  const scope = isAssignmentScoped(viewer.role) ? assignedHousesFilter(viewer.id) : undefined;
+  // **شرط دائم لا `undefined`**: دور خارج القائمتين لا يرى شيئًا (القرار 184)
+  const scope = visibleHouseScope(viewer);
   return db
     .select(HOUSE_COLUMNS)
     .from(houses)
