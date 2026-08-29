@@ -94,9 +94,11 @@ export function createApp(db: Database, env: Env, logger: Logger): Express {
   const ENTITY_ID_PATH_PATTERNS = [
     "/api/houses/:houseId",
     "/api/batches/:batchId",
-    // السرد يأخذ معرّف المزرعة لا العنبر — وبلا نمط له كان يمرّ بلا فحص
-    // إسناد إطلاقًا (§7-ب البند 20، مُغلَق بالقرار #129).
-    "/api/farms/:farmId/houses",
+    // نمط واحد يغطي `/api/farms/:farmId` و`/api/farms/:farmId/houses` معًا —
+    // `api.use(pattern)` يطابق البادئة لا المسار الكامل، **كما في نمط الموقع
+    // أدناه** (القرار #131). وكان النمط هنا **للسرد وحده**، فمرّت قراءة
+    // المزرعة نفسها بلا فحص إسناد إطلاقًا (§7-ب البند 43، والقرار 191).
+    "/api/farms/:farmId",
     // نمط واحد يغطي `/api/sites/:siteId` و`/api/sites/:siteId/farms` معًا —
     // `api.use(pattern)` يطابق البادئة لا المسار الكامل (القرار #131).
     "/api/sites/:siteId",

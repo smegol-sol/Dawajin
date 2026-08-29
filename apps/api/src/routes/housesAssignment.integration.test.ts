@@ -8,7 +8,15 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../app";
 import { loadEnv } from "../lib/env";
 import { assertIsTestDatabase } from "../lib/testGuard";
-import { farmVia, houseVia, seedTenant, seedUser, siteVia, today } from "../test-support/hierarchy";
+import {
+  daysAgo,
+  farmVia,
+  houseVia,
+  seedTenant,
+  seedUser,
+  siteVia,
+  today,
+} from "../test-support/hierarchy";
 
 /**
  * **الإسناد داخل المستأجر الواحد** — ملف مستقل عن `houses.integration.test.ts`
@@ -321,5 +329,102 @@ describe(`GET العنابر — مداخل أخرى (${S})`, () => {
       .get("/api/houses/abc")
       .set("Authorization", `Bearer ${ownerToken}`);
     expect(res.status).toBe(400);
+  });
+});
+
+/**
+ * **قراءة المزرعة نفسها — `GET /api/farms/:farmId`** (§7-ب البند 43، والقرار
+ * 191).
+ *
+ * كان المسار **خارج `ENTITY_ID_PATH_PATTERNS`**، و`getFarm` لا يأخذ `viewer`
+ * — **فأيّ مستخدم في المستأجر يقرأ أيّ مزرعة فيه بمعرّفها**. الحالتان الأوليان
+ * أدناه **هما المخالفتان اللتان مرّتا بـ200 في دفعة القرار 190 فكشفتا الثقب**،
+ * أُعيدتا هنا حارسًا دائمًا: **تسقطان على الكود قبل الإصلاح وتخضرّان بعده**.
+ */
+describe(`GET /farms/:farmId — الفرض بالإسناد (${S})`, () => {
+  it("مربٍّ انتهت مدته أمس ← 403", async () => {
+    const farm = await farmVia(app, ownerToken, listSiteId, `مزرعة المربّي المنتهي ${S}`);
+    const house = await houseVia(app, ownerToken, farm, `عنبر المربّي المنتهي ${S}`);
+    const { id, token } = await seedUser(db, {
+      tenantId: tenantAId,
+      role: "farmer",
+      secret: loadEnv().JWT_SECRET,
+    });
+    await db.insert(userAssignments).values({
+      tenantId: tenantAId,
+      userId: id,
+      houseId: house,
+      startDate: daysAgo(30),
+      endDate: daysAgo(1),
+    });
+
+    const res = await request(app)
+      .get(`/api/farms/${String(farm)}`)
+      .set("Authorization", `Bearer ${token}`);
+    expect(res.status).toBe(403);
+    expect((res.body as { code?: string }).code).toBe("forbidden");
+  });
+
+  it("مشرف انتهت مدته أمس ← 403", async () => {
+    const farm = await farmVia(app, ownerToken, listSiteId, `مزرعة المشرف المنتهي ${S}`);
+    const { id, token } = await seedUser(db, {
+      tenantId: tenantAId,
+      role: "supervisor",
+      secret: loadEnv().JWT_SECRET,
+    });
+    await db.insert(userAssignments).values({
+      tenantId: tenantAId,
+      userId: id,
+      farmId: farm,
+      startDate: daysAgo(30),
+      endDate: daysAgo(1),
+    });
+
+    const res = await request(app)
+      .get(`/api/farms/${String(farm)}`)
+      .set("Authorization", `Bearer ${token}`);
+    expect(res.status).toBe(403);
+  });
+
+  it("مربّي بلا أي إسناد يبلغ المزرعة ← 403 (موجودة غير مُسندة)", async () => {
+    const farm = await farmVia(app, ownerToken, listSiteId, `مزرعة بلا إسناد للقراءة ${S}`);
+    const res = await request(app)
+      .get(`/api/farms/${String(farm)}`)
+      .set("Authorization", `Bearer ${farmerToken}`);
+    expect(res.status).toBe(403);
+  });
+});
+
+describe(`GET /farms/:farmId — ما يجب أن يمرّ (${S})`, () => {
+  it("المالك يفتح أي مزرعة في مستأجره ← 200", async () => {
+    const farm = await farmVia(app, ownerToken, listSiteId, `مزرعة المالك ${S}`);
+    const res = await request(app)
+      .get(`/api/farms/${String(farm)}`)
+      .set("Authorization", `Bearer ${ownerToken}`);
+    expect(res.status).toBe(200);
+  });
+
+  it("المشرف يفتح مزرعته المُسندة ← 200", async () => {
+    const farm = await farmVia(app, ownerToken, listSiteId, `مزرعة المشرف السارية ${S}`);
+    const { id, token } = await seedUser(db, {
+      tenantId: tenantAId,
+      role: "supervisor",
+      secret: loadEnv().JWT_SECRET,
+    });
+    await db
+      .insert(userAssignments)
+      .values({ tenantId: tenantAId, userId: id, farmId: farm, startDate: today() });
+
+    const res = await request(app)
+      .get(`/api/farms/${String(farm)}`)
+      .set("Authorization", `Bearer ${token}`);
+    expect(res.status).toBe(200);
+  });
+
+  it("مزرعة مستأجر آخر ← 404 لا 403 (لا نقرّ بوجودها)", async () => {
+    const res = await request(app)
+      .get(`/api/farms/${String(farmInTenantBId)}`)
+      .set("Authorization", `Bearer ${farmerToken}`);
+    expect(res.status).toBe(404);
   });
 });
