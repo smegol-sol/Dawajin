@@ -36,6 +36,7 @@ import { requireAuth } from "../middleware/auth";
 import { enforceEntityAccess } from "../middleware/entityAccess";
 import { errorHandler } from "../middleware/errorHandler";
 import { requireTenant } from "../middleware/tenant";
+import { today } from "../test-support/hierarchy";
 
 type Pool = ReturnType<typeof createDbClient>["pool"];
 
@@ -202,6 +203,7 @@ async function seedBatches(): Promise<void> {
     userId: farmerInTenantAId,
     houseId: assignedHouseInTenantAId,
     tenantId: tenantAId,
+    startDate: today(),
   });
   const assigned = firstRow(
     await db
@@ -373,6 +375,7 @@ describe("٢) العزل: الوجود قبل التعيين — 404 لا 403 ع
       userId: farmerInTenantAId,
       houseId: houseAId,
       tenantId: tenantAId,
+      startDate: today(),
     });
 
     const res = await request(app)

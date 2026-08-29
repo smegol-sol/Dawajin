@@ -8,7 +8,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../app";
 import { loadEnv } from "../lib/env";
 import { assertIsTestDatabase } from "../lib/testGuard";
-import { farmVia, houseVia, seedTenant, seedUser, siteVia } from "../test-support/hierarchy";
+import { farmVia, houseVia, seedTenant, seedUser, siteVia, today } from "../test-support/hierarchy";
 
 /**
  * **الإسناد داخل المستأجر الواحد** — ملف مستقل عن `houses.integration.test.ts`
@@ -124,7 +124,9 @@ describe(`GET العنابر — الإسناد بالعنبر: المربّي (
 
   it("المربّي يقرأ عنبرًا **مُسندًا** له ← 200", async () => {
     const id = await houseVia(app, ownerToken, farmAId, `مُسند ${S}`);
-    await db.insert(userAssignments).values({ tenantId: tenantAId, userId: farmerId, houseId: id });
+    await db
+      .insert(userAssignments)
+      .values({ tenantId: tenantAId, userId: farmerId, houseId: id, startDate: today() });
 
     const res = await request(app)
       .get(`/api/houses/${String(id)}`)
@@ -156,7 +158,7 @@ describe(`GET العنابر — الإسناد بالمزرعة: المشرف �
     const second = await houseVia(app, ownerToken, farmAId, `مزرعة مشرف ب ${S}`);
     await db
       .insert(userAssignments)
-      .values({ tenantId: tenantAId, userId: supervisorId, farmId: farmAId });
+      .values({ tenantId: tenantAId, userId: supervisorId, farmId: farmAId, startDate: today() });
 
     for (const id of [first, second]) {
       const res = await request(app)
@@ -187,7 +189,7 @@ describe(`GET العنابر — الإسناد بالمزرعة: المشرف �
     const id = await houseVia(app, ownerToken, farmA2Id, `مزرعة الطبيب ${S}`);
     await db
       .insert(userAssignments)
-      .values({ tenantId: tenantAId, userId: vetId, farmId: farmA2Id });
+      .values({ tenantId: tenantAId, userId: vetId, farmId: farmA2Id, startDate: today() });
 
     const res = await request(app)
       .get(`/api/houses/${String(id)}`)
@@ -232,7 +234,7 @@ describe(`GET /farms/:farmId/houses — فلترة السرد بالإسناد (
     for (const house of assigned) {
       await db
         .insert(userAssignments)
-        .values({ tenantId: tenantAId, userId: farmerId, houseId: house.id });
+        .values({ tenantId: tenantAId, userId: farmerId, houseId: house.id, startDate: today() });
     }
 
     const res = await request(app)
@@ -265,9 +267,12 @@ describe(`GET /farms/:farmId/houses — فلترة السرد بالإسناد (
   });
 
   it("المشرف المُسند بالمزرعة يرى الخمسة، والطبيب غير المُسند ← 403", async () => {
-    await db
-      .insert(userAssignments)
-      .values({ tenantId: tenantAId, userId: supervisorId, farmId: listFarmId });
+    await db.insert(userAssignments).values({
+      tenantId: tenantAId,
+      userId: supervisorId,
+      farmId: listFarmId,
+      startDate: today(),
+    });
 
     const seen = await request(app)
       .get(`/api/farms/${String(listFarmId)}/houses`)

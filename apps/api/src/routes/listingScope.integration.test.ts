@@ -9,7 +9,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../app";
 import { loadEnv } from "../lib/env";
 import { assertIsTestDatabase } from "../lib/testGuard";
-import { farmVia, houseVia, seedTenant, seedUser, siteVia } from "../test-support/hierarchy";
+import { farmVia, houseVia, seedTenant, seedUser, siteVia, today } from "../test-support/hierarchy";
 
 /**
  * **فلترة سرد المواقع والمزارع بالإسناد (القرار #131).**
@@ -126,9 +126,15 @@ beforeAll(async () => {
   await setStatus(house2, "مشغول");
   await setStatus(house3, "تحت الصيانة");
 
-  await db.insert(userAssignments).values({ tenantId, userId: farmer.id, houseId: house1 });
-  await db.insert(userAssignments).values({ tenantId, userId: supervisor.id, farmId: farmA1Id });
-  await db.insert(userAssignments).values({ tenantId, userId: vet.id, farmId: farmB1Id });
+  await db
+    .insert(userAssignments)
+    .values({ tenantId, userId: farmer.id, houseId: house1, startDate: today() });
+  await db
+    .insert(userAssignments)
+    .values({ tenantId, userId: supervisor.id, farmId: farmA1Id, startDate: today() });
+  await db
+    .insert(userAssignments)
+    .values({ tenantId, userId: vet.id, farmId: farmB1Id, startDate: today() });
 
   // مستأجر ثانٍ — لإثبات أن العزل يسبق الإسناد: 404 لا 403
   const tenantBId = await seedTenant(db, `نطاق السرد ب ${S}`);

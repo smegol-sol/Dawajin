@@ -182,6 +182,16 @@ export const userAssignments = pgTable(
     tenantId: integer("tenant_id")
       .notNull()
       .references(() => tenants.id),
+    /**
+     * **مدّة الإسناد — بداية مطلوبة ونهاية تقبل الفراغ** (القرار #158، والقرار 190).
+     *
+     * `end_date` **فارغة تعني سريانًا بلا أجل**، وحين تُضبط **فهي آخر يوم مسؤولية
+     * شاملًا** لا أول يوم بعدها — فإسناد انتهى أمس يحمل `end_date = أمس`.
+     *
+     * **ولا بداية افتراضية:** الصفّ يحمل ما اختاره من أنشأه، لا ما سكت عنه.
+     */
+    startDate: date("start_date").notNull(),
+    endDate: date("end_date"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
@@ -205,13 +215,21 @@ export const userAssignments = pgTable(
       "user_assignments_one_level_ck",
       sql`(${table.houseId} IS NULL) <> (${table.farmId} IS NULL)`
     ),
-    // التكرار ← 409 (backend-technical-spec.md §7.1). جزئيان لأن NULL في
-    // فهرس فريد عادي «مميّزة دائمًا» فلا تمنع تكرار الصفوف الأخرى.
-    uniqueIndex("user_assignments_user_house_uq")
-      .on(table.userId, table.houseId)
-      .where(sql`${table.houseId} IS NOT NULL`),
-    uniqueIndex("user_assignments_user_farm_uq")
-      .on(table.userId, table.farmId)
-      .where(sql`${table.farmId} IS NOT NULL`),
+    // **الفهرسان الفريدان الجزئيان أُزيلا واستُبدلا بقيدَي استبعاد تداخل**
+    // (القرار #158 حكم ٢، والقرار 190). سؤالهما تغيّر من «هل تكرّر الإسناد؟»
+    // إلى «هل تتداخل مدّتان؟» — و**التداخل ليس تساويًا فلا تمنعه أداة التساوي**.
+    //
+    // **والقيدان مكتوبان SQL خامًا في الترحيل `0009` لا هنا**: `drizzle-orm`
+    // لا يعبّر عن `EXCLUDE USING gist` في المخطط. **فمن يقرأ هذا الملف وحده
+    // يظنّ الجدول بلا حارس تفرّد، وليس كذلك:**
+    //
+    //   user_assignments_house_period_ex  — EXCLUDE USING gist
+    //     (user_id WITH =, house_id WITH =, daterange(start_date, end_date, '[]') WITH &&)
+    //     WHERE (house_id IS NOT NULL)
+    //   user_assignments_farm_period_ex   — نظيره على farm_id
+    //
+    // **وجزئيان مرتين لا قيد واحد بالعمودين**: `NULL` في قيد الاستبعاد لا
+    // تساوي `NULL`، فقيدٌ واحد يجمع `house_id` و`farm_id` **لا يمنع شيئًا** —
+    // نفس علّة الفهرسين الجزئيين اللذين حلّ محلّهما.
   ]
 );

@@ -64,6 +64,13 @@
       "when": 1787644348161,
       "tag": "0008_farm_level_user_assignments",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1788044907599,
+      "tag": "0009_assignment_periods",
+      "breakpoints": true
     }
   ]
 }
