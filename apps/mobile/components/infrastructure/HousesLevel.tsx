@@ -19,10 +19,13 @@ import { useEntitySheet } from "@/lib/useEntitySheet";
 export function HousesLevel({
   token,
   farmId,
+  farmName,
   capabilities,
 }: {
   token: string;
   farmId: number;
+  /** يُسمّى في زرّ الإضافة — «إضافة عنبر إلى ‹اسم المزرعة›» لا «إضافة» وحدها. */
+  farmName: string;
   capabilities: InfrastructureCapabilities;
 }) {
   const client = useQueryClient();
@@ -46,7 +49,7 @@ export function HousesLevel({
         onRetry={() => void query.refetch()}
         emptyMessage="لا عنابر مُسندة إليك في هذه المزرعة"
         {...(capabilities.canCreate
-          ? { createLabel: "إضافة عنبر", onCreate: form.openCreate }
+          ? { createLabel: `إضافة عنبر إلى ${farmName}`, onCreate: form.openCreate }
           : {})}
         keyOf={(house) => house.id}
         layout="grid"

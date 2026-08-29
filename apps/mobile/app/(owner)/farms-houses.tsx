@@ -140,7 +140,14 @@ function LevelSwitch({
     );
   }
 
-  return <HousesLevel token={token} farmId={level.farmId} capabilities={capabilities} />;
+  return (
+    <HousesLevel
+      token={token}
+      farmId={level.farmId}
+      farmName={level.farmName}
+      capabilities={capabilities}
+    />
+  );
 }
 
 function headerTitle(level: Level): string {

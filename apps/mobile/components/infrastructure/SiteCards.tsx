@@ -31,8 +31,7 @@ export function SiteRow({
   return (
     <Card
       title={site.name}
-      primaryActionLabel="عرض المزارع"
-      onPrimaryAction={onOpen}
+      onPress={onOpen}
       testID={`site-card-${String(site.id)}`}
       {...(onEdit ? { onMorePress: onEdit } : {})}
     >
@@ -56,8 +55,7 @@ export function FarmRow({
     <Card
       title={farm.name}
       subtitle={farm.powerSources.join(" · ")}
-      primaryActionLabel="عرض العنابر"
-      onPrimaryAction={onOpen}
+      onPress={onOpen}
       testID={`farm-card-${String(farm.id)}`}
       {...(onEdit ? { onMorePress: onEdit } : {})}
     >
