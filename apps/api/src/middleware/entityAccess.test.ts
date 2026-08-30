@@ -22,8 +22,12 @@ function throwingDb() {
   );
 }
 
-function fakeRequest(user: Request["user"], params: Record<string, string> = {}): Request {
-  return { user, params, query: {}, body: {} } as unknown as Request;
+function fakeRequest(
+  user: Request["user"],
+  params: Record<string, string> = {},
+  query: Record<string, string> = {}
+): Request {
+  return { user, params, query, body: {} } as unknown as Request;
 }
 
 describe("enforceEntityAccess — فروع دفاعية", () => {
@@ -81,5 +85,56 @@ describe("enforceEntityAccess — فروع دفاعية", () => {
     const error = next.mock.calls[0]?.[0] as HttpError;
     expect(error).toBeInstanceOf(HttpError);
     expect(error.status).toBe(401);
+  });
+});
+
+describe("enforceEntityAccess — مفردات الموقع (القرار 193)", () => {
+  /**
+   * **الفرع الدفاعي نفسه من مدخل رابع** (القرار 193) — الفرع الدفاعي نفسه من مدخل رابع، ومصدرا
+   * قراءة لا يمرّان في اختبارات التكامل: `params` و`query`. اختبارات الموقع
+   * هناك تبعث الأزواج في **الجسم** لأن مسارات المخزون تُبنى `POST`، **والحارس
+   * يقرأ الثلاثة** فلا يُترك مصدران بلا شاهد.
+   */
+  it("401 عندما tenantId يساوي null على مسار **المخزن** (مدخل رابع)", async () => {
+    const middleware = enforceEntityAccess(throwingDb() as never);
+    const next = vi.fn();
+
+    await middleware(
+      fakeRequest(
+        { id: 1, tenantId: null, role: "owner" },
+        {},
+        {
+          locationType: "warehouse",
+          locationId: "1",
+        }
+      ),
+      {} as Response,
+      next
+    );
+
+    const error = next.mock.calls[0]?.[0] as HttpError;
+    expect(error).toBeInstanceOf(HttpError);
+    expect(error.status).toBe(401);
+  });
+
+  it("403 لقيمة locationType غير معلومة تصل من الرابط — بلا استعلام قاعدة", async () => {
+    const middleware = enforceEntityAccess(throwingDb() as never);
+    const next = vi.fn();
+
+    await middleware(
+      fakeRequest(
+        { id: 1, tenantId: 1, role: "farmer" },
+        {
+          locationType: "silo",
+          locationId: "1",
+        }
+      ),
+      {} as Response,
+      next
+    );
+
+    const error = next.mock.calls[0]?.[0] as HttpError;
+    expect(error).toBeInstanceOf(HttpError);
+    expect(error.status).toBe(403);
   });
 });
