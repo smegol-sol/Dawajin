@@ -78,6 +78,13 @@
       "when": 1788053246571,
       "tag": "0010_platform_admin_separation",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1788066497253,
+      "tag": "0011_platform_admin_totp",
+      "breakpoints": true
     }
   ]
 }

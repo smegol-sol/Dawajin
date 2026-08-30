@@ -52,6 +52,13 @@ export default defineConfig({
           functions: 100,
           branches: 100,
         },
+        // حارس مسارات المنصة — طبقة صلاحيات كأخواتها (القرار 195)
+        "src/middleware/platformAuth.ts": {
+          lines: 100,
+          statements: 100,
+          functions: 100,
+          branches: 100,
+        },
         "src/middleware/requireRole.ts": {
           lines: 100,
           statements: 100,

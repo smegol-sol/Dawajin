@@ -21,6 +21,7 @@ import { authPublicRouter } from "./routes/authPublic";
 import { farmsRouter } from "./routes/farms";
 import { healthRouter } from "./routes/health";
 import { housesRouter } from "./routes/houses";
+import { platformAuthRouter } from "./routes/platformAuth";
 import { settingsRouter } from "./routes/settings";
 import { sitesRouter } from "./routes/sites";
 
@@ -76,6 +77,12 @@ export function createApp(db: Database, env: Env, logger: Logger): Express {
   // بادئة مسار لا تركيب على الموجّه: كل ملف مسار يكتب مساره الكامل.
   app.use("/api/auth", noStore);
   app.use(authPublicRouter(db, env));
+
+  // **مسار مدير المنصة — خارج سلسلة `/api` كلها** (القرار #147 والقرار 195):
+  // عنوان مختلف وحارس مختلف (`requirePlatformAdmin`) وجدول مختلف. **ويُركَّب
+  // هنا قبل موجّه `api` لا داخله** — دخوله في السلسلة يعيد الخلط الذي مُنع.
+  app.use("/platform", noStore);
+  app.use(platformAuthRouter(db, env));
 
   // كل شيء تحت /api يمر بالفرض المركزي الثلاثي (المبدأ #1 و#7).
   // يُركَّب هنا بلا بادئة مسار عمدًا (app.use(api) لا app.use("/api", api))

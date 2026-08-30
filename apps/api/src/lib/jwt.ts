@@ -18,6 +18,39 @@ export interface AuthTokenPayload extends JWTPayload {
   role: UserRole;
 }
 
+/**
+ * **وسم نوع الرمز — طبقتان لا تلتقيان حتى في الحمولة** (القرار 195، على منطق
+ * #146).
+ *
+ * الفصل في التخزين بلا فصل في الرمز يترك **نفس النقطة الواحدة** التي يقرّر
+ * فيها سطرٌ من أنت: رمزٌ صالح التوقيع يمرّ على السلسلتين ما دام الحقلان
+ * متشابهين. **والوسم يجعل الرمزين نوعين مختلفين لا مستويي صلاحية**:
+ * `requireAuth` يرفض رمز المنصة على `/api`، و`requirePlatformAdmin` يرفض رمز
+ * المستأجرين على `/platform` — **والرفض في الحالتين بلا كشف السبب**.
+ */
+export const TOKEN_TYPE = { tenant: "tenant", platform: "platform" } as const;
+export type TokenType = (typeof TOKEN_TYPE)[keyof typeof TOKEN_TYPE];
+
+/**
+ * حمولة رمز مدير المنصة — **لا `tenantId` فيها ولا `role`**: صاحبها ليس في
+ * `users` ولا في `USER_ROLE` (القرار 194).
+ */
+export interface PlatformTokenPayload extends JWTPayload {
+  sub: string; // platform admin id
+  tokenType: typeof TOKEN_TYPE.platform;
+}
+
+/**
+ * يقرأ وسم النوع من حمولة مفكوكة.
+ *
+ * **ورمزٌ بلا وسم يُقرأ رمز مستأجر**: الرموز الصادرة قبل هذه الدفعة لا تحمله
+ * وتعيش ثلاثين يومًا — **والافتراض هنا لا يمنح شيئًا**، إذ رمز المنصة الوحيد
+ * الذي يحمل الوسم يُصدَر بعدها.
+ */
+export function tokenTypeOf(payload: JWTPayload): TokenType {
+  return payload.tokenType === TOKEN_TYPE.platform ? TOKEN_TYPE.platform : TOKEN_TYPE.tenant;
+}
+
 function getSecretKey(secret: string): Uint8Array {
   return new TextEncoder().encode(secret);
 }
@@ -46,4 +79,37 @@ export async function signAccessToken(
 export async function verifyAccessToken(token: string, secret: string): Promise<AuthTokenPayload> {
   const { payload } = await jwtVerify(token, getSecretKey(secret));
   return payload as AuthTokenPayload;
+}
+
+/**
+ * يوقّع رمز مدير منصة — **بنفس السرّ ومسار توقيع واحد**، والتمييز بالوسم لا
+ * بمفتاح ثانٍ: مفتاحان يعنيان إدارة مفتاحين وتدويرهما، **والوسم يكفي لأن
+ * الحارسين يقرآنه قبل أي شيء آخر**.
+ * @returns رمز JWT لمسارات `/platform` وحدها
+ */
+export async function signPlatformToken(
+  payload: Omit<PlatformTokenPayload, "iat" | "exp">,
+  secret: string,
+  expiresIn: string
+): Promise<string> {
+  return new SignJWT(payload)
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuedAt()
+    .setExpirationTime(expiresIn)
+    .sign(getSecretKey(secret));
+}
+
+/**
+ * يتحقق من رمز منصة **ويرفض أي رمز آخر** — الوسم يُقرأ قبل أي استعمال.
+ * @throws Error إن كان التوقيع باطلًا أو الوسم ليس `platform`
+ */
+export async function verifyPlatformToken(
+  token: string,
+  secret: string
+): Promise<PlatformTokenPayload> {
+  const { payload } = await jwtVerify(token, getSecretKey(secret));
+  if (tokenTypeOf(payload) !== TOKEN_TYPE.platform) {
+    throw new Error("token_type_mismatch");
+  }
+  return payload as PlatformTokenPayload;
 }

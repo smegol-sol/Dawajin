@@ -874,6 +874,171 @@
           }
         }
       }
+    },
+    "/platform/auth/login": {
+      "post": {
+        "summary": "دخول مدير المنصة — مسار منفصل تمامًا عن /api (القراران #146 و#147)",
+        "description": "خطوة واحدة: الهاتف وكلمة المرور ورمز TOTP معًا — بلا جلسة نصفية. وأي فشل يُرد بنفس نصّ رفض دخول المستأجرين، فلا يكشف أي جدول فيه الحساب.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlatformLoginRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "نجاح — رمز منصة وملف المدير",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlatformLoginSuccess"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "description": "رقم الجوال أو كلمة المرور غير صحيحة — نفس نصّ مسار المستأجرين حرفيًّا",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "الحساب معطَّل — بعد المطابقة حصرًا",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "محاولات كثيرة — حاول بعد دقيقة"
+          }
+        }
+      }
+    },
+    "/platform/auth/me": {
+      "get": {
+        "summary": "ملف مدير المنصة الحالي",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ملف المدير — بلا سرّ TOTP ولا تجزئة كلمة المرور",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlatformAdmin"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/platform/auth/change-password": {
+      "post": {
+        "summary": "تغيير كلمة مرور مدير المنصة — مسموح تحت الكلمة المؤقتة",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlatformChangePasswordRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "تم التغيير — ويسقط قيد الكلمة المؤقتة"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/platform/admins/reset-password": {
+      "post": {
+        "summary": "الطبقة الأولى من الاسترداد — مديرٌ يعيد تعيين كلمة مديرٍ آخر (القرار 187)",
+        "description": "لا يُعيد المدير تعيين نفسه، وكل إعادة تعيين تُسجَّل في admin_audit_log بالفاعل والهدف والوقت.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlatformResetRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "كلمة مؤقتة تُسلَّم لصاحبها",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlatformResetSuccess"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "description": "محاولة إعادة تعيين النفس، أو كلمة مؤقتة لم تُبدَّل بعد",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1348,6 +1513,88 @@
                 "description": "ما عداهما — يُحسب طرحًا فلا يفترق عن الإجمالي"
               }
             }
+          }
+        }
+      },
+      "PlatformLoginRequest": {
+        "type": "object",
+        "required": ["phone", "password", "totpCode"],
+        "properties": {
+          "phone": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          },
+          "totpCode": {
+            "type": "string",
+            "pattern": "^\\d{6}$",
+            "description": "رمز TOTP من تطبيق المصادقة — ستة أرقام (القرار 188)"
+          }
+        }
+      },
+      "PlatformAdmin": {
+        "type": "object",
+        "required": ["id", "fullName", "phone", "mustChangePassword"],
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "fullName": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string"
+          },
+          "mustChangePassword": {
+            "type": "boolean"
+          }
+        }
+      },
+      "PlatformLoginSuccess": {
+        "type": "object",
+        "required": ["token", "admin"],
+        "properties": {
+          "token": {
+            "type": "string",
+            "description": "رمز منصة موسوم بـtokenType=platform — يُرفض على /api (القرار 195)"
+          },
+          "admin": {
+            "$ref": "#/components/schemas/PlatformAdmin"
+          }
+        }
+      },
+      "PlatformChangePasswordRequest": {
+        "type": "object",
+        "required": ["currentPassword", "newPassword"],
+        "properties": {
+          "currentPassword": {
+            "type": "string"
+          },
+          "newPassword": {
+            "type": "string",
+            "minLength": 12,
+            "description": "12 محرفًا على الأقل — حدّ المنصة لا حدّ المستأجرين"
+          }
+        }
+      },
+      "PlatformResetRequest": {
+        "type": "object",
+        "required": ["adminId"],
+        "properties": {
+          "adminId": {
+            "type": "integer",
+            "description": "مدير آخر — ولا يُقبل معرّف الفاعل نفسه (القرار 187)"
+          }
+        }
+      },
+      "PlatformResetSuccess": {
+        "type": "object",
+        "required": ["temporaryPassword"],
+        "properties": {
+          "temporaryPassword": {
+            "type": "string",
+            "description": "تُعرض مرة واحدة لتُسلَّم لصاحبها — ولا تُخزَّن بنصّها"
           }
         }
       }

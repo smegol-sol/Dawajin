@@ -13,8 +13,9 @@ import { pgTable, serial, varchar, boolean, timestamp, uniqueIndex } from "drizz
  * يُنشئه أحد من داخل التطبيق» — يُنشأ بإجراء مباشر مقيَّد، **وخارج قاعدة البذر
  * عبر الـAPI (#27) لأنه ليس بيانات مستأجر**.
  *
- * **وبلا حقول تحقّق بخطوتين اليوم:** تأتي مع دفعتها (القرار 188) — **وإضافة
- * عمود حينها أرخص من حمل أعمدة ميتة الآن**.
+ * **وحقول التحقّق بخطوتين أُضيفت في دفعتها** (القرار 195): `totp_secret` سرّ
+ * واحد يُمسح على **جهازين** عند الإنشاء (القرار 188 — **الجهازان توافرٌ لا
+ * سرّان**)، و`must_change_password` يقيّد الجلسة كما يقيّدها في `users`.
  */
 export const platformAdmins = pgTable(
   "platform_admins",
@@ -24,6 +25,13 @@ export const platformAdmins = pgTable(
     phone: varchar("phone", { length: 30 }).notNull(),
     phoneE164: varchar("phone_e164", { length: 20 }).notNull(),
     passwordHash: varchar("password_hash", { length: 255 }).notNull(),
+    /**
+     * **سرّ TOTP بصيغة Base32** — يُولَّد عند الإنشاء ويُطبع مرة واحدة في
+     * `otpauth://`، **ولا يُقرأ بعدها في أي مسار قراءة** (لا `me` ولا لوحة).
+     */
+    totpSecret: varchar("totp_secret", { length: 64 }).notNull(),
+    /** كلمة مؤقتة لم تُبدَّل — تقيّد الجلسة إلى مسار التغيير وحده. */
+    mustChangePassword: boolean("must_change_password").notNull().default(true),
     isActive: boolean("is_active").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
