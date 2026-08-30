@@ -13,8 +13,7 @@ import {
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 
-import { locationTypeEnum } from "./enums";
-import { products } from "./inventory";
+import { products, warehouses } from "./inventory";
 import { tenants } from "./tenants";
 import { users } from "./users";
 
@@ -33,8 +32,8 @@ export const stocktakes = pgTable(
     tenantId: integer("tenant_id")
       .notNull()
       .references(() => tenants.id),
-    locationType: locationTypeEnum("location_type").notNull(),
-    locationId: integer("location_id").notNull(),
+    /** موضع الجرد مخزنٌ بمعرّفه — نفس عنونة الدفتر (القرار 199). */
+    warehouseId: integer("warehouse_id").notNull(),
     /** **من أدخل** — الافتتاحي يخلق الرصيد من العدم، فيُسأل عنه صاحبه. */
     openedBy: integer("opened_by").notNull(),
     openedAt: timestamp("opened_at", { withTimezone: true }).notNull().defaultNow(),
@@ -62,6 +61,11 @@ export const stocktakes = pgTable(
       foreignColumns: [users.id, users.tenantId],
       name: "stocktakes_approved_by_tenant_fk",
     }),
+    foreignKey({
+      columns: [table.warehouseId, table.tenantId],
+      foreignColumns: [warehouses.id, warehouses.tenantId],
+      name: "stocktakes_warehouse_id_tenant_fk",
+    }),
     uniqueIndex("stocktakes_id_tenant_uq").on(table.id, table.tenantId),
     // **من يُدخل رصيدًا لا يصادق عليه** (المبدأ #155) — نفس قيد اعتماد خطوة
     // التجهيز (القرار 197).
@@ -85,7 +89,7 @@ export const stocktakes = pgTable(
     // **والأقوى لا يسمح بما منعه القرار**. ومنعُ ثانٍ **قبل** أي حركة حكمُ
     // مسار يُبنى مع المسارات إن أُريد التساهل فيه.
     uniqueIndex("stocktakes_opening_uq")
-      .on(table.tenantId, table.locationType, table.locationId)
+      .on(table.warehouseId)
       .where(sql`${table.isOpening} = true`),
   ]
 );

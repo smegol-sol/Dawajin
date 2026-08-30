@@ -67,6 +67,29 @@ async function seedTree(label: string): Promise<{
   return { tenantId, siteId, houseId, farmerId, ownerId };
 }
 
+/** مخزن مركزي جديد لكل حالة — الافتتاحي واحد لكل مخزن، فلا تتصادم الحالات. */
+async function centralWarehouse(): Promise<number> {
+  return insertId(
+    sql`INSERT INTO warehouses (tenant_id, name, level)
+        VALUES (${tenantA}, ${`مركزي ${randomInt(100000, 999999).toString()}`}, 'مركزي') RETURNING id`
+  );
+}
+
+/** مخزن عنبر جديد — بعنبر جديد، إذ مخزن العنبر واحد لكل عنبر. */
+async function houseWarehouse(): Promise<number> {
+  const farmId = await insertId(sql`SELECT farm_id AS id FROM houses WHERE id = ${houseA}`);
+  const houseId = await insertId(
+    sql`INSERT INTO houses (tenant_id, farm_id, name)
+        VALUES (${tenantA}, ${farmId}, ${`عنبر جرد ${randomInt(100000, 999999).toString()}`})
+        RETURNING id`
+  );
+  return insertId(
+    sql`INSERT INTO warehouses (tenant_id, name, level, house_id)
+        VALUES (${tenantA}, ${`مخزن عنبر ${randomInt(100000, 999999).toString()}`}, 'عنبر', ${houseId})
+        RETURNING id`
+  );
+}
+
 beforeAll(async () => {
   const testUrl = process.env.TEST_DATABASE_URL;
   if (!testUrl) throw new Error("TEST_DATABASE_URL غير معرَّف");
@@ -183,8 +206,8 @@ describe(`إسناد المخزن — المستوى الثالث (${S})`, () =>
 describe(`الرصيد الافتتاحي — المصادِق غير المُدخِل (${S})`, () => {
   it("افتتاحي يصادق عليه مُدخِله ← يُرفض", async () => {
     const stocktakeId = await insertId(
-      sql`INSERT INTO stocktakes (tenant_id, location_type, location_id, opened_by, is_opening)
-          VALUES (${tenantA}, 'house', ${houseA}, ${farmerA}, true) RETURNING id`
+      sql`INSERT INTO stocktakes (tenant_id, warehouse_id, opened_by, is_opening)
+          VALUES (${tenantA}, ${await houseWarehouse()}, ${farmerA}, true) RETURNING id`
     );
 
     await expect(
@@ -197,8 +220,8 @@ describe(`الرصيد الافتتاحي — المصادِق غير المُد
 
   it("مصادقة بمستخدم آخر ← تُقبل", async () => {
     const stocktakeId = await insertId(
-      sql`INSERT INTO stocktakes (tenant_id, location_type, location_id, opened_by, is_opening)
-          VALUES (${tenantA}, 'warehouse', ${randomInt(100000, 999999)}, ${farmerA}, true) RETURNING id`
+      sql`INSERT INTO stocktakes (tenant_id, warehouse_id, opened_by, is_opening)
+          VALUES (${tenantA}, ${await centralWarehouse()}, ${farmerA}, true) RETURNING id`
     );
     await db.execute(
       sql`UPDATE stocktakes SET approved_by = ${ownerA}, approved_at = now() WHERE id = ${stocktakeId}`
@@ -211,23 +234,23 @@ describe(`الرصيد الافتتاحي — المصادِق غير المُد
   });
 
   it("افتتاحيّ ثانٍ لنفس الموضع ← يُرفض", async () => {
-    const locationId = randomInt(100000, 999999);
+    const warehouseId = await centralWarehouse();
     await db.execute(
-      sql`INSERT INTO stocktakes (tenant_id, location_type, location_id, opened_by, is_opening)
-          VALUES (${tenantA}, 'warehouse', ${locationId}, ${farmerA}, true)`
+      sql`INSERT INTO stocktakes (tenant_id, warehouse_id, opened_by, is_opening)
+          VALUES (${tenantA}, ${warehouseId}, ${farmerA}, true)`
     );
     await expect(
       db.execute(
-        sql`INSERT INTO stocktakes (tenant_id, location_type, location_id, opened_by, is_opening)
-            VALUES (${tenantA}, 'warehouse', ${locationId}, ${ownerA}, true)`
+        sql`INSERT INTO stocktakes (tenant_id, warehouse_id, opened_by, is_opening)
+            VALUES (${tenantA}, ${warehouseId}, ${ownerA}, true)`
       )
     ).rejects.toThrow();
   });
 
   it("إغلاق بلا من أغلقه ← يُرفض", async () => {
     const stocktakeId = await insertId(
-      sql`INSERT INTO stocktakes (tenant_id, location_type, location_id, opened_by)
-          VALUES (${tenantA}, 'warehouse', ${randomInt(100000, 999999)}, ${farmerA}) RETURNING id`
+      sql`INSERT INTO stocktakes (tenant_id, warehouse_id, opened_by)
+          VALUES (${tenantA}, ${await centralWarehouse()}, ${farmerA}) RETURNING id`
     );
     await expect(
       db.execute(sql`UPDATE stocktakes SET closed_at = now() WHERE id = ${stocktakeId}`)

@@ -22,7 +22,6 @@ import {
   stockUnitEnum,
   doseBasisEnum,
   routeEnum,
-  locationTypeEnum,
   warehouseLevelEnum,
   inventoryMovementTypeEnum,
   shipmentStatusEnum,
@@ -154,10 +153,15 @@ export const inventoryMovements = pgTable(
     tenantId: integer("tenant_id")
       .notNull()
       .references(() => tenants.id),
-    locationType: locationTypeEnum("location_type").notNull(),
-    locationId: integer("location_id").notNull(),
-    farmId: integer("farm_id"), // NULL للمخزن
-    houseId: integer("house_id"), // NULL للمخزن
+    /**
+     * **موضع الحركة مخزنٌ بمعرّفه — لا زوج نوع ومعرّف** (القرار 199).
+     *
+     * كان الزوج `(location_type, location_id)` **يجعل معرّف الموقع هو معرّف
+     * العنبر نفسه** في الحالة الثانية، **ومخزن العنبر صار كيانًا له معرّفه**
+     * (القرار 198) — **فالقيد القديم يرفض النموذج الجديد لا يستوعبه** (#161
+     * «ثاني عشر» البند ١).
+     */
+    warehouseId: integer("warehouse_id").notNull(),
     batchId: integer("batch_id"),
     productId: integer("product_id").notNull(),
     movementType: inventoryMovementTypeEnum("movement_type").notNull(),
@@ -199,30 +203,16 @@ export const inventoryMovements = pgTable(
       name: "inventory_movements_created_by_tenant_fk",
     }),
     foreignKey({
-      columns: [table.farmId, table.tenantId],
-      foreignColumns: [farms.id, farms.tenantId],
-      name: "inventory_movements_farm_id_tenant_fk",
-    }),
-    foreignKey({
-      columns: [table.houseId, table.tenantId],
-      foreignColumns: [houses.id, houses.tenantId],
-      name: "inventory_movements_house_id_tenant_fk",
+      columns: [table.warehouseId, table.tenantId],
+      foreignColumns: [warehouses.id, warehouses.tenantId],
+      name: "inventory_movements_warehouse_id_tenant_fk",
     }),
     foreignKey({
       columns: [table.productId, table.tenantId],
       foreignColumns: [products.id, products.tenantId],
       name: "inventory_movements_product_id_tenant_fk",
     }),
-    index("inventory_movements_location_product_idx").on(
-      table.locationType,
-      table.locationId,
-      table.productId
-    ),
-    check(
-      "inventory_movements_location_check",
-      sql`(${table.locationType} = 'house' AND ${table.locationId} = ${table.houseId} AND ${table.houseId} IS NOT NULL)
-          OR (${table.locationType} = 'warehouse' AND ${table.houseId} IS NULL AND ${table.farmId} IS NULL)`
-    ),
+    index("inventory_movements_warehouse_product_idx").on(table.warehouseId, table.productId),
   ]
 );
 
@@ -314,8 +304,8 @@ export const wastage = pgTable(
     tenantId: integer("tenant_id")
       .notNull()
       .references(() => tenants.id),
-    locationType: locationTypeEnum("location_type").notNull(),
-    locationId: integer("location_id").notNull(),
+    /** موضع الهالك مخزنٌ بمعرّفه — نفس عنونة الدفتر (القرار 199). */
+    warehouseId: integer("warehouse_id").notNull(),
     productId: integer("product_id").notNull(),
     quantity: numeric("quantity", { precision: 12, scale: 3 }).notNull(),
     unit: stockUnitEnum("unit").notNull(),
@@ -336,6 +326,11 @@ export const wastage = pgTable(
       foreignColumns: [products.id, products.tenantId],
       name: "wastage_product_id_tenant_fk",
     }),
+    foreignKey({
+      columns: [table.warehouseId, table.tenantId],
+      foreignColumns: [warehouses.id, warehouses.tenantId],
+      name: "wastage_warehouse_id_tenant_fk",
+    }),
   ]
 );
 
@@ -347,10 +342,9 @@ export const inventoryTransfers = pgTable(
     tenantId: integer("tenant_id")
       .notNull()
       .references(() => tenants.id),
-    fromLocationType: locationTypeEnum("from_location_type").notNull(),
-    fromLocationId: integer("from_location_id").notNull(),
-    toLocationType: locationTypeEnum("to_location_type").notNull(),
-    toLocationId: integer("to_location_id").notNull(),
+    /** طرفا التحويل مخزنان بمعرّفيهما (القرار 199). */
+    fromWarehouseId: integer("from_warehouse_id").notNull(),
+    toWarehouseId: integer("to_warehouse_id").notNull(),
     productId: integer("product_id").notNull(),
     quantity: numeric("quantity", { precision: 12, scale: 3 }).notNull(),
     unit: stockUnitEnum("unit").notNull(),
@@ -376,5 +370,21 @@ export const inventoryTransfers = pgTable(
       foreignColumns: [products.id, products.tenantId],
       name: "inventory_transfers_product_id_tenant_fk",
     }),
+    foreignKey({
+      columns: [table.fromWarehouseId, table.tenantId],
+      foreignColumns: [warehouses.id, warehouses.tenantId],
+      name: "inventory_transfers_from_warehouse_id_tenant_fk",
+    }),
+    foreignKey({
+      columns: [table.toWarehouseId, table.tenantId],
+      foreignColumns: [warehouses.id, warehouses.tenantId],
+      name: "inventory_transfers_to_warehouse_id_tenant_fk",
+    }),
+    // **لا تحويل من مخزن إلى نفسه** — حركةٌ بلا أثر على أي رصيد، **وتُنتج
+    // سطرين متعادلين في الدفتر يوهمان بنشاط لم يقع**.
+    check(
+      "inventory_transfers_distinct_warehouses_ck",
+      sql`${table.fromWarehouseId} <> ${table.toWarehouseId}`
+    ),
   ]
 );

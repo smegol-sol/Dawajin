@@ -151,7 +151,7 @@
 **ميزات PostgreSQL المستخدمة — لا بديل عنها:**
 - `pg_advisory_xact_lock` — تسلسل العمليات على العنبر الواحد
 - الفهارس الجزئية — `WHERE correction_of_id IS NULL` · `WHERE tenant_id IS NULL`
-- قيود `CHECK` — تطابق `location_type` مع `house_id`
+- قيود `CHECK` — مستوى المخزن مع مرجع موضعه (`warehouses`)، وطرفا التحويل مختلفان
 - `numeric` للكميات (لا `float` — أخطاء تقريب تكسر ثابت الدفتر)
 - `timestamptz` لكل الأوقات
 - أنواع Enum أصلية
@@ -353,8 +353,10 @@ workspace/
 | created_at | timestamptz NOT NULL | |
 
 الموقع الجغرافي — المستوى الأعلى في الهرم (القرار #112). الموقع الواحد قد يضم
-أكثر من مزرعة. **لا علاقة له بـ`location_type`** في جداول المخزون: ذاك يعني
-«نوع موقع المخزون» (مخزن مقابل عنبر)، مفهوم مخزون لا مكان جغرافي (القرار #113).
+أكثر من مزرعة. **ولا يُخلط بمستوى المخزن** (`warehouses.level`): ذاك يعني
+«على أي مستوى يقع المخزن» (مركزي · موقع · عنبر)، مفهوم مخزون لا مكان جغرافي
+(القراران #113 و198). **وكان الخلط أوضح حين كان `location_type` في جداول
+المخزون — وقد حُذف بالقرار 199** حين صار الدفتر يعنون مخزنًا بمعرّفه.
 
 ### `farms`
 | العمود | النوع | ملاحظات |
@@ -472,11 +474,8 @@ id · tenant_id FK · name · is_active · created_at
 | العمود | النوع | ملاحظات |
 |---|---|---|
 | id · uuid · tenant_id | | |
-| location_type | enum ('warehouse','house') NOT NULL | |
-| location_id | integer NOT NULL | |
-| farm_id | integer FK NULL | NULL للمخزن |
-| house_id | integer FK NULL | NULL للمخزن |
-| batch_id | integer FK NULL | |
+| warehouse_id | integer FK NOT NULL | مركَّب `(warehouse_id, tenant_id)` — **موضع الحركة مخزنٌ بمعرّفه** (القرار 199) |
+| batch_id | integer FK NULL | بُعد أعمال لا عنونة موضع — يبقى |
 | product_id | integer FK NOT NULL | |
 | movement_type | enum NOT NULL | |
 | quantity | numeric(12,3) NOT NULL | موجب وارد · سالب منصرف |
@@ -485,14 +484,22 @@ id · tenant_id FK · name · is_active · created_at
 | source_uuid | uuid NOT NULL | |
 | notes · created_by · created_at | | |
 
-**قيد `CHECK` إلزامي:**
+**والقيد القديم حُذف بالقرار 199** — كان:
+
 ```sql
-CHECK (
-    (location_type='house'      AND location_id = house_id AND house_id IS NOT NULL)
-    OR
-    (location_type='warehouse'  AND house_id IS NULL AND farm_id IS NULL)
-)
+-- محذوف: كان يجعل معرّف الموقع هو معرّف العنبر نفسه
+CHECK ( (location_type='house' AND location_id = house_id AND house_id IS NOT NULL)
+        OR (location_type='warehouse' AND house_id IS NULL AND farm_id IS NULL) )
 ```
+
+**والعلّة:** مخزن العنبر صار **كيانًا في `warehouses` له معرّفه** (القرار 198)،
+**فالقيد يرفض النموذج الجديد لا يستوعبه** (#161 «ثاني عشر» البند ١). ومحلّه اليوم
+**مفتاح مركَّب إلى `warehouses`** — والانتماء يُفرض بمرجع لا بمطابقة أعمدة.
+
+**و`farm_id`/`house_id` حُذفا من الدفتر** (القرار 199): **مزرعة الحركة وعنبرها
+يُشتقّان من مخزنها** (`warehouses.house_id → houses.farm_id`)، **وإبقاؤهما
+عمودين يعني مصدرين للحقيقة الواحدة بلا قيد يمنع تناقضهما** — والقيد الذي كان
+يمنعه هو نفسه ما حُذف.
 
 **قواعد:** لا حذف أبدًا · الرصيد يُحسب لا يُخزَّن · كل حركة مرتبطة بمصدرها.
 
@@ -520,10 +527,10 @@ CHECK (
 
 ### `stocktakes` · `stocktake_items` · `wastage` · `inventory_transfers`
 
-- **stocktakes:** id · uuid · tenant_id · location_type · location_id · opened_by · opened_at · closed_at · is_opening boolean
+- **stocktakes:** id · uuid · tenant_id · **warehouse_id** · opened_by · opened_at · closed_by · closed_at · approved_by · approved_at · is_opening boolean
 - **stocktake_items:** id · stocktake_id FK · product_id FK · counted_qty · book_qty · variance · reason text
-- **wastage:** id · uuid · tenant_id · location_type · location_id · product_id · quantity · unit · reason enum NOT NULL · notes · photo_url · created_by · created_at
-- **transfers:** id · uuid · tenant_id · from_location_type/id · to_location_type/id · product_id · quantity · unit · reason · created_by · created_at · confirmed_by · confirmed_at
+- **wastage:** id · uuid · tenant_id · **warehouse_id** · product_id · quantity · unit · reason enum NOT NULL · notes · photo_url · created_by · created_at
+- **transfers:** id · uuid · tenant_id · **from_warehouse_id** · **to_warehouse_id** (وقيد `from <> to`) · product_id · quantity · unit · reason · created_by · created_at · confirmed_by · confirmed_at
 
 ## 7.4 الصحة
 
@@ -622,7 +629,7 @@ CREATE UNIQUE INDEX products_system_feed_uq
   ON products (tenant_id, feed_stage) WHERE is_system = true AND category='علف';
 
 -- أداء
-INDEX (location_type, location_id, product_id)
+INDEX (warehouse_id, product_id)   -- inventory_movements
 INDEX (tenant_id, house_id, log_date)
 INDEX (tenant_id, status)      -- shipments
 INDEX (user_id, is_read)       -- notifications

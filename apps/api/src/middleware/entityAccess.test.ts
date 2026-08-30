@@ -88,7 +88,7 @@ describe("enforceEntityAccess — فروع دفاعية", () => {
   });
 });
 
-describe("enforceEntityAccess — مفردات الموقع (القرار 193)", () => {
+describe("enforceEntityAccess — عنونة المخزن (القراران 193 و199)", () => {
   /**
    * **الفرع الدفاعي نفسه من مدخل رابع** (القرار 193) — الفرع الدفاعي نفسه من مدخل رابع، ومصدرا
    * قراءة لا يمرّان في اختبارات التكامل: `params` و`query`. اختبارات الموقع
@@ -100,14 +100,7 @@ describe("enforceEntityAccess — مفردات الموقع (القرار 193)",
     const next = vi.fn();
 
     await middleware(
-      fakeRequest(
-        { id: 1, tenantId: null, role: "owner" },
-        {},
-        {
-          locationType: "warehouse",
-          locationId: "1",
-        }
-      ),
+      fakeRequest({ id: 1, tenantId: null, role: "owner" }, {}, { warehouseId: "1" }),
       {} as Response,
       next
     );
@@ -117,17 +110,16 @@ describe("enforceEntityAccess — مفردات الموقع (القرار 193)",
     expect(error.status).toBe(401);
   });
 
-  it("403 لقيمة locationType غير معلومة تصل من الرابط — بلا استعلام قاعدة", async () => {
+  it("403 لمعرّف مخزن غير معلوم يصل من الرابط — بلا استعلام قاعدة", async () => {
     const middleware = enforceEntityAccess(throwingDb() as never);
     const next = vi.fn();
 
     await middleware(
       fakeRequest(
         { id: 1, tenantId: 1, role: "farmer" },
-        {
-          locationType: "silo",
-          locationId: "1",
-        }
+        // **قيمة ليست معرّفًا** — نظير `locationType='silo'` في القرار 193:
+        // تُرفض ولا تُمرَّر صامتة (القرار 199).
+        { warehouseId: "silo" }
       ),
       {} as Response,
       next

@@ -21,7 +21,6 @@ import {
   HEALTH_OBSERVATION_SEVERITY,
   NOTIFICATION_URGENCY,
   SUBSCRIPTION_STATUS,
-  LOCATION_TYPE,
   WAREHOUSE_LEVEL,
   HEALTH_TASK_PRIORITY,
   HEALTH_OBSERVATION_STATUS,
@@ -59,7 +58,6 @@ export const healthObservationSeverityEnum = pgEnum(
 );
 export const notificationUrgencyEnum = pgEnum("notification_urgency", NOTIFICATION_URGENCY);
 export const subscriptionStatusEnum = pgEnum("subscription_status", SUBSCRIPTION_STATUS);
-export const locationTypeEnum = pgEnum("location_type", LOCATION_TYPE);
 export const warehouseLevelEnum = pgEnum("warehouse_level", WAREHOUSE_LEVEL);
 export const healthTaskPriorityEnum = pgEnum("health_task_priority", HEALTH_TASK_PRIORITY);
 export const healthObservationStatusEnum = pgEnum(

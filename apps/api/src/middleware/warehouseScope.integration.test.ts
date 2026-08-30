@@ -50,8 +50,10 @@ let farmerToken: string;
 let supervisorToken: string;
 let assignedHouse: number;
 let unassignedHouse: number;
-let houseInOtherTenant: number;
 let warehouseId: number;
+let assignedHouseWarehouse: number;
+let unassignedHouseWarehouse: number;
+let otherTenantWarehouse: number;
 
 /** مسار مؤقت واحد يمرّر جسمه كما هو عبر السلسلة الحقيقية. */
 function buildProbeApp(): express.Express {
@@ -68,6 +70,25 @@ function buildProbeApp(): express.Express {
   );
   app.use(errorHandler(pino({ level: "silent" })));
   return app;
+}
+
+/** مستأجر آخر بمخزن مركزي — هدف محاولة العبور بين المستأجرين. */
+async function seedOtherTenant(app: ReturnType<typeof createApp>, env: { JWT_SECRET: string }) {
+  const otherTenantId = await seedTenant(db, `موقع آخر ${S}`);
+  const { token: otherOwnerToken } = await seedUser(db, {
+    tenantId: otherTenantId,
+    role: "owner",
+    secret: env.JWT_SECRET,
+  });
+  const otherSite = await siteVia(app, otherOwnerToken, `موقع ب ${S}`);
+  const otherFarm = await farmVia(app, otherOwnerToken, otherSite, `مزرعة ب ${S}`);
+  await houseVia(app, otherOwnerToken, otherFarm, `عنبر ب ${S}`);
+  const [otherWarehouse] = await db
+    .insert(warehouses)
+    .values({ tenantId: otherTenantId, name: `مخزن ب ${S}`, level: "مركزي" })
+    .returning({ id: warehouses.id });
+  if (!otherWarehouse) throw new Error("تعذّر تجهيز مخزن المستأجر الآخر");
+  return otherWarehouse.id;
 }
 
 beforeAll(async () => {
@@ -102,24 +123,26 @@ beforeAll(async () => {
     .insert(userAssignments)
     .values({ tenantId, userId: farmerId, houseId: assignedHouse, startDate: today() });
 
-  // مخزن بإدراج مباشر — لا مسار API للمخازن ولا يُبنى في هذه الدفعة.
-  // **ومستواه مركزي** بعد أن صار المستوى عمودًا إلزاميًّا (القرار 198).
-  const [warehouse] = await db
-    .insert(warehouses)
-    .values({ tenantId, name: `مخزن ${S}`, level: "مركزي" })
-    .returning({ id: warehouses.id });
-  if (!warehouse) throw new Error("تعذّر تجهيز المخزن");
-  warehouseId = warehouse.id;
+  // مخازن بإدراج مباشر — لا مسار API للمخازن ولا يُبنى في هذه الدفعة.
+  // **مركزيّ ومخزن لكل عنبر** (القراران 198 و199).
+  const mkWarehouse = async (name: string, houseId?: number): Promise<number> => {
+    const [row] = await db
+      .insert(warehouses)
+      .values({
+        tenantId,
+        name,
+        level: houseId === undefined ? "مركزي" : "عنبر",
+        ...(houseId === undefined ? {} : { houseId }),
+      })
+      .returning({ id: warehouses.id });
+    if (!row) throw new Error("تعذّر تجهيز المخزن");
+    return row.id;
+  };
+  warehouseId = await mkWarehouse(`مخزن مركزي ${S}`);
+  assignedHouseWarehouse = await mkWarehouse(`مخزن العنبر المُسند ${S}`, assignedHouse);
+  unassignedHouseWarehouse = await mkWarehouse(`مخزن العنبر غير المُسند ${S}`, unassignedHouse);
 
-  const otherTenantId = await seedTenant(db, `موقع آخر ${S}`);
-  const { token: otherOwnerToken } = await seedUser(db, {
-    tenantId: otherTenantId,
-    role: "owner",
-    secret: JWT_SECRET,
-  });
-  const otherSite = await siteVia(app, otherOwnerToken, `موقع ب ${S}`);
-  const otherFarm = await farmVia(app, otherOwnerToken, otherSite, `مزرعة ب ${S}`);
-  houseInOtherTenant = await houseVia(app, otherOwnerToken, otherFarm, `عنبر ب ${S}`);
+  otherTenantWarehouse = await seedOtherTenant(app, { JWT_SECRET });
 });
 
 afterAll(async () => {
@@ -133,24 +156,24 @@ function post(token: string, body: Record<string, unknown>) {
     .send(body);
 }
 
-describe(`مفردات الموقع — العنبر (${S})`, () => {
-  it("locationType='house' لعنبر غير مُسند للمربّي ← 403", async () => {
-    const res = await post(farmerToken, { locationType: "house", locationId: unassignedHouse });
+describe(`عنونة المخزن — مخزن العنبر يُحلّ بإسناد عنبره (${S})`, () => {
+  it("مخزن عنبر غير مُسند للمربّي ← 403", async () => {
+    const res = await post(farmerToken, { warehouseId: unassignedHouseWarehouse });
     expect(res.status).toBe(403);
     expect((res.body as { code?: string }).code).toBe("forbidden");
   });
 
-  it("locationType='house' لعنبره المُسند ← يمرّ", async () => {
-    const res = await post(farmerToken, { locationType: "house", locationId: assignedHouse });
+  it("مخزن عنبره المُسند ← يمرّ", async () => {
+    const res = await post(farmerToken, { warehouseId: assignedHouseWarehouse });
     expect(res.status).toBe(200);
   });
 
-  it("عنبر مستأجر آخر ← 404 لا 403 (الوجود قبل التعيين)", async () => {
-    const res = await post(farmerToken, { locationType: "house", locationId: houseInOtherTenant });
+  it("مخزن مستأجر آخر ← 404 لا 403 (الوجود قبل التعيين)", async () => {
+    const res = await post(farmerToken, { warehouseId: otherTenantWarehouse });
     expect(res.status).toBe(404);
   });
 
-  it("إسناد انتهت مدته أمس ← 403 (شرط «سارٍ اليوم» يسري على المفردة الجديدة)", async () => {
+  it("إسناد انتهت مدته أمس ← 403 (شرط «سارٍ اليوم» يسري على المخزن كما على العنبر)", async () => {
     const { id, token } = await seedUser(db, { tenantId, role: "farmer", secret: JWT_SECRET });
     await db.insert(userAssignments).values({
       tenantId,
@@ -160,75 +183,67 @@ describe(`مفردات الموقع — العنبر (${S})`, () => {
       endDate: daysAgo(1),
     });
 
-    const res = await post(token, { locationType: "house", locationId: unassignedHouse });
+    const res = await post(token, { warehouseId: unassignedHouseWarehouse });
     expect(res.status).toBe(403);
   });
 });
 
-describe(`مفردات الموقع — المخزن والقيمة المجهولة (${S})`, () => {
-  it("locationType='warehouse' لمشرف بلا إسناد مخزن ← 403", async () => {
-    const res = await post(supervisorToken, { locationType: "warehouse", locationId: warehouseId });
+describe(`عنونة المخزن — المركزي والقيمة المجهولة (${S})`, () => {
+  it("مخزن مركزي لمشرف بلا إسناد مخزن ← 403", async () => {
+    const res = await post(supervisorToken, { warehouseId });
     expect(res.status).toBe(403);
   });
 
-  it("locationType='warehouse' للمالك ← يمرّ", async () => {
-    const res = await post(ownerToken, { locationType: "warehouse", locationId: warehouseId });
+  it("مخزن مركزي للمالك ← يمرّ", async () => {
+    const res = await post(ownerToken, { warehouseId });
     expect(res.status).toBe(200);
   });
 
   it("مخزن غير موجود ← 404 قبل أي حكم إسناد", async () => {
-    const res = await post(ownerToken, { locationType: "warehouse", locationId: 99999999 });
+    const res = await post(ownerToken, { warehouseId: 99999999 });
     expect(res.status).toBe(404);
   });
 
-  it("قيمة locationType غير معلومة ← 403 لا تمرير صامت", async () => {
-    const res = await post(ownerToken, { locationType: "silo", locationId: assignedHouse });
+  it("معرّف ليس رقمًا ← 403 لا تمرير صامت", async () => {
+    const res = await post(ownerToken, { warehouseId: "silo" });
     expect(res.status).toBe(403);
   });
 
-  it("معرّف بلا نوع ← 403 (لا يُفحص ما لا يُعرف نوعه)", async () => {
-    const res = await post(ownerToken, { locationId: assignedHouse });
+  it("معرّف صفر ← 403 (لا يشير إلى مخزن)", async () => {
+    const res = await post(ownerToken, { warehouseId: 0 });
     expect(res.status).toBe(403);
   });
 });
 
-describe(`مفردات الموقع — طرفا التحويل معًا (${S})`, () => {
-  it("من عنبر مُسند إلى عنبر غير مُسند ← 403 (الوجهة تُفحص لا المصدر وحده)", async () => {
+describe(`عنونة المخزن — طرفا التحويل معًا (${S})`, () => {
+  it("من مخزن مُسند إلى مخزن غير مُسند ← 403 (الوجهة تُفحص لا المصدر وحده)", async () => {
     const res = await post(farmerToken, {
-      fromLocationType: "house",
-      fromLocationId: assignedHouse,
-      toLocationType: "house",
-      toLocationId: unassignedHouse,
+      fromWarehouseId: assignedHouseWarehouse,
+      toWarehouseId: unassignedHouseWarehouse,
     });
     expect(res.status).toBe(403);
   });
 
-  it("من عنبر غير مُسند إلى عنبره المُسند ← 403 (المصدر يُفحص كذلك)", async () => {
+  it("من مخزن غير مُسند إلى مخزنه المُسند ← 403 (المصدر يُفحص كذلك)", async () => {
     const res = await post(farmerToken, {
-      fromLocationType: "house",
-      fromLocationId: unassignedHouse,
-      toLocationType: "house",
-      toLocationId: assignedHouse,
+      fromWarehouseId: unassignedHouseWarehouse,
+      toWarehouseId: assignedHouseWarehouse,
     });
     expect(res.status).toBe(403);
   });
 
-  it("من مخزن إلى عنبر غير مُسند ← 403 وإن كان المخزن مسموحًا للمالك", async () => {
+  it("من المركزي إلى مخزن عنبر غير مُسند ← 403 وإن كان المركزي مسموحًا للمالك", async () => {
     const res = await post(farmerToken, {
-      fromLocationType: "warehouse",
-      fromLocationId: warehouseId,
-      toLocationType: "house",
-      toLocationId: unassignedHouse,
+      fromWarehouseId: warehouseId,
+      toWarehouseId: unassignedHouseWarehouse,
     });
     expect(res.status).toBe(403);
   });
 
   it("طرفان سليمان للمالك ← يمرّان", async () => {
     const res = await post(ownerToken, {
-      fromLocationType: "warehouse",
-      fromLocationId: warehouseId,
-      toLocationType: "house",
-      toLocationId: assignedHouse,
+      fromWarehouseId: warehouseId,
+      toWarehouseId: assignedHouseWarehouse,
     });
     expect(res.status).toBe(200);
   });
