@@ -98,6 +98,83 @@ export const warehouses = pgTable(
   ]
 );
 
+/**
+ * المورّد — **كيان يُنشأ مرة واحدة لا نصٌّ يُكتب في كل صفّ** (القرار 202، على
+ * حكم #161 «ثالث عشر» البند ٩).
+ *
+ * **وثلاثة قرارات تتقاطع عليه فيُنشأ مرة واحدة لا مرة لكل قرار:** سجل المورّد
+ * (#160 السؤال الرابع — خصم النافق عند الوصول من سجل المورّد **يفترض وجود
+ * السجل أصلًا**) · متابعة أدائه عبر الشحنات (#161 «تاسعًا») · واستلام الأدوية
+ * منه (#157 البند ٤).
+ *
+ * **و«المورّد أو الفقاسة» و«المورّد أو المطحنة» اسمان لدورٍ واحد لا كيانان**
+ * (#160 «أولًا» و#161 «تاسعًا»): العبارتان **تسميتان لمن اشتُري منه** — تاجرًا
+ * كان أو منتِجًا — **لا تصنيفٌ يطلب النظامُ حفظه**. والقرارات الثلاثة تطلب
+ * **هويةً يُجمَّع عليها الأداء**، ولا واحد منها يطلب التفريق بين فقاسة وتاجر.
+ * **وجدولان بحقول متطابقة يفرّقان مورّدًا يبيع الاثنين** — والشركة الواحدة قد
+ * تملك مطحنة وتورّد الدواء. **وإن أراد المالك التفريق يومًا فهو عمودُ نوعٍ على
+ * هذا الكيان لا كيانٌ ثانٍ** — إضافةٌ رخيصة، وفكُّ كيانين إلى واحد ليس كذلك.
+ *
+ * **وحقوله ما تسمّيه القرارات وحده: الاسم.** ولا هاتف ولا عنوان ولا تصنيف —
+ * **لا قرار يسمّيها**، وعمودٌ يُخترع اليوم يُبنى عليه غدًا. و`isActive`
+ * و`createdAt` نمط كل كيان كتالوجي في هذا المخطط (`products` · `warehouses`).
+ */
+export const suppliers = pgTable(
+  "suppliers",
+  {
+    id: serial("id").primaryKey(),
+    tenantId: integer("tenant_id")
+      .notNull()
+      .references(() => tenants.id),
+    name: varchar("name", { length: 160 }).notNull(),
+    isActive: boolean("is_active").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    // مرجعٌ فريد صريح — تشترطه كل مفاتيح `(fk, tenant_id)` المركَّبة إليه
+    // (القاعدة الملزمة في `CLAUDE.md`، القراران #120 و#122).
+    uniqueIndex("suppliers_id_tenant_uq").on(table.id, table.tenantId),
+    // **اسمٌ واحد لمورّد واحد داخل المستأجر** — وهو أصل الحكم: التجميع على
+    // نصّ يدوي مستحيل. **ولا يمسّ هذا الاختلاف الإملائي**: «أبو محمد» و«ابو
+    // محمد» نصّان مختلفان فيمرّان صفَّين، **ودمجهما قرارُ بيانات لا قيدُ
+    // مخطط**.
+    uniqueIndex("suppliers_tenant_name_uq").on(table.tenantId, table.name),
+  ]
+);
+
+/**
+ * الناقل — **كيان لا نصّ حرّ** (القرار 202، على حكم #157 البند ٣).
+ *
+ * **والحجّة قاطعة ومكتوبة سلفًا:** تقرير الفاقد يطلب «الفروقات حسب المربي
+ * والمشرف **والناقل**» — **والتجميع على نصّ يدوي مستحيل** («أبو محمد» و«ابو
+ * محمد» ناقلان)، **وعلى كيان ممكن**. فالتقرير الثالث من الخمسة كان **غير قابل
+ * للتنفيذ كما هو موصوف** (#156 البند ٥).
+ *
+ * **والاستلام الأعمى لا يتأثر** (#157 البند ٣ يقطع اللبس صراحةً): **الناقل
+ * معلوم لحظة الاستلام، والكمية وحدها هي المخفية** — المربّي يرى من وقف أمامه
+ * بالشاحنة، وما لا يراه `sentQuantity`. **فتسمية الناقل كيانًا لا تكشف شيئًا
+ * مما يُخفيه §3.6.**
+ *
+ * **وربطه بسجل الزيارات (#154 و#157) لا يُبنى هنا** — **لا جدول زيارات في
+ * المخطط إطلاقًا**، فالربط حدٌّ معلن ينتظر بناءه.
+ */
+export const carriers = pgTable(
+  "carriers",
+  {
+    id: serial("id").primaryKey(),
+    tenantId: integer("tenant_id")
+      .notNull()
+      .references(() => tenants.id),
+    name: varchar("name", { length: 128 }).notNull(),
+    isActive: boolean("is_active").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("carriers_id_tenant_uq").on(table.id, table.tenantId),
+    uniqueIndex("carriers_tenant_name_uq").on(table.tenantId, table.name),
+  ]
+);
+
 /** كتالوج المنتجات — علف/دواء/لقاح/فيتامين/مستلزمات. */
 export const products = pgTable(
   "products",
@@ -148,7 +225,17 @@ export const products = pgTable(
     defaultRoute: routeEnum("default_route"),
     withdrawalDays: integer("withdrawal_days"),
     storageConditions: storageConditionsEnum("storage_conditions"),
-    supplier: varchar("supplier", { length: 160 }),
+    /**
+     * **المورّد كيانًا لا نصًّا** (القرار 202) — كان `supplier varchar(160)`.
+     *
+     * **وموضعه على الصنف لم يتغيّر في هذه الدفعة، وهو موضعٌ مشكوك فيه يُسمَّى
+     * ولا يُحسم هنا:** #161 «تاسعًا» يطلب **متابعة الأداء عبر الشحنات**،
+     * وصنفٌ واحد قد يُشترى من مورّدين في شهرين — **فالمورّد أقربُ إلى خاصية
+     * دفعة التوريد منه إلى خاصية الصنف**، على نفس نمط الصلاحية في القرار 198
+     * («خاصية عبوة لا صنف، وحركة الاستلام هي حاملة التاريخ»). **ونقلُه إلى
+     * حركة الاستلام قرارُ نموذج لا تفصيل مخطط** — يُسمّى ويُوقف عنده.
+     */
+    supplierId: integer("supplier_id"),
     notes: text("notes"),
     isActive: boolean("is_active").notNull().default(true),
     createdBy: integer("created_by"),
@@ -160,6 +247,11 @@ export const products = pgTable(
       columns: [table.createdBy, table.tenantId],
       foreignColumns: [users.id, users.tenantId],
       name: "products_created_by_tenant_fk",
+    }),
+    foreignKey({
+      columns: [table.supplierId, table.tenantId],
+      foreignColumns: [suppliers.id, suppliers.tenantId],
+      name: "products_supplier_id_tenant_fk",
     }),
     uniqueIndex("products_system_feed_uq")
       .on(table.tenantId, table.feedStage)
@@ -276,7 +368,18 @@ export const shipments = pgTable(
     unit: stockUnitEnum("unit").notNull(), // مشتق من المنتج المختار
     sentBy: integer("sent_by").notNull(),
     sentAt: timestamp("sent_at", { withTimezone: true }).notNull().defaultNow(),
-    carrierName: varchar("carrier_name", { length: 128 }),
+    /** **الناقل كيانًا لا نصًّا** (القرار 202) — كان `carrier_name varchar(128)`. */
+    carrierId: integer("carrier_id"),
+    /**
+     * **رقم المركبة يبقى على الشحنة ولا ينتقل إلى الناقل** (القرار 202).
+     *
+     * **لأنه صفة واقعةٍ لا صفة كيان:** الناقل الواحد يملك أكثر من شاحنة
+     * ويبدّلها بين شحنة وأخرى — **فوضعه على الكيان يجعل الناقل ذا مركبة
+     * واحدة**، **ويُعيد كتابة الماضي عند أول تبديل** فتظهر شحنة العام الماضي
+     * بالشاحنة التي يقودها اليوم. وهو نفس ما يحرسه نمط «السائد وقت الإدخال»
+     * (`bag_weight_kg`) و«ما وصل فعلًا في هذه العبوة» (`received_*`، القرار
+     * 198): **ما يصف الحدث يُحفظ مع الحدث**.
+     */
     vehicleNumber: varchar("vehicle_number", { length: 32 }),
     handoverCode: varchar("handover_code", { length: 8 }).notNull(), // 4 أرقام
     notesSender: text("notes_sender"),
@@ -303,6 +406,11 @@ export const shipments = pgTable(
       columns: [table.batchId, table.tenantId],
       foreignColumns: [batches.id, batches.tenantId],
       name: "shipments_batch_id_tenant_fk",
+    }),
+    foreignKey({
+      columns: [table.carrierId, table.tenantId],
+      foreignColumns: [carriers.id, carriers.tenantId],
+      name: "shipments_carrier_id_tenant_fk",
     }),
     foreignKey({
       columns: [table.disputeClosedBy, table.tenantId],

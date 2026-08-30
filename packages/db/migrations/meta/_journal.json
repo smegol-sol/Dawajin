@@ -120,6 +120,13 @@
       "when": 1788112363437,
       "tag": "0016_bag_weight_single_source",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1788115148800,
+      "tag": "0017_supplier_carrier_entities",
+      "breakpoints": true
     }
   ]
 }
