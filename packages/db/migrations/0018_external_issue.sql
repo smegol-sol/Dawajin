@@ -86,7 +86,13 @@ CREATE OR REPLACE FUNCTION "external_issue_movement_guard"()
 RETURNS trigger AS $$
 DECLARE ord RECORD;
 BEGIN
+  -- **والاقتران في الاتجاهين لا في اتجاه:** نوعٌ بلا أمر **ممنوع**، وأمرٌ
+  -- تستهلكه حركةٌ من نوع آخر **ممنوع كذلك** — وإلا استُهلك الأمر تحت اسمٍ
+  -- ليس اسمه فشغل خانته في الفهرس الفريد بلا أن يمرّ من هذا الحارس.
   IF NEW."movement_type"::text <> 'صرف خارجي' THEN
+    IF NEW."source_type" = 'external_issue_order' THEN
+      RAISE EXCEPTION 'حركة من نوع «%» تشير إلى أمر صرف خارجي — الأمر لا يُستهلك بغير نوعه', NEW."movement_type";
+    END IF;
     RETURN NEW;
   END IF;
 
@@ -109,6 +115,12 @@ BEGIN
     RAISE EXCEPTION 'حركة صرف خارجي تخالف أمرها في المخزن أو الصنف';
   END IF;
 
+  -- **والوحدة مع الكمية لا بعدها** (القرار 201: «الرقم بلا وحدته نصف مصدر»)
+  -- — كميةٌ متطابقة بوحدة مختلفة تخالف أمرها وهي تبدو مطابقة له.
+  IF ord."unit" <> NEW."unit" THEN
+    RAISE EXCEPTION 'حركة صرف خارجي تخالف وحدة أمرها: % مقابل %', NEW."unit", ord."unit";
+  END IF;
+
   -- **بمقدار الكمية بالضبط** — والصرف الجزئي ليس في الحكم فلا يُخترع له باب.
   IF NEW."quantity" <> -ord."quantity" THEN
     RAISE EXCEPTION 'حركة صرف خارجي تخالف كمية أمرها: % مقابل %', NEW."quantity", ord."quantity";
@@ -126,4 +138,47 @@ FOR EACH ROW EXECUTE FUNCTION "external_issue_movement_guard"();--> statement-br
 -- **والشرط على `source_type` النصّي لا على قيمة الـenum الجديدة** (نفس العلّة).
 CREATE UNIQUE INDEX IF NOT EXISTS "inventory_movements_external_issue_source_uq"
 ON "inventory_movements" ("source_uuid")
-WHERE "source_type" = 'external_issue_order';
+WHERE "source_type" = 'external_issue_order';--> statement-breakpoint
+
+-- **حارس التجميد — «الأمر المصادَق عليه لا يُعدَّل» مفروضًا لا مكتوبًا في تعليق.**
+--
+-- **والقاعدة على الخروج من «معلّق» لا على الوجود:** المعلَّق **يُعدَّل ويُقرَّر
+-- عليه** فهو مسوّدة لم تُخرج شيئًا؛ **والمصادَق والمرفوض مجمَّدان بعدها** —
+-- لا حالة ولا كمية ولا مخزن ولا صنف ولا مستفيد ولا سبب ولا من قرّر ولا متى.
+--
+-- **ولماذا حارسٌ لا `CHECK`:** القيد يرى الصفّ الجديد وحده **فلا يعرف أنه كان
+-- معلّقًا** — و«لا يُعدَّل بعد القرار» حكمٌ على **الانتقال** لا على القيمة.
+--
+-- **والحذف ممنوع كذلك، بعلّتين:** الدفتر يشير إلى الأمر بـ`source_uuid`
+-- **لا بمفتاح أجنبي** (المرجع متعدد المصادر: شحنة · جرد · سجل يومي)، **فحذف
+-- أمرٍ مصادَق عليه يترك حركةً يتيمة في دفترٍ لا يُحذف منه** — كميةٌ خرجت بلا
+-- موقّع. **وحذف المرفوض يمحو رفضًا وقّعه إنسان.** **وبهذا وحده يصير «والأصل
+-- يبقى ظاهرًا» صحيحًا** لا موعودًا.
+CREATE OR REPLACE FUNCTION "external_issue_order_freeze_guard"()
+RETURNS trigger AS $$
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    IF OLD."status"::text <> 'معلّق' THEN
+      RAISE EXCEPTION 'أمر صرف خارجي حالته «%» لا يُحذف — والتصحيح بأمر مضاد مرتبط بالأصل', OLD."status";
+    END IF;
+    RETURN OLD;
+  END IF;
+
+  -- المعلَّق مسوّدة: يُعدَّل ويُقرَّر عليه.
+  IF OLD."status"::text = 'معلّق' THEN
+    RETURN NEW;
+  END IF;
+
+  -- **وما خرج من «معلّق» مجمَّد بكل حقوله** — والمقارنة على الصفّ كله لا على
+  -- قائمة أعمدة، **فعمودٌ يُضاف غدًا يدخل التجميد بلا تعديل هنا**.
+  IF NEW IS DISTINCT FROM OLD THEN
+    RAISE EXCEPTION 'أمر صرف خارجي حالته «%» مجمَّد — لا يُعدَّل بعد القرار (المبدأ الرابع)', OLD."status";
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;--> statement-breakpoint
+
+CREATE TRIGGER "external_issue_order_freeze_guard_trg"
+BEFORE UPDATE OR DELETE ON "external_issue_orders"
+FOR EACH ROW EXECUTE FUNCTION "external_issue_order_freeze_guard"();

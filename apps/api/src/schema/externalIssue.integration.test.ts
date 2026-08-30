@@ -266,11 +266,126 @@ describe(`المصادقة تُنقص بمقدار الكمية بالضبط (${
     await issueMovement(approved.uuid, -7);
     await expect(issueMovement(approved.uuid, -7)).rejects.toThrow();
   });
+});
+
+describe(`الحركة تطابق أمرها أو تُرفض (${S})`, () => {
+  it("حركة بوحدة تخالف أمرها ← يرفضها الحارس، فالرقم بلا وحدته نصف مصدر", async () => {
+    const approved = await order(centralA, 6, storekeeperA);
+    await decide(approved.id, "مصادَق", ownerA);
+    await expect(
+      db.execute(
+        sql`INSERT INTO inventory_movements
+              (tenant_id, warehouse_id, product_id, movement_type, quantity, unit,
+               source_type, source_uuid, created_by)
+            VALUES (${tenantA}, ${centralA}, ${productA}, 'صرف خارجي', -6, 'كجم',
+                    'external_issue_order', ${approved.uuid}, ${storekeeperA})`
+      )
+    ).rejects.toThrow();
+  });
+
+  it("أمرٌ تستهلكه حركة من نوع آخر ← يرفضها الحارس، فالاقتران في الاتجاهين", async () => {
+    const approved = await order(centralA, 6, storekeeperA);
+    await decide(approved.id, "مصادَق", ownerA);
+    await expect(
+      db.execute(
+        sql`INSERT INTO inventory_movements
+              (tenant_id, warehouse_id, product_id, movement_type, quantity, unit,
+               source_type, source_uuid, created_by)
+            VALUES (${tenantA}, ${centralA}, ${productA}, 'هالك/تلف', -6, 'كيس',
+                    'external_issue_order', ${approved.uuid}, ${storekeeperA})`
+      )
+    ).rejects.toThrow();
+  });
 
   it("حركة إلى مخزن غير مخزن أمرها ← يرفضها الحارس", async () => {
     const approved = await order(centralA, 5, storekeeperA);
     await decide(approved.id, "مصادَق", ownerA);
     await expect(issueMovement(approved.uuid, -5, houseWarehouseA)).rejects.toThrow();
+  });
+});
+
+describe(`الأمر المقرَّر مجمَّد — لا يُعدَّل ولا يُحذف (${S})`, () => {
+  it("أمر مصادَق تُقلب حالته إلى «مرفوض» ← يُرفض، فلا حركة بلا موقّع", async () => {
+    const approved = await order(centralA, 11, storekeeperA);
+    await decide(approved.id, "مصادَق", ownerA);
+    await issueMovement(approved.uuid, -11);
+    await expect(
+      db.execute(sql`UPDATE external_issue_orders SET status = 'مرفوض' WHERE id = ${approved.id}`)
+    ).rejects.toThrow();
+  });
+
+  it("أمر مصادَق تُعدَّل كميته ← يُرفض، فلا يقول الأمر ٩٩٩ والدفتر ١١", async () => {
+    const approved = await order(centralA, 11, storekeeperA);
+    await decide(approved.id, "مصادَق", ownerA);
+    await expect(
+      db.execute(sql`UPDATE external_issue_orders SET quantity = 999 WHERE id = ${approved.id}`)
+    ).rejects.toThrow();
+  });
+
+  it("أمر مصادَق يُعدَّل مستفيده ← يُرفض", async () => {
+    const approved = await order(centralA, 9, storekeeperA);
+    await decide(approved.id, "مصادَق", ownerA);
+    await expect(
+      db.execute(
+        sql`UPDATE external_issue_orders SET beneficiary = ${`جهة أخرى ${S}`}
+            WHERE id = ${approved.id}`
+      )
+    ).rejects.toThrow();
+  });
+
+  it("أمر مرفوض يُعدَّل ← يُرفض كذلك، فالتجميد على الخروج من «معلّق»", async () => {
+    const rejected = await order(centralA, 9, storekeeperA);
+    await decide(rejected.id, "مرفوض", ownerA);
+    await expect(
+      db.execute(sql`UPDATE external_issue_orders SET quantity = 1 WHERE id = ${rejected.id}`)
+    ).rejects.toThrow();
+  });
+
+  it("أمر معلّق يُعدَّل ← يُقبل، فالتجميد على الخروج من «معلّق» لا على الوجود", async () => {
+    const pending = await order(centralA, 9, storekeeperA);
+    await db.execute(
+      sql`UPDATE external_issue_orders SET quantity = 14, beneficiary = ${`جهة معدَّلة ${S}`}
+          WHERE id = ${pending.id}`
+    );
+    const result = await db.execute(
+      sql`SELECT quantity::float8 AS q FROM external_issue_orders WHERE id = ${pending.id}`
+    );
+    expect((result.rows[0] as { q: number }).q).toBe(14);
+  });
+
+  it("أمر معلّق يُصادَق ← يُقبل، فالقرار نفسه ليس تعديلًا ممنوعًا", async () => {
+    const pending = await order(centralA, 9, storekeeperA);
+    await decide(pending.id, "مصادَق", ownerA);
+    const result = await db.execute(
+      sql`SELECT status::text AS s FROM external_issue_orders WHERE id = ${pending.id}`
+    );
+    expect((result.rows[0] as { s: string }).s).toBe("مصادَق");
+  });
+});
+
+describe(`والمقرَّر لا يُحذف — والدفتر يشير إليه بلا مفتاح أجنبي (${S})`, () => {
+  it("أمر مقرَّر يُحذف ← يُرفض، فلا حركة يتيمة ولا رفضٌ يُمحى", async () => {
+    const approved = await order(centralA, 13, storekeeperA);
+    await decide(approved.id, "مصادَق", ownerA);
+    await issueMovement(approved.uuid, -13);
+    await expect(
+      db.execute(sql`DELETE FROM external_issue_orders WHERE id = ${approved.id}`)
+    ).rejects.toThrow();
+
+    const rejected = await order(centralA, 13, storekeeperA);
+    await decide(rejected.id, "مرفوض", ownerA);
+    await expect(
+      db.execute(sql`DELETE FROM external_issue_orders WHERE id = ${rejected.id}`)
+    ).rejects.toThrow();
+  });
+
+  it("أمر معلّق يُحذف ← يُقبل، ولا حركة له فلا يُتْم", async () => {
+    const pending = await order(centralA, 13, storekeeperA);
+    await db.execute(sql`DELETE FROM external_issue_orders WHERE id = ${pending.id}`);
+    const result = await db.execute(
+      sql`SELECT count(*)::int AS n FROM external_issue_orders WHERE id = ${pending.id}`
+    );
+    expect((result.rows[0] as { n: number }).n).toBe(0);
   });
 });
 
