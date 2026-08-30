@@ -468,9 +468,27 @@ id · tenant_id FK · name · is_active · created_at
 | default_route | enum | |
 | withdrawal_days | integer | |
 | storage_conditions | enum | |
-| supplier | varchar(160) | |
+| supplier_id | integer FK | **المورّد كيانًا لا نصًّا** (القرار 202) — مركَّب `(supplier_id, tenant_id)`. **وكان `supplier varchar(160)`**. **وموضعه على الصنف يُسمَّى مشكوكًا فيه ولا يُحسم**: #161 «تاسعًا» يطلب متابعة الأداء **عبر الشحنات**، وصنفٌ واحد قد يُشترى من مورّدين — **فالمورّد أقرب إلى خاصية دفعة التوريد**، على نمط الصلاحية في القرار 198. **نقلُه قرارُ نموذج** |
 | notes · is_active | text · boolean NOT NULL DEFAULT true | |
 | created_by · created_at | | |
+
+### `suppliers`
+| العمود | النوع | ملاحظات |
+|---|---|---|
+| id · tenant_id | | `UNIQUE (id, tenant_id)` — يشترطه كل مفتاح مركَّب إليه |
+| name | varchar(160) NOT NULL | `UNIQUE (tenant_id, name)` — **اسمٌ واحد لمورّد واحد داخل المستأجر** |
+| is_active · created_at | boolean NOT NULL DEFAULT true · timestamptz | |
+
+**كيان يُنشأ مرة واحدة لا نصٌّ في كل صفّ** (القرار 202) — تتقاطع عليه ثلاثة قرارات: سجل المورّد (#160 السؤال الرابع) · متابعة الأداء عبر الشحنات (#161 «تاسعًا») · واستلام الأدوية منه (#157 البند ٤). **و«المورّد أو الفقاسة» و«المورّد أو المطحنة» اسمان لدورٍ واحد لا كيانان** — تسميتان لمن اشتُري منه، **لا تصنيفٌ يطلب النظامُ حفظه**. **وحقوله ما تسمّيه القرارات وحده: الاسم.**
+
+### `carriers`
+| العمود | النوع | ملاحظات |
+|---|---|---|
+| id · tenant_id | | `UNIQUE (id, tenant_id)` |
+| name | varchar(128) NOT NULL | `UNIQUE (tenant_id, name)` |
+| is_active · created_at | boolean NOT NULL DEFAULT true · timestamptz | |
+
+**كيان لا نصّ حرّ** (القرار 202، على حكم #157 البند ٣) — **وبه يسقط تعارض تقرير الفاقد**: التجميع «حسب الناقل» على نصّ يدوي مستحيل («أبو محمد» و«ابو محمد» ناقلان) وعلى كيان ممكن. **والاستلام الأعمى لا يتأثر** — الناقل معلوم لحظة الاستلام والكمية وحدها هي المخفية. **وربطه بسجل الزيارات (#154) حدٌّ معلن: لا جدول زيارات في المخطط.**
 
 ### `inventory_movements` — الدفتر
 | العمود | النوع | ملاحظات |
@@ -513,7 +531,8 @@ CHECK ( (location_type='house' AND location_id = house_id AND house_id IS NOT NU
 | sent_quantity | numeric(12,3) NOT NULL | |
 | unit | enum NOT NULL | مشتق من المنتج المختار |
 | sent_by · sent_at | | |
-| carrier_name · vehicle_number | | |
+| carrier_id | integer FK | **الناقل كيانًا لا نصًّا** (القرار 202) — مركَّب `(carrier_id, tenant_id)`. **وكان `carrier_name varchar(128)`**، **والتجميع عليه في تقرير الفاقد مستحيل** (#157 البند ٣) |
+| vehicle_number | varchar(32) | **يبقى على الشحنة ولا ينتقل إلى الناقل** (القرار 202) — **صفة واقعة لا صفة كيان**: الناقل الواحد يبدّل شاحنته، ووضعها على الكيان **يُعيد كتابة الماضي** عند أول تبديل. نفس نمط «السائد وقت الإدخال» |
 | handover_code | varchar(8) NOT NULL | 4 أرقام |
 | notes_sender | text | |
 | counted_quantity | numeric(12,3) | |
