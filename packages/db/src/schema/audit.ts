@@ -1,5 +1,6 @@
 import {
   pgTable,
+  boolean,
   foreignKey,
   serial,
   integer,
@@ -109,4 +110,24 @@ export const adminAuditLog = pgTable("admin_audit_log", {
     .notNull()
     .references(() => platformAdmins.id),
   tenantId: integer("tenant_id").references(() => tenants.id),
+  /**
+   * **مسار الطوارئ — وسمٌ صريح لا استنتاج** (القرار 187 الطبقة الثانية، والقرار
+   * 196).
+   *
+   * **ولا يُستدلّ عليه بامتلاء `emergency_operator`:** حقلٌ فارغ قد يفرغ لخلل
+   * أو لتغيير لاحق، **والوسم يقول ما جرى ولا يُحسب من غياب غيره**. وهو نظير
+   * `stocktakes.is_opening`: **الصفّ يُصنَّف بعموده لا بشكل بقية أعمدته.**
+   */
+  isEmergency: boolean("is_emergency").notNull().default(false),
+  /**
+   * **اسم منفّذ مفتاح الطوارئ — نصٌّ لا مفتاح** (القرار 196).
+   *
+   * `actor_id` يبقى `NOT NULL` مفتاحًا إلى `platform_admins`، **ويحمل في صفّ
+   * الطوارئ معرّف المدير الذي أُعيد تعيينه — هدفَ الإجراء**؛ **والاسم هنا يقول
+   * بيد من جرى**. فالصفّ يجيب «ماذا جرى لمن، وبيد من» **بلا كذب على القيد**.
+   *
+   * **وفارغ في كل صفّ عدا مسار الطوارئ** — وهو الفرق المقصود بينه وبين
+   * `actor_id`: ذاك يشير إلى حسابٍ في النظام، وهذا يسمّي إنسانًا خارجه.
+   */
+  emergencyOperator: varchar("emergency_operator", { length: 128 }),
 });
