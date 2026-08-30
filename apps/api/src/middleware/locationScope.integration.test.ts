@@ -102,10 +102,11 @@ beforeAll(async () => {
     .insert(userAssignments)
     .values({ tenantId, userId: farmerId, houseId: assignedHouse, startDate: today() });
 
-  // مخزن بإدراج مباشر — لا مسار API للمخازن ولا يُبنى في هذه الدفعة
+  // مخزن بإدراج مباشر — لا مسار API للمخازن ولا يُبنى في هذه الدفعة.
+  // **ومستواه مركزي** بعد أن صار المستوى عمودًا إلزاميًّا (القرار 198).
   const [warehouse] = await db
     .insert(warehouses)
-    .values({ tenantId, name: `مخزن ${S}` })
+    .values({ tenantId, name: `مخزن ${S}`, level: "مركزي" })
     .returning({ id: warehouses.id });
   if (!warehouse) throw new Error("تعذّر تجهيز المخزن");
   warehouseId = warehouse.id;
@@ -165,7 +166,7 @@ describe(`مفردات الموقع — العنبر (${S})`, () => {
 });
 
 describe(`مفردات الموقع — المخزن والقيمة المجهولة (${S})`, () => {
-  it("locationType='warehouse' لمشرف ← 403 اليوم (لا نموذج إسناد بعد)", async () => {
+  it("locationType='warehouse' لمشرف بلا إسناد مخزن ← 403", async () => {
     const res = await post(supervisorToken, { locationType: "warehouse", locationId: warehouseId });
     expect(res.status).toBe(403);
   });

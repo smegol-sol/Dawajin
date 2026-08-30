@@ -12,8 +12,13 @@
  * جدول مستقل بلا `tenant_id` (`platform_admins`، القراران #146 و#147).
  * **وبقاؤه قيمةً هنا كان يجعل الفرق بين «صاحب مزرعة» و«من يرى كل العملاء»
  * مقارنةً نصّية واحدة.**
+ *
+ * **و`storekeeper` (أمين المخزن) أُضيف بالقرار 198** — **وهو أول دور يُضاف بعد
+ * قلب افتراض الحارس** (القرار 184، وشرط الإغلاق في #161 «ثالث عشر» البند ١):
+ * **من ليس في قائمة معلومة لا يرى شيئًا**، فالدور الجديد **يصل محجوبًا لا
+ * مفتوحًا**، ويُدرَج فيما يراه بقرار مكتوب لا بالسكوت.
  */
-export const USER_ROLE = ["farmer", "supervisor", "vet", "owner"] as const;
+export const USER_ROLE = ["farmer", "supervisor", "vet", "owner", "storekeeper"] as const;
 export type UserRole = (typeof USER_ROLE)[number];
 
 export const BATCH_STATUS = ["نشطة", "منتهية"] as const;
@@ -73,7 +78,19 @@ export type ReviewStatus = (typeof REVIEW_STATUS)[number];
 export const FEED_STAGE = ["بادئ", "نامي", "ناهي"] as const;
 export type FeedStage = (typeof FEED_STAGE)[number];
 
-export const PRODUCT_CATEGORY = ["علف", "دواء", "لقاح", "فيتامين", "مستلزمات"] as const;
+/**
+ * فئات الأصناف — **ستّ بعد فصل المعقمات والمطهرات** (القرار #161 «ثالث عشر»
+ * البند ٧): كانت تقع ضمن «مستلزمات»، **وحدّ ما يحمله مخزن العنبر بالفئة لا
+ * بكتلة** — وكتلةٌ تضمّ المطهر والمعدّة الإنشائية معًا **لا تُفرَض عليها قاعدة**.
+ */
+export const PRODUCT_CATEGORY = [
+  "علف",
+  "دواء",
+  "لقاح",
+  "فيتامين",
+  "معقمات ومطهرات",
+  "مستلزمات",
+] as const;
 export type ProductCategory = (typeof PRODUCT_CATEGORY)[number];
 
 export const STOCK_UNIT = ["عبوة", "زجاجة", "كيس", "لتر", "كجم", "قطعة"] as const;
@@ -134,6 +151,19 @@ export type SubscriptionStatus = (typeof SUBSCRIPTION_STATUS)[number];
 
 /** نوع الموقع في دفتر المخزون — القيدان المذكوران حرفيًا في قيد CHECK بـ §7.3. */
 export const LOCATION_TYPE = ["warehouse", "house"] as const;
+
+/**
+ * **مستوى المخزن — كيان واحد بمستوى لا أنواع متعددة** (القرار #161 «أولًا»).
+ *
+ * **والتوسع إعداد لا برمجة:** المالك ينشئ ما يناسب حجمه — مركزي واحد يصرف
+ * للعنابر مباشرة، أو مركزي ثم مخزن لكل موقع ثم العنابر، أو مخازن مواقع بلا
+ * مركزي. **وبناء أنواع مختلفة يجعل كل تغيّر في حجم العميل تعديلًا في النظام.**
+ *
+ * **ولا مستوى «مزرعة»** (#161 «ثالث عشر» البند ٣): «مخزن مزرعته» خطأ في اللفظ،
+ * **والمقصود مخزن الموقع** — والموقع قد يضمّ أكثر من مزرعة (#113).
+ */
+export const WAREHOUSE_LEVEL = ["مركزي", "موقع", "عنبر"] as const;
+export type WarehouseLevel = (typeof WAREHOUSE_LEVEL)[number];
 export type LocationType = (typeof LOCATION_TYPE)[number];
 
 /** أولوية المهمة الصحية (decisions.md #50 — حسمها صاحب المنتج). */

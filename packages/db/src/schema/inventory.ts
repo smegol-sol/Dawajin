@@ -10,6 +10,7 @@ import {
   numeric,
   text,
   uuid,
+  date,
   check,
   index,
   uniqueIndex,
@@ -22,6 +23,7 @@ import {
   doseBasisEnum,
   routeEnum,
   locationTypeEnum,
+  warehouseLevelEnum,
   inventoryMovementTypeEnum,
   shipmentStatusEnum,
   shipmentVarianceStatusEnum,
@@ -30,20 +32,72 @@ import {
   wastageReasonEnum,
   storageConditionsEnum,
 } from "./enums";
-import { farms, houses, batches } from "./farms";
+import { farms, houses, sites, batches } from "./farms";
 import { tenants } from "./tenants";
 import { users } from "./users";
 
 /** مخزن افتراضي واحد لكل مستأجر يُنشأ تلقائيًا — الجدول يسمح بأكثر لاحقًا. */
-export const warehouses = pgTable("warehouses", {
-  id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id")
-    .notNull()
-    .references(() => tenants.id),
-  name: varchar("name", { length: 128 }).notNull(),
-  isActive: boolean("is_active").notNull().default(true),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+/**
+ * المخزن — **كيان واحد له مستوى، لا أنواع متعددة** (القرار #161 «أولًا»،
+ * والقرار 198).
+ *
+ * **والمستوى حقل فالتوسع إعداد لا برمجة:** مركزي واحد يصرف للعنابر مباشرة، أو
+ * مركزي ثم مخزن لكل موقع ثم العنابر، أو مخازن مواقع بلا مركزي — **بلا سطر كود
+ * لكل شكل**.
+ *
+ * **وكل مستوى يحمل مرجعه وحده:** المركزي بلا مرجع موضع (نطاقه المستأجر)، ومخزن
+ * الموقع بـ`site_id`، ومخزن العنبر بـ`house_id` — **بقيد يمنع الجمع والغياب
+ * معًا**، على نمط قيد المستوى الواحد في `user_assignments`.
+ *
+ * **وصاحب المخزن يُشتق من مستواه ولا يُخزَّن عمودًا** (#161 «ثانيًا»): المركزي
+ * لأمين المخزن (بصفّ إسناد `user_assignments.warehouse_id`)، ومخزن الموقع
+ * للمشرف المسؤول عن مزارع ذلك الموقع، ومخزن العنبر لمربّيه. **وعمودُ صاحبٍ
+ * ثالثٌ كان سيتيح تعيينًا يناقض الاشتقاق** — فيصير للمخزن صاحبان: واحد بالجدول
+ * وواحد بالقاعدة.
+ */
+export const warehouses = pgTable(
+  "warehouses",
+  {
+    id: serial("id").primaryKey(),
+    tenantId: integer("tenant_id")
+      .notNull()
+      .references(() => tenants.id),
+    name: varchar("name", { length: 128 }).notNull(),
+    /** مركزي · موقع · عنبر — **ولا مستوى «مزرعة»** (#161 «ثالث عشر» البند ٣). */
+    level: warehouseLevelEnum("level").notNull(),
+    siteId: integer("site_id"),
+    houseId: integer("house_id"),
+    isActive: boolean("is_active").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("warehouses_id_tenant_uq").on(table.id, table.tenantId),
+    foreignKey({
+      columns: [table.siteId, table.tenantId],
+      foreignColumns: [sites.id, sites.tenantId],
+      name: "warehouses_site_id_tenant_fk",
+    }),
+    foreignKey({
+      columns: [table.houseId, table.tenantId],
+      foreignColumns: [houses.id, houses.tenantId],
+      name: "warehouses_house_id_tenant_fk",
+    }),
+    // **مرجعٌ واحد يطابق المستوى** — لا مخزن موقع بلا موقع، ولا مخزن عنبر
+    // بمرجعين، ولا مركزي يحمل موضعًا. (نمط `user_assignments_one_level_ck`.)
+    check(
+      "warehouses_level_reference_ck",
+      sql`(${table.level} = 'مركزي' AND ${table.siteId} IS NULL AND ${table.houseId} IS NULL)
+          OR (${table.level} = 'موقع' AND ${table.siteId} IS NOT NULL AND ${table.houseId} IS NULL)
+          OR (${table.level} = 'عنبر' AND ${table.houseId} IS NOT NULL AND ${table.siteId} IS NULL)`
+    ),
+    // **مخزن العنبر واحد لكل عنبر** (#161 «أولًا»، القيد الثاني) — جزئي لأن
+    // `NULL` في الفهرس الفريد «مميّزة دائمًا» فلا تمنع تكرار صفوف المستويات
+    // الأخرى (نفس علّة #128).
+    uniqueIndex("warehouses_house_uq")
+      .on(table.houseId)
+      .where(sql`${table.houseId} IS NOT NULL`),
+  ]
+);
 
 /** كتالوج المنتجات — علف/دواء/لقاح/فيتامين/مستلزمات. */
 export const products = pgTable(
@@ -109,6 +163,24 @@ export const inventoryMovements = pgTable(
     movementType: inventoryMovementTypeEnum("movement_type").notNull(),
     quantity: numeric("quantity", { precision: 12, scale: 3 }).notNull(), // موجب وارد · سالب منصرف
     unit: stockUnitEnum("unit").notNull(),
+    /**
+     * **ما التُقط لحظة الاستلام من المورّد — على الحركة لا على الصنف** (#157
+     * البند ٤، و#161 «ثالث عشر» البند ٤).
+     *
+     * **الصلاحية خاصية عبوة لا صنف:** عبوتان من نفس اللقاح تختلفان، **وحركة
+     * الاستلام هي حاملة التاريخ**. **وتُلتقط لحظة الاستلام أو لا تُلتقط أبدًا:**
+     * بعدها تدخل العبوة المخزن ويُخلط الوارد الجديد بالقديم في رصيد واحد،
+     * **فلا يبقى في النظام ما يقول متى تنتهي صلاحية ما في اليد**.
+     *
+     * **وفترة السحب وظروف التخزين معها** — و`products` يحمل قيمتيهما
+     * **افتراضًا للصنف**، وهذه **ما وصل فعلًا في هذه العبوة**: نفس نمط
+     * «السائد وقت الإدخال» في `daily_log_feed_rows.bag_weight_kg`.
+     *
+     * **وفارغة في كل حركة عدا الاستلام من مورّد.**
+     */
+    receivedExpiryDate: date("received_expiry_date"),
+    receivedWithdrawalDays: integer("received_withdrawal_days"),
+    receivedStorageConditions: storageConditionsEnum("received_storage_conditions"),
     sourceType: varchar("source_type", { length: 48 }).notNull(),
     sourceUuid: uuid("source_uuid").notNull(),
     notes: text("notes"),
@@ -233,44 +305,6 @@ export const shipments = pgTable(
     index("shipments_tenant_status_idx").on(table.tenantId, table.status),
   ]
 );
-
-export const stocktakes = pgTable(
-  "stocktakes",
-  {
-    id: serial("id").primaryKey(),
-    uuid: uuid("uuid").notNull().defaultRandom(),
-    tenantId: integer("tenant_id")
-      .notNull()
-      .references(() => tenants.id),
-    locationType: locationTypeEnum("location_type").notNull(),
-    locationId: integer("location_id").notNull(),
-    openedBy: integer("opened_by").notNull(),
-    openedAt: timestamp("opened_at", { withTimezone: true }).notNull().defaultNow(),
-    closedAt: timestamp("closed_at", { withTimezone: true }),
-    isOpening: boolean("is_opening").notNull().default(false),
-  },
-  (table) => [
-    foreignKey({
-      columns: [table.openedBy, table.tenantId],
-      foreignColumns: [users.id, users.tenantId],
-      name: "stocktakes_opened_by_tenant_fk",
-    }),
-  ]
-);
-
-export const stocktakeItems = pgTable("stocktake_items", {
-  id: serial("id").primaryKey(),
-  stocktakeId: integer("stocktake_id")
-    .notNull()
-    .references(() => stocktakes.id),
-  productId: integer("product_id")
-    .notNull()
-    .references(() => products.id),
-  countedQty: numeric("counted_qty", { precision: 12, scale: 3 }).notNull(),
-  bookQty: numeric("book_qty", { precision: 12, scale: 3 }).notNull(),
-  variance: numeric("variance", { precision: 12, scale: 3 }).notNull(),
-  reason: text("reason"),
-});
 
 export const wastage = pgTable(
   "wastage",
