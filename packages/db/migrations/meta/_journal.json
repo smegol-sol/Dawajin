@@ -85,6 +85,13 @@
       "when": 1788066497253,
       "tag": "0011_platform_admin_totp",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1788068323700,
+      "tag": "0012_admin_audit_emergency",
+      "breakpoints": true
     }
   ]
 }

@@ -186,3 +186,73 @@ export async function resetOtherAdminPassword(
 
   return { temporaryPassword };
 }
+
+export interface EmergencyResetInput {
+  /** هاتف المدير المستهدف — كما يُدخله المنفّذ على الخادم. */
+  phone: string;
+  /** اسم منفّذ الإجراء — **مطلوب لا اختياري** (القرار 196). */
+  operator: string;
+}
+
+/**
+ * **الطبقة الثانية من الاسترداد — مفتاح الطوارئ** (القرار 187، والقرار 196).
+ *
+ * **ملاذ أخير حين تسقط الأولى، ويُنفَّذ على الخادم نفسه لا من الشبكة:** لا مسار
+ * API له إطلاقًا — من يصل الخادم يملك المنصة أصلًا (نصّ 187)، **والغاية أن يترك
+ * كل استرداد أثرًا مكتوبًا لا يُمحى** لا أن يُمنع القفل.
+ *
+ * **والاسم مطلوب:** تنفيذٌ بلا اسم **يجعل الأثر بلا صاحب**، وهو نقيض غاية
+ * القرار كلها — فيُرفض **قبل أي كتابة**.
+ *
+ * **والكتابتان في معاملة واحدة:** تحديث الكلمة وكتابة الأثر معًا — **وإخفاق
+ * الثاني بعد نجاح الأول يعيد تعيين كلمة بلا أثر**، وهو بالضبط ما بُني هذا
+ * المسار ليمنعه.
+ *
+ * @returns الكلمة المؤقتة — تُطبع مرة واحدة ولا تُخزَّن بنصّها
+ * @throws HttpError 400 إن كان الاسم فارغًا · 404 إن لم يوجد المدير
+ */
+export async function emergencyResetPlatformAdminPassword(
+  db: Database,
+  env: Env,
+  input: EmergencyResetInput
+): Promise<{ temporaryPassword: string; adminId: number }> {
+  const operator = input.operator.trim();
+  if (operator === "") {
+    throw new HttpError(400, "operator_required", "اسم منفّذ الإجراء مطلوب — لا أثر بلا صاحب");
+  }
+
+  const phoneE164 = normalizePhoneE164(input.phone, env.DEFAULT_COUNTRY_CODE);
+  const [admin] = await db
+    .select({ id: platformAdmins.id })
+    .from(platformAdmins)
+    .where(eq(platformAdmins.phoneE164, phoneE164))
+    .limit(1);
+  if (!admin) throw new HttpError(404, "not_found", "الحساب غير موجود");
+
+  const temporaryPassword = generateTemporaryPassword();
+  const passwordHash = await bcrypt.hash(temporaryPassword, env.BCRYPT_ROUNDS);
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(platformAdmins)
+      .set({ passwordHash, mustChangePassword: true })
+      .where(eq(platformAdmins.id, admin.id));
+
+    // **الفاعل هو الهدف، والاسم يقول من نفّذ** (القرار 196): `actor_id` مفتاح
+    // `NOT NULL` إلى `platform_admins`، ومنفّذ الطوارئ ليس صفًّا فيه.
+    await tx.insert(adminAuditLog).values({
+      tenantId: null,
+      actorId: admin.id,
+      entityType: "platform_admin",
+      entityId: String(admin.id),
+      action: "emergency_reset_password",
+      isEmergency: true,
+      emergencyOperator: operator,
+      after: { mustChangePassword: true },
+      reason: "مفتاح الطوارئ — الطبقة الثانية (القرار 187)",
+      requestId: null,
+    });
+  });
+
+  return { temporaryPassword, adminId: admin.id };
+}

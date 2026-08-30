@@ -13,7 +13,8 @@
     "test:coverage": "vitest run --config vitest.coverage.config.ts --coverage",
     "typecheck": "tsc --noEmit",
     "api:generate": "echo 'TODO: openapi-typescript + orval — يُفعَّل عند إنشاء أول عقد OpenAPI (المرحلة 1)'",
-    "platform:create-admin": "tsx src/scripts/platform-create-admin.ts"
+    "platform:create-admin": "tsx src/scripts/platform-create-admin.ts",
+    "platform:emergency-reset": "tsx src/scripts/platform-emergency-reset.ts"
   },
   "dependencies": {
     "@dawajin/db": "workspace:*",
