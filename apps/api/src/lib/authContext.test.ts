@@ -25,9 +25,11 @@ describe("requireUser", () => {
 });
 
 describe("requireTenantUser", () => {
+  // الدور هنا **رمز قديم بقيمة لم تعد معلومة** (القرار 194) — والحكم واحد
+  // لكل من يصل بلا مستأجر، معلوم الدور أو مجهوله.
   it("يرمي 401 عندما tenantId يساوي null", () => {
     expect(() =>
-      requireTenantUser(fakeRequest({ id: 1, tenantId: null, role: "platform_admin" }))
+      requireTenantUser(fakeRequest({ id: 1, tenantId: null, role: "platform_admin" as never }))
     ).toThrow(HttpError);
   });
 

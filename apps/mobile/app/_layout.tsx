@@ -105,7 +105,6 @@ export default function RootLayout() {
           <Stack.Screen name="(supervisor)" />
           <Stack.Screen name="(vet)" />
           <Stack.Screen name="(owner)" />
-          <Stack.Screen name="platform" />
         </Stack>
         {gate}
       </SafeAreaProvider>

@@ -93,11 +93,12 @@ export async function listAccountsForPhone(
     .leftJoin(tenants, eq(users.tenantId, tenants.id))
     .where(eq(users.phoneE164, phoneE164));
 
-  // flatMap لا filter+map: الأخير لا يُضيّق `tenantId` من `number | null`
-  // فيضطر لتأكيد نوع، والتأكيد يخفي تغيّرًا مستقبليًا في المخطط بدل كشفه
+  // flatMap لا filter+map — والسبب تغيّر ولم يزل: كان `tenantId` يحتاج تضييقًا
+  // من `number | null`، **و`users.tenant_id` صار `NOT NULL` (القرار 194)**
+  // فسقط فحص `null` معه. ويبقى `flatMap` لأن الإخفاء نفسه ما زال قائمًا.
   return rows.flatMap((r) => {
-    // مسار مدير المنصة منفصل (platform-login)، والمعطَّل مخفي (القيد د)
-    if (r.tenantId === null || !r.isActive) return [];
+    // المعطَّل مخفي (القيد د) — ولا مدير منصة في هذا الجدول بعد اليوم
+    if (!r.isActive) return [];
     return [{ tenantId: r.tenantId, tenantName: r.tenantName ?? "" }];
   });
 }

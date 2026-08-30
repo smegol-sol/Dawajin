@@ -3,7 +3,18 @@ import { SignJWT, jwtVerify, type JWTPayload } from "jose";
 
 export interface AuthTokenPayload extends JWTPayload {
   sub: string; // user id
-  tenantId: number | null; // null حصريًا لمدير المنصة
+  /**
+   * **مستأجر حامل الرمز.** `null` كانت **حصريًا لمدير المنصة** — وقد فُصل إلى
+   * جدول مستقل (القرار 194) فلم يعد يُصدَر رمز بلا مستأجر.
+   *
+   * **والنوع يبقى `| null` عمدًا لا سهوًا:** `verifyAccessToken` **يُسقِط
+   * الحمولة إسقاطًا (`as`) بلا تحقق بنيوي**، فالنوع هنا **ادّعاء عن نصّ وقّعناه
+   * سابقًا لا ضمان عن نصّ قادم**. وتضييقه إلى `number` يجعل حرّاس `null`
+   * القائمين (`requireTenant` · `requireTenantUser` · `enforceEntityAccess`)
+   * **شروطًا ميتة في نظر المدقّق فتُحذف** — **فيسقط الحارس لا الاحتمال**.
+   * **ويُضيَّق يوم يُتحقَّق من الحمولة عند فكّها لا قبله.**
+   */
+  tenantId: number | null;
   role: UserRole;
 }
 

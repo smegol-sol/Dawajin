@@ -4,7 +4,7 @@ import { and, asc, eq, sql } from "drizzle-orm";
 
 import { writeAuditLog } from "../lib/auditLog";
 import {
-  isAssignmentScoped,
+  hasFullVisibility,
   visibleFarmCondition,
   visibleHouseCondition,
   type Viewer,
@@ -75,10 +75,15 @@ export async function listSites(
     .where(eq(sites.tenantId, tenantId))
     .groupBy(sites.id, sites.name);
 
-  const scoped = isAssignmentScoped(viewer.role);
-  return scoped
-    ? query.having(sql`count(distinct ${farms.id}) > 0`).orderBy(asc(sites.name), asc(sites.id))
-    : query.orderBy(asc(sites.name), asc(sites.id));
+  // **الموقع يظهر لصاحب الرؤية الكاملة وحده بلا شرط** (القرار 194، إتمامًا
+  // للقرار 184): كان الشرط «مقيَّد بالإسناد ← يُشترط أن يرى مزرعة» **وغيرُه
+  // يمرّ**، وغيرُه يشمل **كل دور غير معلوم** — فكان رمزٌ بدور محذوف يرى أسماء
+  // مواقع المستأجر بعدّادات أصفار. **وقُلبت إلى قائمة موجبة كنظائرها**:
+  // المالك بلا شرط، ومن سواه يُشترط أن يرى مزرعة واحدة على الأقل، **ودورٌ
+  // مجهول لا يرى شيئًا** لأنه لا يرى أي مزرعة أصلًا (`denyAll`).
+  return hasFullVisibility(viewer.role)
+    ? query.orderBy(asc(sites.name), asc(sites.id))
+    : query.having(sql`count(distinct ${farms.id}) > 0`).orderBy(asc(sites.name), asc(sites.id));
 }
 
 /**

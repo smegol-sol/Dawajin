@@ -5,7 +5,15 @@
  * راجع backend-technical-spec.md §8 لجدول الأنواع الكامل.
  */
 
-export const USER_ROLE = ["farmer", "supervisor", "vet", "owner", "platform_admin"] as const;
+/**
+ * أدوار المستخدمين **داخل المستأجر** — خمسة بلا سادس (القرار 194).
+ *
+ * **و`platform_admin` أُزيل**: مدير المنصة **ليس دورًا في مستأجر** بل كيان في
+ * جدول مستقل بلا `tenant_id` (`platform_admins`، القراران #146 و#147).
+ * **وبقاؤه قيمةً هنا كان يجعل الفرق بين «صاحب مزرعة» و«من يرى كل العملاء»
+ * مقارنةً نصّية واحدة.**
+ */
+export const USER_ROLE = ["farmer", "supervisor", "vet", "owner"] as const;
 export type UserRole = (typeof USER_ROLE)[number];
 
 export const BATCH_STATUS = ["نشطة", "منتهية"] as const;

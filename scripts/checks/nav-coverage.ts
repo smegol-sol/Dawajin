@@ -4,8 +4,12 @@ import { join, relative } from "node:path";
 /**
  * فاحص تغطية التنقّل — يمنع شاشة خارج مكدّس تبويب وبلا زر رجوع
  * (backend-technical-spec.md §21). يتحقق أن كل شاشة في مجموعة دور
- * ((farmer)، (supervisor)، (vet)، (owner)، platform) مسجَّلة فعليًا في
+ * ((farmer)، (supervisor)، (vet)، (owner)) مسجَّلة فعليًا في
  * Tabs.Screen بتخطيط المجموعة.
+ *
+ * **ومجموعة `platform` أُزيلت من القائمة** (القرار 194): شاشات مدير المنصة
+ * الخمس حُذفت من التطبيق — **«لوحة تحكم منفصلة عن التطبيق، لا شاشة داخله»**
+ * (#147). **وبقاء الاسم هنا كان سيجعل الفاحص يطالب بمجلد يجب ألا يعود.**
  *
  * ويمنع أيضًا أي **ملف غير مسار** داخل `app/` (القرار #91): Expo Router
  * يعامل كل ملف هناك كمسار بلا استثناء للاحقة `.test.tsx` — وقع هذا فعلًا،
@@ -13,7 +17,7 @@ import { join, relative } from "node:path";
  */
 
 const APP_DIR = join(process.cwd(), "apps/mobile/app");
-const TAB_GROUPS = ["(farmer)", "(supervisor)", "(vet)", "(owner)", "platform"];
+const TAB_GROUPS = ["(farmer)", "(supervisor)", "(vet)", "(owner)"];
 
 /** لواحق ملفات لا يجوز وجودها داخل شجرة التوجيه إطلاقًا. */
 const NON_ROUTE_SUFFIXES = [".test.tsx", ".test.ts", ".spec.tsx", ".spec.ts"];
