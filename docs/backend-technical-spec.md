@@ -433,7 +433,7 @@ id · user_id FK · house_id FK (nullable) · **farm_id FK (nullable)** · tenan
 ### `daily_log_feed_rows`
 | العمود | النوع | ملاحظات |
 |---|---|---|
-| id · daily_log_id FK · product_id FK | | |
+| id · **tenant_id** · daily_log_id FK · product_id FK | | **`tenant_id` أُضيف بالقرار 205**، **والمفتاحان مركَّبان** `(fk, tenant_id)`. **وكان الجدول بلا عمود مستأجر فمفاتيحه مفردة** — **وأُثبت على القاعدة**: صفٌّ يستشهد بصنف مستأجرٍ آخر قُبل صامتًا |
 | feed_stage | enum NOT NULL | |
 | bags | numeric(8,3) NOT NULL | |
 | kg | numeric(10,2) NOT NULL | محسوب |
@@ -442,9 +442,11 @@ id · user_id FK · house_id FK (nullable) · **farm_id FK (nullable)** · tenan
 جدول منفصل لأن أيام الانتقال بين المراحل تحمل نوعين معًا.
 
 ### `log_notes`
-id · daily_log_id FK · author_id FK · body text NOT NULL · created_at
+id · **tenant_id** · daily_log_id FK · author_id FK · body text NOT NULL · created_at
 
 غير قابلة للتعديل أو الحذف · إضافتها تنقل السجل لـ `pending_review` في نفس المعاملة.
+
+> **`tenant_id` أُضيف بالقرار 205، والمفتاحان مركَّبان.** **وأُثبت على القاعدة قبل الإصلاح**: ملاحظةٌ على سجلّ يومٍ في مزرعة مستأجرٍ **يكتبها مستخدم مستأجرٍ آخر** قُبلت صامتة — `author_id → users.id` مفردًا.
 
 ## 7.3 المخزون
 
@@ -576,9 +578,11 @@ CHECK ( (location_type='house' AND location_id = house_id AND house_id IS NOT NU
 ## 7.4 الصحة
 
 - **health_tasks:** id · uuid · tenant_id · house_id · batch_id · product_id FK · dose_amount · dose_unit · dose_basis · route · scheduled_date · priority enum · notes_vet · status enum · created_by(vet) · created_at
-- **health_task_executions:** id · task_id FK · executed_at · quantity_used · notes · photo_url · executed_by · failed boolean · failure_reason
+- **health_task_executions:** id · **tenant_id** · task_id FK · executed_at · quantity_used · notes · photo_url · executed_by FK · failed boolean · failure_reason — **`tenant_id` والمفتاحان المركَّبان بالقرار 205**
 - **health_observations:** id · uuid · tenant_id · house_id · batch_id · symptoms text[] NOT NULL · severity enum NOT NULL · affected_estimate · photo_urls · notes · status enum NOT NULL DEFAULT 'جديد' · vet_response · responded_by · responded_at · created_by · created_at
-- **batch_diagnoses:** id · batch_id FK · observation_id FK NULL · diagnosis · treatment_plan · created_by(vet) · created_at
+- **batch_diagnoses:** id · **tenant_id** · batch_id FK · observation_id FK NULL · diagnosis · treatment_plan · created_by(vet) FK · created_at — **`tenant_id` والمفاتيح الثلاثة المركَّبة بالقرار 205**
+
+> **والقرار 205 أضاف كذلك `UNIQUE (id, tenant_id)` إلى `health_tasks` و`health_observations`** — **ولم يكونا موجودين**، و Postgres يرفض المفتاح المركَّب بلا مرجعٍ فريد مطابق ولو كان `id` مفتاحًا أساسيًّا. **فغيابهما كان يمنع الإصلاح لا يؤجّله.**
 
 ## 7.5 دورة العنبر
 
