@@ -26,6 +26,8 @@ import {
   HEALTH_OBSERVATION_STATUS,
   DISPUTE_STATUS,
   STORAGE_CONDITIONS,
+  EXTERNAL_ISSUE_STATUS,
+  EXTERNAL_ISSUE_REASON,
 } from "@dawajin/shared";
 import { pgEnum } from "drizzle-orm/pg-core";
 
@@ -66,3 +68,5 @@ export const healthObservationStatusEnum = pgEnum(
 );
 export const disputeStatusEnum = pgEnum("dispute_status", DISPUTE_STATUS);
 export const storageConditionsEnum = pgEnum("storage_conditions", STORAGE_CONDITIONS);
+export const externalIssueStatusEnum = pgEnum("external_issue_status", EXTERNAL_ISSUE_STATUS);
+export const externalIssueReasonEnum = pgEnum("external_issue_reason", EXTERNAL_ISSUE_REASON);
