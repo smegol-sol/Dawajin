@@ -31,6 +31,7 @@ import {
   wastageReasonEnum,
   storageConditionsEnum,
 } from "./enums";
+import { farmerRequests } from "./farmer-requests";
 import { farms, houses, sites, batches } from "./farms";
 import { tenants } from "./tenants";
 import { users } from "./users";
@@ -499,6 +500,19 @@ export const inventoryTransfers = pgTable(
     quantity: numeric("quantity", { precision: 12, scale: 3 }).notNull(),
     unit: stockUnitEnum("unit").notNull(),
     reason: text("reason"),
+    /**
+     * **الطلب الذي صدر هذا التحويل تلبيةً له** (القرار 211) — «**للمشرف إصدار
+     * أمر صرف مباشرة منه، ويُربط الطلب بالأمر تلقائيًا**» (#160 «خامسًا»).
+     *
+     * **والمرجع على التحويل لا على الطلب — وهو ما يجعل الشكل يتبع الحكم:**
+     * الأمر يصدر **من** الطلب فيعرف مصدره. **وطلبٌ واحد قد يحمله أكثر من
+     * تحويل** (نصف الكمية اليوم ونصفها غدًا) **بلا جدول وسيط**؛ ولو كان
+     * المرجع على الطلب لأغلق ذلك بعمود واحد. **فالشكل لا يقرّر التلبية
+     * الجزئية ولا يمنعها** — **وقرارها للمالك** (§7-ب البند 61).
+     *
+     * **وفارغ في كل تحويل لم يُطلب** — والتحويل بين عنبرين (#159) أشيعها.
+     */
+    requestId: integer("request_id"),
     createdBy: integer("created_by").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     confirmedBy: integer("confirmed_by"),
@@ -509,6 +523,11 @@ export const inventoryTransfers = pgTable(
       columns: [table.confirmedBy, table.tenantId],
       foreignColumns: [users.id, users.tenantId],
       name: "inventory_transfers_confirmed_by_tenant_fk",
+    }),
+    foreignKey({
+      columns: [table.requestId, table.tenantId],
+      foreignColumns: [farmerRequests.id, farmerRequests.tenantId],
+      name: "inventory_transfers_request_id_tenant_fk",
     }),
     foreignKey({
       columns: [table.createdBy, table.tenantId],

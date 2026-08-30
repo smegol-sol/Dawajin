@@ -152,6 +152,17 @@ export type ExternalIssueStatus = (typeof EXTERNAL_ISSUE_STATUS)[number];
 export const EXTERNAL_ISSUE_REASON = ["بيع", "أخرى"] as const;
 export type ExternalIssueReason = (typeof EXTERNAL_ISSUE_REASON)[number];
 
+/**
+ * **حالة طلب المربّي** (القرار 211) — **قيمتان لا ثلاث**.
+ *
+ * **والحكم يسمّي «لم يُلبَّ» ولا يسمّي رفضًا** (#160 «خامسًا»): **الطلب غير
+ * الملبَّى يتصاعد إلى المالك بمرور المدّة** — **فالتصعيد يقوم على الصمت**.
+ * **وقيمةُ رفضٍ تغيّر معنى التصعيد** (أيتصاعد المرفوض؟ إن لم يتصاعد صار
+ * الرفض بابًا لإسكات الطلب) — **وهو قرار مالك لم يصدر، فلا تُخترع القيمة**.
+ */
+export const FARMER_REQUEST_STATUS = ["مرفوع", "ملبّى"] as const;
+export type FarmerRequestStatus = (typeof FARMER_REQUEST_STATUS)[number];
+
 export const SHIPMENT_STATUS = ["معلّقة", "مستلمة", "ملغاة"] as const;
 export type ShipmentStatus = (typeof SHIPMENT_STATUS)[number];
 

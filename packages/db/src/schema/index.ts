@@ -6,6 +6,7 @@ export * from "./farms";
 export * from "./daily-logs";
 export * from "./inventory";
 export * from "./external-issue";
+export * from "./farmer-requests";
 export * from "./stock-counts";
 export * from "./health";
 export * from "./house-prep";
