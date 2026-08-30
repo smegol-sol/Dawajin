@@ -32,10 +32,13 @@ async function insertId(query: ReturnType<typeof sql>): Promise<number> {
   return row.id;
 }
 
-async function packageSizeOf(productId: number): Promise<string | null> {
-  const result = await db.execute(sql`SELECT "package_size" FROM products WHERE id = ${productId}`);
-  const row = result.rows[0] as { package_size?: string | null } | undefined;
-  return row?.package_size ?? null;
+async function packageOf(productId: number): Promise<{ size: string | null; unit: string | null }> {
+  const result = await db.execute(
+    sql`SELECT "package_size", "package_unit" FROM products WHERE id = ${productId}`
+  );
+  const row = result.rows[0] as
+    { package_size?: string | null; package_unit?: string | null } | undefined;
+  return { size: row?.package_size ?? null, unit: row?.package_unit ?? null };
 }
 
 beforeAll(async () => {
@@ -77,20 +80,24 @@ afterAll(async () => {
 });
 
 describe(`وزن الكيس مصدرًا واحدًا على الصنف (${S})`, () => {
-  it("صنف علف بلا حجم عبوة صريح ← يأخذ ٥٠ من القاعدة", async () => {
+  it("صنف علف بلا حجم عبوة ولا وحدة ← يأخذ الاثنين من القاعدة", async () => {
     const productId = await insertId(
       sql`INSERT INTO products (tenant_id, category, name, stock_unit)
           VALUES (${tenantId}, 'علف', ${`علف بلا عبوة ${S}`}, 'كيس') RETURNING id`
     );
-    expect(Number(await packageSizeOf(productId))).toBe(50);
+    const pkg = await packageOf(productId);
+    expect(Number(pkg.size)).toBe(50);
+    expect(pkg.unit).toBe("كجم");
   });
 
-  it("صنف علف بعبوة مختلفة ← يبقى بعبوته لا بالخمسين", async () => {
+  it("صنف علف بعبوة مختلفة ← يبقى بعبوته، ووحدته تُملأ معها", async () => {
     const productId = await insertId(
       sql`INSERT INTO products (tenant_id, category, name, stock_unit, package_size)
           VALUES (${tenantId}, 'علف', ${`علف بعبوة ٢٥ ${S}`}, 'كيس', 25) RETURNING id`
     );
-    expect(Number(await packageSizeOf(productId))).toBe(25);
+    const pkg = await packageOf(productId);
+    expect(Number(pkg.size)).toBe(25);
+    expect(pkg.unit).toBe("كجم");
   });
 
   it("لقاح بلا حجم عبوة ← يبقى بلا عبوة، فالخمسون للعلف وحده", async () => {
@@ -98,7 +105,9 @@ describe(`وزن الكيس مصدرًا واحدًا على الصنف (${S})`,
       sql`INSERT INTO products (tenant_id, category, name, stock_unit)
           VALUES (${tenantId}, 'لقاح', ${`لقاح ${S}`}, 'زجاجة') RETURNING id`
     );
-    expect(await packageSizeOf(productId)).toBeNull();
+    const pkg = await packageOf(productId);
+    expect(pkg.size).toBeNull();
+    expect(pkg.unit).toBeNull();
   });
 
   it("محو حجم عبوة صنف علف بتعديل ← يُملأ ٥٠ لا يعود الصنف بلا وزن", async () => {
@@ -107,7 +116,43 @@ describe(`وزن الكيس مصدرًا واحدًا على الصنف (${S})`,
           VALUES (${tenantId}, 'علف', ${`علف يُمحى وزنه ${S}`}, 'كيس', 25) RETURNING id`
     );
     await db.execute(sql`UPDATE products SET "package_size" = NULL WHERE id = ${productId}`);
-    expect(Number(await packageSizeOf(productId))).toBe(50);
+    expect(Number((await packageOf(productId)).size)).toBe(50);
+  });
+
+  it("محو وحدة عبوة صنف علف بتعديل ← تُملأ من جديد لا يبقى الرقم بلا وحدته", async () => {
+    const productId = await insertId(
+      sql`INSERT INTO products (tenant_id, category, name, stock_unit, package_size, package_unit)
+          VALUES (${tenantId}, 'علف', ${`علف تُمحى وحدته ${S}`}, 'كيس', 40, 'كجم') RETURNING id`
+    );
+    await db.execute(sql`UPDATE products SET "package_unit" = NULL WHERE id = ${productId}`);
+    const pkg = await packageOf(productId);
+    expect(pkg.unit).toBe("كجم");
+    expect(Number(pkg.size)).toBe(40);
+  });
+});
+
+describe(`رقمٌ بلا وحدته لا يُقبل من أي فئة (${S})`, () => {
+  it("دواء بحجم عبوة بلا وحدتها ← يرفضه القيد، فالرقم بلا وحدته ليس مصدرًا", async () => {
+    await expect(
+      db.execute(
+        sql`INSERT INTO products (tenant_id, category, name, stock_unit, package_size)
+            VALUES (${tenantId}, 'دواء', ${`دواء بلا وحدة ${S}`}, 'زجاجة', 100)`
+      )
+    ).rejects.toThrow();
+  });
+
+  it("دواء بحجم عبوة ووحدتها ← يُقبل، والقيد لا يفرض حجمًا على أحد", async () => {
+    const withUnit = await insertId(
+      sql`INSERT INTO products (tenant_id, category, name, stock_unit, package_size, package_unit)
+          VALUES (${tenantId}, 'دواء', ${`دواء بوحدة ${S}`}, 'زجاجة', 100, 'مل') RETURNING id`
+    );
+    expect((await packageOf(withUnit)).unit).toBe("مل");
+
+    const without = await insertId(
+      sql`INSERT INTO products (tenant_id, category, name, stock_unit)
+          VALUES (${tenantId}, 'دواء', ${`دواء بلا عبوة ${S}`}, 'زجاجة') RETURNING id`
+    );
+    expect((await packageOf(without)).size).toBeNull();
   });
 
   it("إعداد المستأجر `feed_bag_weight_kg` ← لا وجود له في القاعدة", async () => {
@@ -144,6 +189,6 @@ describe(`السجل الميداني لقطة مجمَّدة لا مصدر يُ
     const row = result.rows[0] as { bag_weight_kg: string; kg: string };
     expect(Number(row.bag_weight_kg)).toBe(45);
     expect(Number(row.kg)).toBe(450);
-    expect(Number(await packageSizeOf(productId))).toBe(60);
+    expect(Number((await packageOf(productId)).size)).toBe(60);
   });
 });

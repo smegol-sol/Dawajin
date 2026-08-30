@@ -1,5 +1,5 @@
 {
-  "id": "afba69f9-91d1-4d37-a32c-875efc6c4f28",
+  "id": "360c4649-3128-4906-805d-fc65fe7ff87f",
   "prevId": "25ecdf27-c6f4-4dc9-b1c4-887575b02223",
   "version": "7",
   "dialect": "postgresql",
@@ -2130,7 +2130,11 @@
       "checkConstraints": {
         "products_feed_package_size_ck": {
           "name": "products_feed_package_size_ck",
-          "value": "\"products\".\"category\" <> 'علف' OR \"products\".\"package_size\" IS NOT NULL"
+          "value": "\"products\".\"category\" <> 'علف' OR (\"products\".\"package_size\" IS NOT NULL AND \"products\".\"package_unit\" IS NOT NULL)"
+        },
+        "products_package_unit_ck": {
+          "name": "products_package_unit_ck",
+          "value": "\"products\".\"package_size\" IS NULL OR \"products\".\"package_unit\" IS NOT NULL"
         }
       },
       "isRLSEnabled": false
