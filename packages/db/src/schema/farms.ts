@@ -21,6 +21,7 @@ import {
   batchStatusEnum,
   powerSourceEnum,
 } from "./enums";
+import { warehouses } from "./inventory";
 import { tenants } from "./tenants";
 import { users } from "./users";
 
@@ -195,6 +196,20 @@ export const userAssignments = pgTable(
     userId: integer("user_id").notNull(),
     houseId: integer("house_id"),
     farmId: integer("farm_id"),
+    /**
+     * **المستوى الثالث — إسناد المخزن** (القرار #161 «ثالث عشر» البند ١٠،
+     * والقرار 198).
+     *
+     * **وترتيب التغييرين كان صريحًا في القرار:** الإسناد بمدة أولًا (#158،
+     * منفَّذ بالقرار 190) **ثم مستوى المخزن فوقه** — لأن قيد عدم التداخل
+     * الزمني يجب أن يكون قائمًا قبل أن يُوسَّع، **وعكسُ الترتيب يعني كتابة
+     * القيد مرتين**. وهذا هو الفوق.
+     *
+     * **وسؤال «كيف يُسند أمين المخزن» يبقى مفتوحًا للمالك** (#161 «حادي عشر»
+     * السؤال ١: مخزن بعينه · عدة مخازن · الشركة كلها) — **والبنية تحتمل
+     * الثلاثة بلا ترجيح**: صفّ واحد، أو صفوف، أو لا صفّ ويُحكم بالدور وحده.
+     */
+    warehouseId: integer("warehouse_id"),
     tenantId: integer("tenant_id")
       .notNull()
       .references(() => tenants.id),
@@ -226,10 +241,18 @@ export const userAssignments = pgTable(
       foreignColumns: [users.id, users.tenantId],
       name: "user_assignments_user_id_tenant_fk",
     }),
-    // مستوى واحد لكل صف — لا صف بلا مستوى ولا صف بمستويين
+    foreignKey({
+      columns: [table.warehouseId, table.tenantId],
+      foreignColumns: [warehouses.id, warehouses.tenantId],
+      name: "user_assignments_warehouse_id_tenant_fk",
+    }),
+    // **مستوى واحد من ثلاثة** (القرار 198): كان «أحدهما» بعمودين، فصار
+    // «واحدٌ بالضبط» بثلاثة — لا صفّ بلا مستوى ولا صفّ بمستويين.
     check(
       "user_assignments_one_level_ck",
-      sql`(${table.houseId} IS NULL) <> (${table.farmId} IS NULL)`
+      sql`(CASE WHEN ${table.houseId} IS NOT NULL THEN 1 ELSE 0 END)
+          + (CASE WHEN ${table.farmId} IS NOT NULL THEN 1 ELSE 0 END)
+          + (CASE WHEN ${table.warehouseId} IS NOT NULL THEN 1 ELSE 0 END) = 1`
     ),
     // **الفهرسان الفريدان الجزئيان أُزيلا واستُبدلا بقيدَي استبعاد تداخل**
     // (القرار #158 حكم ٢، والقرار 190). سؤالهما تغيّر من «هل تكرّر الإسناد؟»
@@ -243,6 +266,7 @@ export const userAssignments = pgTable(
     //     (user_id WITH =, house_id WITH =, daterange(start_date, end_date, '[]') WITH &&)
     //     WHERE (house_id IS NOT NULL)
     //   user_assignments_farm_period_ex   — نظيره على farm_id
+    //   user_assignments_warehouse_period_ex — ونظيرهما على warehouse_id (القرار 198)
     //
     // **وجزئيان مرتين لا قيد واحد بالعمودين**: `NULL` في قيد الاستبعاد لا
     // تساوي `NULL`، فقيدٌ واحد يجمع `house_id` و`farm_id` **لا يمنع شيئًا** —

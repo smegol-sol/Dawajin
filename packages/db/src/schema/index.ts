@@ -5,6 +5,7 @@ export * from "./platform-admins";
 export * from "./farms";
 export * from "./daily-logs";
 export * from "./inventory";
+export * from "./stock-counts";
 export * from "./health";
 export * from "./house-prep";
 export * from "./breed-standards";
