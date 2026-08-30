@@ -14,8 +14,8 @@ import { assertIsTestDatabase } from "../lib/testGuard";
 /**
  * GET /api/auth/me · POST /api/auth/change-password ·
  * POST /api/auth/register-push-token — بلا قيد دور (أي مستخدم مصادَق على
- * نفسه)، فمصفوفة الصلاحيات هنا هي: allow لكل الأدوار الأربعة غير
- * platform_admin (خارج نطاق المرحلة 1 — لا مسار تسجيل دخول له بعد)،
+ * نفسه)، فمصفوفة الصلاحيات هنا هي: allow لكل الأدوار الأربعة (وهي كل ما في
+ * `USER_ROLE` بعد فصل مدير المنصة إلى `platform_admins`، القرار 194)،
  * و401 لغير المصادَق. لا cross-tenant-404: هذه المسارات لا تأخذ معرّف
  * كيان في الرابط أصلًا (تعمل على req.user.id فقط) — enforceEntityAccess
  * لا يفحص شيئًا هنا (راجع تقرير إغلاق المرحلة 1 لتفصيل هذه النقطة).

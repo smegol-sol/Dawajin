@@ -353,9 +353,16 @@ export function enforceEntityAccess(db: Database) {
       const locationRefs = resolveLocationRefs(req);
       await assertWarehouseLocations(db, user, locationRefs);
 
-      if (!isAssignmentScoped(user.role)) {
+      // **من ليس في قائمة معلومة لا يمرّ** (القرار 194، إتمامًا للقرار 184):
+      // كان الشرط «غير مقيَّد بالإسناد ← يمرّ»، **وغيرُ المقيَّد يشمل كل دور
+      // غير معلوم** — فرمزٌ بدور محذوف كان يتخطّى الحارس كله. **والمالك يمرّ
+      // بحكم رؤيته الكاملة لا بحكم أنه ليس مقيَّدًا.**
+      if (hasFullVisibility(user.role)) {
         next();
         return;
+      }
+      if (!isAssignmentScoped(user.role)) {
+        throw new HttpError(403, "forbidden", "غير مخوَّل بالوصول لهذا الكيان");
       }
 
       await assertHouseLocations(db, user, locationRefs);

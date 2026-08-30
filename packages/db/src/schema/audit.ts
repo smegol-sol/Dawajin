@@ -10,6 +10,7 @@ import {
   timestamp,
 } from "drizzle-orm/pg-core";
 
+import { platformAdmins } from "./platform-admins";
 import { tenants } from "./tenants";
 import { users } from "./users";
 
@@ -91,13 +92,21 @@ export const settingsAuditLog = pgTable(
  * (مثل مراجعة سجل الاستخدام العام) لا تستهدف مستأجرًا واحدًا بعينه.
  */
 /**
- * **الاستثناء الوحيد من قاعدة المفتاح المركَّب** (القرار #122): `actor_id`
- * يبقى مفتاحًا **مفردًا** هنا. الفاعل مدير منصة و`users.tenant_id` له
- * `NULL`، بينما `admin_audit_log.tenant_id` قد يحمل مستأجرًا حقيقيًا يستهدفه
- * الفعل. مفتاح مركَّب `(actor_id, tenant_id)` كان **يرفض كل صف مشروع**، لا
- * يضعف الحراسة فحسب.
+ * **والفاعل هنا في `platform_admins` لا في `users`** (القرار 194): المرجع
+ * `actor_id → platform_admins(id)` **يعيد تعريف الجدول على الفصل البنيوي** —
+ * فاعل هذا السجل **ليس مستخدم مستأجر أصلًا**.
+ *
+ * **وبه زال الاستثناء الوحيد من قاعدة المفتاح المركَّب** (القرار #122): كان
+ * `actor_id` مفتاحًا **مفردًا** هنا لأن الفاعل مدير منصة و`users.tenant_id` له
+ * `NULL` بينما `admin_audit_log.tenant_id` قد يحمل مستأجرًا حقيقيًا يستهدفه
+ * الفعل، **فمفتاح مركَّب `(actor_id, tenant_id)` كان يرفض كل صف مشروع**.
+ * **والآن الفاعل في جدول بلا `tenant_id` إطلاقًا، فلا مركَّب يُطلب ولا استثناء
+ * يُستثنى** — والقاعدة تسري بلا ثغرة في نصّها.
  */
 export const adminAuditLog = pgTable("admin_audit_log", {
   ...auditColumns,
+  actorId: integer("actor_id")
+    .notNull()
+    .references(() => platformAdmins.id),
   tenantId: integer("tenant_id").references(() => tenants.id),
 });

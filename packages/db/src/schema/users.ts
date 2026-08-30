@@ -1,4 +1,3 @@
-import { sql } from "drizzle-orm";
 import {
   pgTable,
   serial,
@@ -13,14 +12,23 @@ import { userRoleEnum } from "./enums";
 import { tenants } from "./tenants";
 
 /**
- * المستخدمون. tenant_id NULL حصريًا لمدير المنصة (backend-technical-spec.md §7.1).
+ * المستخدمون — **كلهم داخل مستأجر بلا استثناء** (القرار 194).
+ *
+ * `tenant_id` كان يقبل `NULL` **لمدير المنصة وحده**، ومعه فهرس جزئي
+ * `users_platform_phone_unique WHERE tenant_id IS NULL`. **وقد فُصل مدير المنصة
+ * إلى `platform_admins`** (القراران #146 و#147)، **فزالت علّة القابلية للفراغ
+ * وزال معها الفهرس**: `NOT NULL` **يغلق الباب بنيويًّا** — لا صفّ مستخدم بلا
+ * مستأجر بعد اليوم، **فلا يبقى شكلٌ في القاعدة يسمح بإعادة الخلط**.
+ *
  * رقم الجوال معرَّف، فريد داخل المستأجر، شامل المعطَّلين (decisions.md #23).
  */
 export const users = pgTable(
   "users",
   {
     id: serial("id").primaryKey(),
-    tenantId: integer("tenant_id").references(() => tenants.id),
+    tenantId: integer("tenant_id")
+      .notNull()
+      .references(() => tenants.id),
     username: varchar("username", { length: 64 }),
     passwordHash: varchar("password_hash", { length: 255 }).notNull(),
     fullName: varchar("full_name", { length: 128 }).notNull(),
@@ -35,10 +43,7 @@ export const users = pgTable(
   },
   (table) => [
     uniqueIndex("users_id_tenant_uq").on(table.id, table.tenantId),
-    uniqueIndex("users_tenant_phone_uq").on(table.tenantId, table.phoneE164),
     // يشمل المعطّلين — يمنع "أوقف الحساب وأنشئ آخر بنفس الرقم" (decisions.md #23)
-    uniqueIndex("users_platform_phone_unique")
-      .on(table.phoneE164)
-      .where(sql`${table.tenantId} IS NULL`),
+    uniqueIndex("users_tenant_phone_uq").on(table.tenantId, table.phoneE164),
   ]
 );

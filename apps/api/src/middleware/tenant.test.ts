@@ -19,15 +19,25 @@ describe("requireTenant", () => {
     expect(error.status).toBe(401);
   });
 
-  it("يمرّ مدير المنصة رغم tenantId null (مسار /platform منفصل)", () => {
+  /**
+   * **حُوِّل لا حُذف** (القرار 194): كان يُثبت أن مدير المنصة **يمرّ** بـ
+   * `tenantId: null`، **وصار يُثبت أن لا أحد يمرّ بها** — القيمة نفسها،
+   * والحكم انقلب. **ورمزٌ قديم بدور لم يعد معلومًا** (`platform_admin` أُزيل
+   * من `USER_ROLE`) **يُرفض بلا استثناء**.
+   */
+  it("401 لرمز قديم بدور غير معلوم وtenantId null — لا استثناء لأحد", () => {
     const next = vi.fn();
     requireTenant(
-      fakeRequest({ id: 1, tenantId: null, role: "platform_admin" }),
+      // القيمة لم تعد في `UserRole` — والإسقاط يحاكي رمزًا قديمًا لا كودًا جديدًا
+      fakeRequest({ id: 1, tenantId: null, role: "platform_admin" as never }),
       {} as Response,
       next
     );
 
-    expect(next).toHaveBeenCalledWith();
+    expect(next).toHaveBeenCalledTimes(1);
+    const error = next.mock.calls[0]?.[0] as HttpError;
+    expect(error).toBeInstanceOf(HttpError);
+    expect(error.status).toBe(401);
   });
 
   it("401 لمستخدم عادي بلا tenantId (حساب غير مرتبط بمستأجر)", () => {

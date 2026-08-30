@@ -71,6 +71,13 @@
       "when": 1788044907599,
       "tag": "0009_assignment_periods",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1788053246571,
+      "tag": "0010_platform_admin_separation",
+      "breakpoints": true
     }
   ]
 }

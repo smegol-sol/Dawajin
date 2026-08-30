@@ -53,9 +53,17 @@ describe("قائمتا الرؤية — موجبتان لا سالبتين", () 
     expect([...FULL_VISIBILITY_ROLES]).toEqual(["owner"]);
   });
 
-  it("مدير المنصة ليس في أي قائمة — فلا يرث رؤية بالسكوت", () => {
-    expect(FULL_VISIBILITY_ROLES.has("platform_admin")).toBe(false);
-    expect(ASSIGNMENT_SCOPED_ROLES.has("platform_admin")).toBe(false);
+  /**
+   * **حُوِّل لا حُذف** (القرار 194): كان يُثبت أن `platform_admin` — **وهو دور
+   * قائم وقتها** — خارج القائمتين. **والقيمة أُزيلت من `USER_ROLE`**، فصار
+   * يُثبت ما هو أعمّ وأبقى: **أي قيمة دور غير معلومة لا ترث شيئًا بالسكوت**
+   * (القرار 184)، **وهذا ما يلتقط ما خلّفه الحذف** — رمزٌ قديم يحمل الدور
+   * المحذوف لا يرى شيئًا.
+   */
+  it("قيمة دور غير معلومة ليست في أي قائمة — فلا ترث رؤية بالسكوت", () => {
+    const legacyRole = "platform_admin" as never;
+    expect(FULL_VISIBILITY_ROLES.has(legacyRole)).toBe(false);
+    expect(ASSIGNMENT_SCOPED_ROLES.has(legacyRole)).toBe(false);
   });
 
   it("القائمتان لا تتقاطعان", () => {
