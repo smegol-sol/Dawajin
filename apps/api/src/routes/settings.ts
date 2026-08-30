@@ -16,7 +16,6 @@ import { getTenantSettings, updateTenantSettings } from "../services/settingsSer
 
 const updateSettingsSchema = z
   .object({
-    feedBagWeightKg: z.number().positive().optional(),
     feedStarterEndDay: z.number().int().positive().optional(),
     feedGrowerEndDay: z.number().int().positive().optional(),
     feedAnomalyThresholdPct: z.number().int().min(0).max(100).optional(),

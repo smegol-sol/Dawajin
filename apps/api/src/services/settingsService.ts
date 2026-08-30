@@ -10,7 +10,6 @@ import { writeAuditLog } from "../lib/auditLog";
  */
 
 const SETTINGS_FIELDS = [
-  "feedBagWeightKg",
   "feedStarterEndDay",
   "feedGrowerEndDay",
   "feedAnomalyThresholdPct",
@@ -19,7 +18,6 @@ const SETTINGS_FIELDS = [
 ] as const;
 
 export interface TenantSettings {
-  feedBagWeightKg: string | null;
   feedStarterEndDay: number | null;
   feedGrowerEndDay: number | null;
   feedAnomalyThresholdPct: number | null;
@@ -29,7 +27,6 @@ export interface TenantSettings {
 
 // `| undefined` صريح في كل حقل — راجع التعليق في authService.LoginInput
 export interface TenantSettingsUpdate {
-  feedBagWeightKg?: number | undefined;
   feedStarterEndDay?: number | undefined;
   feedGrowerEndDay?: number | undefined;
   feedAnomalyThresholdPct?: number | undefined;
@@ -46,8 +43,10 @@ function pickSettings(row: Record<string, unknown>): TenantSettings {
 }
 
 /**
- * يقرأ إعدادات المستأجر التشغيلية الستة (وزن الكيس، أيام مراحل العلف، ...).
- * @returns الحقول الستة المسموحة فقط — لا بقية أعمدة tenants
+ * يقرأ إعدادات المستأجر التشغيلية الخمسة (أيام مراحل العلف، العتبات، ...).
+ * **ووزن كيس العلف ليس منها — حُذف بالقرار 201**: ثابتٌ على الصنف
+ * (`products.package_size`) لا إعدادٌ يملك المالك تغييره.
+ * @returns الحقول الخمسة المسموحة فقط — لا بقية أعمدة tenants
  * @throws HttpError 404 إن لم يوجد مستأجر بهذا المعرّف
  */
 export async function getTenantSettings(db: Database, tenantId: number): Promise<TenantSettings> {
@@ -73,10 +72,6 @@ export async function updateTenantSettings(
     if (!before) throw new HttpError(404, "not_found", "المستأجر غير موجود");
 
     const updateValues: Record<string, unknown> = { ...input };
-    if (typeof input.feedBagWeightKg === "number") {
-      // عمود numeric بوضع نصي في Drizzle — يقبل نصًا لا رقمًا
-      updateValues.feedBagWeightKg = input.feedBagWeightKg.toFixed(2);
-    }
 
     const [after] = await tx
       .update(tenants)

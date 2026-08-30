@@ -15,7 +15,6 @@
  * بتعليق eslint-disable-next-line معلَّل — لا بإيقاف القاعدة عالميًا.
  */
 const TENANT_SETTING_KEYS = new Set([
-  "feedBagWeightKg",
   "feedStarterEndDay",
   "feedGrowerEndDay",
   "feedAnomalyThresholdPct",

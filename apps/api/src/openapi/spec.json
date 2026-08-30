@@ -1130,9 +1130,6 @@
       "TenantSettings": {
         "type": "object",
         "properties": {
-          "feedBagWeightKg": {
-            "type": "number"
-          },
           "feedStarterEndDay": {
             "type": "integer"
           },
@@ -1154,10 +1151,6 @@
         "type": "object",
         "description": "أي مجموعة فرعية من TenantSettings — يجب حقل واحد على الأقل",
         "properties": {
-          "feedBagWeightKg": {
-            "type": "number",
-            "exclusiveMinimum": 0
-          },
           "feedStarterEndDay": {
             "type": "integer",
             "exclusiveMinimum": 0

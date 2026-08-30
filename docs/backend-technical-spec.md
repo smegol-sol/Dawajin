@@ -317,7 +317,6 @@ workspace/
 | subscription_status | enum NOT NULL DEFAULT 'تجريبي' | |
 | subscription_expires_at | timestamptz | |
 | max_houses | integer NOT NULL DEFAULT 5 | |
-| feed_bag_weight_kg | numeric(6,2) NOT NULL DEFAULT 50 | |
 | feed_starter_end_day | integer NOT NULL DEFAULT 10 | |
 | feed_grower_end_day | integer NOT NULL DEFAULT 24 | |
 | feed_anomaly_threshold_pct | integer NOT NULL DEFAULT 30 | |
@@ -328,6 +327,9 @@ workspace/
 | timezone | varchar(64) NOT NULL | |
 | is_active | boolean NOT NULL DEFAULT true | |
 | created_at | timestamptz NOT NULL | |
+
+> **و`feed_bag_weight_kg` حُذف بالقرار 201.** وزن كيس العلف **ثابت ٥٠ كجم لا إعداد** — ومصدره الوحيد `products.package_size` **مع وحدته `package_unit`** على الصنف (#161 «ثالث عشر» ٥) — **والوحدة كانت مكتوبة في اسم العمود المحذوف، فنُقلت إلى القاعدة لا إلى ذاكرة القارئ**. **وإعدادٌ يملك المالك تغييره يناقض «ثابت» من حيث المبدأ لا من حيث الاستعمال**: وجوده يُعيد التعارض الثلاثي أول مرة يُغيَّر.
+
 
 ### `users`
 | العمود | النوع | ملاحظات |
@@ -433,7 +435,7 @@ id · user_id FK · house_id FK (nullable) · **farm_id FK (nullable)** · tenan
 | feed_stage | enum NOT NULL | |
 | bags | numeric(8,3) NOT NULL | |
 | kg | numeric(10,2) NOT NULL | محسوب |
-| bag_weight_kg | numeric(6,2) NOT NULL | السائد وقت الإدخال |
+| bag_weight_kg | numeric(6,2) NOT NULL | السائد وقت الإدخال — **لقطة مجمَّدة لا مصدرٌ ثالث، فلا تُحذف** (القرار 201): السجل الميداني لا يُعدَّل (المبدأ الرابع)، **فسجلٌّ قديم يبقى محسوبًا بما كان لا بما صار** |
 
 جدول منفصل لأن أيام الانتقال بين المراحل تحمل نوعين معًا.
 
@@ -458,8 +460,8 @@ id · tenant_id FK · name · is_active · created_at
 | feed_stage | enum | للعلف فقط |
 | is_system | boolean NOT NULL DEFAULT false | |
 | stock_unit | enum stock_unit NOT NULL | |
-| package_size | numeric(10,3) | |
-| package_unit | varchar(16) | |
+| package_size | numeric(10,3) | **المصدر الوحيد لوزن كيس العلف** (القرار 201) — **ولا يُقرأ بمعزل عن `package_unit` أبدًا**: قراءة الرقم وحده تفترض وحدة، **والافتراض هو ما مُنع**. مُشغِّلٌ في القاعدة يملأ ٥٠ **و«كجم» معًا** لصنف علف بلا قيمة، **وقيد `products_feed_package_size_ck` يضمن الاثنين**. **والخمسون للعلف وحده** — الدواء واللقاح والمطهّر تختلف عبواتها |
+| package_unit | varchar(16) | وحدة حجم العبوة — **لا تُفصَل عن `package_size`** (القرار 201). **ونصّ لا `stock_unit` عمدًا**: وحدة عبوة اللقاح قد تكون «مل» أو «جرعة» وليستا في القائمة. **وقيد `products_package_unit_ck` يمنع حجمًا بلا وحدته من أي فئة** — ولا يفرض حجمًا على أحد |
 | dose_unit | varchar(16) | |
 | default_dose_amount | numeric(10,3) | |
 | default_dose_basis | enum | |
@@ -903,7 +905,8 @@ PATCH /batches/:id لأي دور: 'منتهية'→'نشطة' مباشرة ← 4
 
 ```
 avg_weight_g       = sampled_weight_kg / sampled_birds × 1000
-feed_kg            = bags × bag_weight_kg
+feed_kg            = bags × bag_weight_kg   (وزن الكيس يُقرأ من products.package_size
+                                            ويُجمَّد في الصفّ وقت الإدخال — القرار 201)
 water_liters       = tanks × tank_capacity_l
 current_birds      = initial_bird_count − Σ mortality
 mortality_pct      = Σ mortality / initial_bird_count × 100

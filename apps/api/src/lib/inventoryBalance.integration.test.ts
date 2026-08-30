@@ -49,7 +49,7 @@ async function seedLedgerEntities(): Promise<void> {
   const tenant = firstRow(
     await db
       .insert(tenants)
-      .values({ name: "Ledger Test Tenant", timezone: "Asia/Aden", feedBagWeightKg: "50" })
+      .values({ name: "Ledger Test Tenant", timezone: "Asia/Aden" })
       .returning({ id: tenants.id })
   );
   tenantId = tenant.id;
