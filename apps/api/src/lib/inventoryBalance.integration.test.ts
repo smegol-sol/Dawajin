@@ -9,6 +9,7 @@ import {
   houses,
   products,
   inventoryMovements,
+  warehouses,
 } from "@dawajin/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
@@ -19,6 +20,10 @@ import { assertIsTestDatabase } from "../lib/testGuard";
  * ثابت الدفتر (docs/work-plan.md المرحلة 1، بوابة الخروج):
  * Σ كل الحركات لمنتج = رصيد المخزن + Σ أرصدة العنابر لنفس المنتج.
  * لا عمود رصيد مخزَّن في أي مكان — كلاهما محسوبان بـ SUM حيّة (decisions.md #14).
+ *
+ * **والمواضع صارت مخازن بمعرّفاتها** (القرار 199): المخزن المركزي ومخزنا
+ * العنبرين **صفوفٌ في `warehouses`** لا أزواج نوع ومعرّف — **والثابت نفسه لم
+ * يتغيّر**: مجموع الحركات = مجموع أرصدة كل المخازن.
  */
 
 type Pool = ReturnType<typeof createDbClient>["pool"];
@@ -26,7 +31,9 @@ type Pool = ReturnType<typeof createDbClient>["pool"];
 let db: Database;
 let pool: Pool;
 let tenantId: number;
-let warehouseLocationId: number; // معرّف المخزن — نستخدم farmId 0 اصطلاحًا؟ لا، نستخدم صف warehouses
+let centralWarehouseId: number;
+let houseAWarehouseId: number;
+let houseBWarehouseId: number;
 let productId: number;
 let houseAId: number;
 let houseBId: number;
@@ -83,24 +90,37 @@ async function seedLedgerEntities(): Promise<void> {
   );
   productId = product.id;
 
-  // المخزن نفسه ليس صفًا في warehouses هنا فقط — قيد CHECK يفرض
-  // location_type='warehouse' ⇒ house_id/farm_id كلاهما NULL، بلا صف مرجعي إضافي مطلوب.
-  warehouseLocationId = 1; // location_id اصطلاحي ثابت لمخزن هذا المستأجر (decisions.md #14)
+  // **ثلاثة مخازن بصفوفها** — مركزي ومخزن لكل عنبر (القراران 198 و199):
+  // لا موضع في الدفتر بلا كيان يقابله.
+  centralWarehouseId = firstRow(
+    await db
+      .insert(warehouses)
+      .values({ tenantId, name: "المخزن المركزي", level: "مركزي" })
+      .returning({ id: warehouses.id })
+  ).id;
+  houseAWarehouseId = firstRow(
+    await db
+      .insert(warehouses)
+      .values({ tenantId, name: "مخزن عنبر أ", level: "عنبر", houseId: houseAId })
+      .returning({ id: warehouses.id })
+  ).id;
+  houseBWarehouseId = firstRow(
+    await db
+      .insert(warehouses)
+      .values({ tenantId, name: "مخزن عنبر ب", level: "عنبر", houseId: houseBId })
+      .returning({ id: warehouses.id })
+  ).id;
 }
 
 /** يُدرج حركة مخزون واحدة في الدفتر. */
 async function movement(input: {
-  locationType: "warehouse" | "house";
-  locationId: number;
-  houseId: number | null;
+  warehouseId: number;
   quantity: string;
   movementType: (typeof inventoryMovements.$inferInsert)["movementType"];
 }): Promise<void> {
   await db.insert(inventoryMovements).values({
     tenantId,
-    locationType: input.locationType,
-    locationId: input.locationId,
-    houseId: input.houseId,
+    warehouseId: input.warehouseId,
     productId,
     movementType: input.movementType,
     quantity: input.quantity,
@@ -135,41 +155,31 @@ beforeAll(async () => {
 
   // مخزن: +100 استلام، -30 شحن صادر (تحوّل لاحقًا لعنبر أ) ⇒ رصيد المخزن = 70
   await movement({
-    locationType: "warehouse",
-    locationId: warehouseLocationId,
-    houseId: null,
+    warehouseId: centralWarehouseId,
     quantity: "100",
     movementType: "استلام",
   });
   await movement({
-    locationType: "warehouse",
-    locationId: warehouseLocationId,
-    houseId: null,
+    warehouseId: centralWarehouseId,
     quantity: "-30",
     movementType: "شحن صادر",
   });
 
   // عنبر أ: +20 شحن وارد، -5 استهلاك يومي ⇒ رصيد عنبر أ = 15
   await movement({
-    locationType: "house",
-    locationId: houseAId,
-    houseId: houseAId,
+    warehouseId: houseAWarehouseId,
     quantity: "20",
     movementType: "شحن وارد",
   });
   await movement({
-    locationType: "house",
-    locationId: houseAId,
-    houseId: houseAId,
+    warehouseId: houseAWarehouseId,
     quantity: "-5",
     movementType: "استهلاك يومي",
   });
 
   // عنبر ب: +10 شحن وارد ⇒ رصيد عنبر ب = 10
   await movement({
-    locationType: "house",
-    locationId: houseBId,
-    houseId: houseBId,
+    warehouseId: houseBWarehouseId,
     quantity: "10",
     movementType: "شحن وارد",
   });
@@ -184,20 +194,17 @@ describe("ثابت الدفتر — Σ الحركات = رصيد المخزن + 
     const warehouseBalance = await computeBalance(db, {
       tenantId,
       productId,
-      locationType: "warehouse",
-      locationId: warehouseLocationId,
+      warehouseId: centralWarehouseId,
     });
     const houseABalance = await computeBalance(db, {
       tenantId,
       productId,
-      locationType: "house",
-      locationId: houseAId,
+      warehouseId: houseAWarehouseId,
     });
     const houseBBalance = await computeBalance(db, {
       tenantId,
       productId,
-      locationType: "house",
-      locationId: houseBId,
+      warehouseId: houseBWarehouseId,
     });
 
     expect(warehouseBalance).toBe(70);
@@ -215,9 +222,7 @@ describe("ثابت الدفتر — Σ الحركات = رصيد المخزن + 
     // يتغيّر تبعًا لذلك (لا قيمة ثابتة مصادَق عليها يدويًا)، أي أن الحساب حيّ فعلًا.
     await db.insert(inventoryMovements).values({
       tenantId,
-      locationType: "house",
-      locationId: houseBId,
-      houseId: houseBId,
+      warehouseId: houseBWarehouseId,
       productId,
       movementType: "شحن وارد",
       quantity: "3",
@@ -229,8 +234,7 @@ describe("ثابت الدفتر — Σ الحركات = رصيد المخزن + 
     const houseBBalance = await computeBalance(db, {
       tenantId,
       productId,
-      locationType: "house",
-      locationId: houseBId,
+      warehouseId: houseBWarehouseId,
     });
     const totalMovements = await computeTotalMovements(db, { tenantId, productId });
 

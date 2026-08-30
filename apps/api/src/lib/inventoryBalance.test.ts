@@ -18,8 +18,7 @@ describe("computeBalance — فرع الصف الفارغ الدفاعي", () =>
     const balance = await computeBalance(fakeDbReturningEmptyRows(), {
       tenantId: 1,
       productId: 1,
-      locationType: "warehouse",
-      locationId: 1,
+      warehouseId: 1,
     });
     expect(balance).toBe(0);
   });

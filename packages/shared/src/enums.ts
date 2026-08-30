@@ -149,9 +149,6 @@ export type NotificationUrgency = (typeof NOTIFICATION_URGENCY)[number];
 export const SUBSCRIPTION_STATUS = ["تجريبي", "نشط", "موقوف", "منتهي"] as const;
 export type SubscriptionStatus = (typeof SUBSCRIPTION_STATUS)[number];
 
-/** نوع الموقع في دفتر المخزون — القيدان المذكوران حرفيًا في قيد CHECK بـ §7.3. */
-export const LOCATION_TYPE = ["warehouse", "house"] as const;
-
 /**
  * **مستوى المخزن — كيان واحد بمستوى لا أنواع متعددة** (القرار #161 «أولًا»).
  *
@@ -164,7 +161,13 @@ export const LOCATION_TYPE = ["warehouse", "house"] as const;
  */
 export const WAREHOUSE_LEVEL = ["مركزي", "موقع", "عنبر"] as const;
 export type WarehouseLevel = (typeof WAREHOUSE_LEVEL)[number];
-export type LocationType = (typeof LOCATION_TYPE)[number];
+
+/*
+ * **`LOCATION_TYPE` حُذف بالقرار 199** — كان زوجًا `(نوع، معرّف)` يعنون الدفتر،
+ * **وصار الدفتر يعنون مخزنًا بمعرّفه** بعد أن صار مخزن العنبر كيانًا (القرار
+ * 198). **ولا مستهلك له بقي**: الجداول الأربعة تحوّلت، وطبقة الرصيد والحارس
+ * معها. ويُذكر هنا كي لا يُعاد استحداثه ظنًّا أنه سقط سهوًا.
+ */
 
 /** أولوية المهمة الصحية (decisions.md #50 — حسمها صاحب المنتج). */
 export const HEALTH_TASK_PRIORITY = ["عادي", "عاجل"] as const;

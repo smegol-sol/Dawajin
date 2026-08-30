@@ -191,51 +191,45 @@ async function assertSiteAssignment(
 }
 
 /**
- * **أزواج الموقع الثلاثة على السلك** (§7-ب البند 28، والقرار #157 البند ١،
- * والقرار 193).
+ * **حقول المخزن الثلاثة على السلك** (القرار 199، وقبله 193).
  *
- * **والزوجان معًا في التحويل لا أحدهما:** طلبٌ سليم المصدر معطوب الوجهة
- * **يُرفض** — لو فُحص المصدر وحده لصار التحويل بابًا خلفيًّا إلى عنبر غير
- * مُسند.
+ * **كانت أزواجًا `(نوع، معرّف)` فصارت معرّفًا واحدًا**: الدفتر يعنون مخزنًا
+ * بمعرّفه بعد أن صار مخزن العنبر كيانًا (القرار 198) — **فلا نوع يُقرأ ولا
+ * قيمة نوع تُرفض**، والمعرّف نفسه إمّا يقابله صفّ في `warehouses` داخل
+ * المستأجر أو لا يقابله.
  *
- * **والتسمية `camelCase` لا أعمدة القاعدة** (القرار 193): المواصفة §13 تسمّي
- * الأعمدة `from_location_type/id`، **وكل عقد قائم في `openapi/spec.json`
- * `camelCase` بلا استثناء** (`farmId` · `siteId` · `waterTankCapacityL`) —
- * فالسلك يخاطب بما يخاطب به أخواته، والقاعدة تبقى بأسمائها.
+ * **والطرفان معًا في التحويل لا أحدهما:** طلبٌ سليم المصدر معطوب الوجهة
+ * **يُرفض** — لو فُحص المصدر وحده لصار التحويل بابًا خلفيًّا إلى مخزن لا
+ * يبلغه إسناد صاحب الطلب.
+ *
+ * **والتسمية `camelCase` لا أعمدة القاعدة** (القرار 193): العمود
+ * `from_warehouse_id` والسلك `fromWarehouseId` — **وكل عقد قائم في
+ * `openapi/spec.json` `camelCase` بلا استثناء**.
  */
-const LOCATION_FIELD_PAIRS = [
-  ["locationType", "locationId"],
-  ["fromLocationType", "fromLocationId"],
-  ["toLocationType", "toLocationId"],
-] as const;
+const WAREHOUSE_ID_FIELDS = ["warehouseId", "fromWarehouseId", "toWarehouseId"] as const;
 
-interface LocationRef {
-  /** اسم حقل النوع — يُذكر في رسالة الرفض فيعرف المستدعي أيّ طرف رُفض. */
-  typeField: string;
-  type: string | undefined;
-  id: number;
+interface WarehouseRef {
+  /** اسم الحقل — يُذكر في رسالة الرفض فيعرف المستدعي أيّ طرف رُفض. */
+  field: string;
+  /** القيمة الخام كما وصلت — **تُفحص قبل تحويلها إلى رقم**. */
+  raw: string;
 }
 
 /**
- * يجمع أزواج الموقع الحاضرة في الطلب — `params` ثم `query` ثم `body`، نفس
+ * يجمع حقول المخزن الحاضرة في الطلب — `params` ثم `query` ثم `body`، نفس
  * ترتيب أولوية `houseId`.
  *
- * **ويُقرأ الزوج بمعرّفه لا بنوعه:** زوجٌ بلا معرّف **لا يشير إلى كيان** فلا
- * شيء فيه يُفحص (فلترة سرد بالنوع مثلًا)، **ومعرّفٌ بلا نوع معلوم لا يُمرَّر**
- * — يُرفض في الحارس أدناه.
+ * **وحقلٌ غائب لا يشير إلى كيان فلا شيء فيه يُفحص**؛ **وحقلٌ حاضر بقيمة غير
+ * معلومة يُرفض ولا يُمرَّر صامتًا** — نفس ما فرضه القرار 193 على قيمة نوع لا
+ * نعرفها: **الحارس لا يتّكئ على حارس لم يُبنَ بعد**.
  */
-function resolveLocationRefs(req: Request): LocationRef[] {
+function resolveWarehouseRefs(req: Request): WarehouseRef[] {
   const body = req.body as Record<string, unknown> | undefined;
-  const refs: LocationRef[] = [];
-  for (const [typeField, idField] of LOCATION_FIELD_PAIRS) {
-    const rawId = firstDefinedPrimitive(req.params[idField], req.query[idField], body?.[idField]);
-    if (!rawId) continue;
-    const rawType = firstDefinedPrimitive(
-      req.params[typeField],
-      req.query[typeField],
-      body?.[typeField]
-    );
-    refs.push({ typeField, type: rawType, id: Number(rawId) });
+  const refs: WarehouseRef[] = [];
+  for (const field of WAREHOUSE_ID_FIELDS) {
+    const raw = firstDefinedPrimitive(req.params[field], req.query[field], body?.[field]);
+    if (raw === undefined) continue;
+    refs.push({ field, raw });
   }
   return refs;
 }
@@ -254,9 +248,13 @@ function resolveLocationRefs(req: Request): LocationRef[] {
  * **وشرط «سارٍ اليوم» يسري هنا كما يسري على العنبر والمزرعة** (القرار 190):
  * نفس `assignmentActiveToday` لا نسخة منه.
  *
- * **وما لم يُبنَ هنا ويُسجَّل:** وصول المشرف إلى **مخزن موقعه** بحكم إسناد
+ * **ومخزن العنبر يُحلّ بإسناد عنبره** (القرار 199): #161 «ثانيًا» يجعل صاحبه
+ * مربّيه، **فالإسناد القائم يكفي ولا يُطلب إسناد مخزن فوقه**.
+ *
+ * **وما لم يُبنَ هنا ويبقى معلنًا:** وصول المشرف إلى **مخزن موقعه** بحكم إسناد
  * مزارعه — #161 يجعله صاحبه، **ولا يُشتق ذلك من صفوف الإسناد القائمة بلا حكم
- * مسار مكتوب**، فيبقى للمرحلة 3 (أو يُسنَد المخزن صراحةً كأي مخزن آخر).
+ * مسار مكتوب** (الموقع قد يضمّ أكثر من مزرعة، #113) — فيبقى للمرحلة 3، أو
+ * يُسنَد مخزن الموقع صراحةً كأي مخزن آخر.
  */
 async function assertWarehouseAccess(
   db: Database,
@@ -268,13 +266,22 @@ async function assertWarehouseAccess(
   }
 
   const [warehouse] = await db
-    .select({ id: warehouses.id })
+    .select({ id: warehouses.id, houseId: warehouses.houseId })
     .from(warehouses)
     .where(and(eq(warehouses.id, warehouseId), eq(warehouses.tenantId, user.tenantId)))
     .limit(1);
   if (!warehouse) throw new HttpError(404, "not_found", "المخزن غير موجود");
 
   if (hasFullVisibility(user.role)) return;
+
+  // **مخزن العنبر صاحبه مربّيه** (#161 «ثانيًا») — **فيُحلّ بإسناد العنبر نفسه**
+  // لا بإسناد ثانٍ يُطلب فوقه: `assertHouseAssignment` هي هي، **فلا نسخة ثانية
+  // من حكم الإسناد ولا شرط «سارٍ اليوم» مكتوب مرتين** (المبدأ الأول، والقرار
+  // 190). ومربٍّ لا يبلغه العنبر لا يبلغه مخزنه.
+  if (warehouse.houseId !== null) {
+    await assertHouseAssignment(db, user, warehouse.houseId);
+    return;
+  }
 
   const [assignment] = await db
     .select({ id: userAssignments.id })
@@ -291,44 +298,29 @@ async function assertWarehouseAccess(
 }
 
 /**
- * **ما لا يخصّ العنبر من مفردات الموقع — يُفحص لكل دور** (القرار 193).
+ * **حقول المخزن تُفحص لكل دور** (القرار 199، وقبله 193).
  *
  * **قبل قصر الدائرة على الأدوار المقيَّدة بالإسناد**: الحارس يخرج مبكرًا لكل
  * دور غير مقيَّد، **ولو فُحص المخزن بعد ذلك الخروج لمرّ كل دور غير مقيَّد بلا
  * فحص إطلاقًا** — وهو نقيض الوضعية الموجبة.
+ *
+ * **و`assertWarehouseAccess` نقطة الفرض الوحيدة** — لا نسخة ثانية من حكمها في
+ * هذا الملف ولا في مسار.
  */
-async function assertWarehouseLocations(
+async function assertWarehouseRefs(
   db: Database,
   user: AuthenticatedUser,
-  refs: readonly LocationRef[]
+  refs: readonly WarehouseRef[]
 ): Promise<void> {
   for (const ref of refs) {
-    if (ref.type === "warehouse") {
-      await assertWarehouseAccess(db, user, ref.id);
-      continue;
+    const id = Number(ref.raw);
+    // **قيمة غير معلومة ← 403 لا تمرير صامت** (نفس ما فرضه القرار 193 على قيمة
+    // نوع لا نعرفها): نصٌّ ليس رقمًا، أو صفر، أو سالب — **لا يشير إلى مخزن**،
+    // **ولا يُترك ليقرّر مسارٌ لم يُبنَ بعد ماذا يفعل به**.
+    if (!Number.isInteger(id) || id <= 0) {
+      throw new HttpError(403, "forbidden", `قيمة ${ref.field} غير معلومة`);
     }
-    if (ref.type !== "house") {
-      // **قيمة غير معلومة ← 403 لا تمرير صامت.** zod يرفضها في المسار لاحقًا،
-      // **والحارس لا يتّكئ على حارس لم يُبنَ بعد** — ونوعٌ ثالث يُضاف إلى
-      // `LOCATION_TYPE` غدًا يبقى محجوبًا حتى يُدرَج هنا بقرار مكتوب (نفس
-      // منطق القائمة الموجبة، #161 و184).
-      throw new HttpError(403, "forbidden", `قيمة ${ref.typeField} غير معلومة`);
-    }
-  }
-}
-
-/**
- * **`locationType='house'` يُحلّ كما يُحلّ `houseId` حرفيًّا** — نفس
- * `assertHouseAssignment` لا نسخة ثانية منه (المبدأ الأول): الوجود في المستأجر
- * ← 404، ثم الإسناد **الساري اليوم** ← 403 (القرار 190).
- */
-async function assertHouseLocations(
-  db: Database,
-  user: AuthenticatedUser,
-  refs: readonly LocationRef[]
-): Promise<void> {
-  for (const ref of refs) {
-    if (ref.type === "house") await assertHouseAssignment(db, user, ref.id);
+    await assertWarehouseAccess(db, user, id);
   }
 }
 
@@ -349,8 +341,9 @@ async function assertHouseLocations(
  * أعمى تجاه معرّفات الرابط كلها (القرار #124، مُثبَت بتجربة مستقلة).
  *
  * مُنفَّذ حاليًا: houseId · batchId (يُحل لعنبره) · farmId · siteId (القرار
- * #129 و#131)، **وأزواج الموقع الثلاثة** `locationType/Id` و`from…` و`to…`
- * (القرار 193، §7-ب البند 28) — **قبل أول مسار مخزون لا بعده**.
+ * #129 و#131)، **وحقول المخزن الثلاثة** `warehouseId` و`fromWarehouseId`
+ * و`toWarehouseId` (القراران 193 و199، §7-ب البند 28) — **قبل أول مسار مخزون
+ * لا بعده**.
  *
  * **و`houseId` يقصر الدائرة قبل `farmId`:** `POST /farms/:farmId/houses` يحمل
  * الاثنين، والعنبر أدقّ نطاقًا فيُفحص وحده — لا يُجمعان.
@@ -367,8 +360,8 @@ export function enforceEntityAccess(db: Database) {
       // 193): حكم المخزن **وضعية موجبة تسري على كل دور** — والمالك يمرّ
       // بحكم رؤيته لا بحكم تخطّي الحارس. ولو فُحصت بعد الخروج المبكر أدناه
       // لمرّ كل دور غير مقيَّد بالإسناد **بلا فحص إطلاقًا**.
-      const locationRefs = resolveLocationRefs(req);
-      await assertWarehouseLocations(db, user, locationRefs);
+      const warehouseRefs = resolveWarehouseRefs(req);
+      await assertWarehouseRefs(db, user, warehouseRefs);
 
       // **من ليس في قائمة معلومة لا يمرّ** (القرار 194، إتمامًا للقرار 184):
       // كان الشرط «غير مقيَّد بالإسناد ← يمرّ»، **وغيرُ المقيَّد يشمل كل دور
@@ -381,8 +374,6 @@ export function enforceEntityAccess(db: Database) {
       if (!isAssignmentScoped(user.role)) {
         throw new HttpError(403, "forbidden", "غير مخوَّل بالوصول لهذا الكيان");
       }
-
-      await assertHouseLocations(db, user, locationRefs);
 
       const houseId = await resolveHouseId(db, req);
       if (houseId) {
