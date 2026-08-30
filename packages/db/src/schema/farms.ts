@@ -65,10 +65,26 @@ export const farms = pgTable(
     // مصادر الطاقة على **المزرعة** لا العنبر: المولّد يخدم مزرعة فيها أكثر
     // من عنبر (القرار #112). ولا مزرعة بلا طاقة — القيد في القاعدة.
     powerSources: powerSourceEnum("power_sources").array().notNull(),
+    /**
+     * **مدة الراحة على مستوى المزرعة — المستوى الثاني** (القرار #153، والقرار
+     * 197).
+     *
+     * **فارغة تعني «اتبع سياسة المستأجر»** (`tenants.min_rest_days`) — لا
+     * تعني صفرًا ولا تعني «بلا راحة». **ومزرعة بعنابر أقدم أو موقع أصعب تحتاج
+     * أطول**، فيرفعها المشرف **صعودًا فقط** عن سياسة المستأجر.
+     *
+     * **والنزول عنها للطبيب أو المالك وبسبب مكتوب** — التمديد سهل والتقصير
+     * صعب: لو تساوى الاتجاهان **قصّرت الراحة عند أول ضغط تشغيلي، والخسارة
+     * تظهر بعد دفعتين فلا تُربط بسببها**.
+     */
+    restDays: integer("rest_days"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
     uniqueIndex("farms_id_tenant_uq").on(table.id, table.tenantId),
+    // الحدّ الأدنى المطلق — ثلاثة أيام (`ABSOLUTE_MIN_REST_DAYS`)، والقاعدة لا
+    // تستورد TypeScript فالرقم مكرَّر عمدًا (القرار 197)
+    check("farms_rest_days_min_ck", sql`${table.restDays} IS NULL OR ${table.restDays} >= 3`),
     // اسم المزرعة فريد **داخل موقعها** لا عبر المستأجر: «مزرعة 1» في الجبل
     // وفي الحمراء اسمان مشروعان
     uniqueIndex("farms_site_name_uq").on(table.siteId, table.name),
