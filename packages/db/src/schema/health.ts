@@ -10,6 +10,7 @@ import {
   varchar,
   date,
   boolean,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 import {
@@ -54,6 +55,11 @@ export const healthTasks = pgTable(
       foreignColumns: [batches.id, batches.tenantId],
       name: "health_tasks_batch_id_tenant_fk",
     }),
+    // **مرجعٌ فريد صريح — يشترطه المفتاح المركَّب من `health_task_executions`**
+    // (القرار 205). **ولم يكن موجودًا**: Postgres يرفض المفتاح المركَّب بلا
+    // مرجعٍ فريد مطابق **ولو كان `id` مفتاحًا أساسيًّا** (القاعدة الملزمة في
+    // `CLAUDE.md`) — **فغيابه كان يمنع الإصلاح لا يؤجّله**.
+    uniqueIndex("health_tasks_id_tenant_uq").on(table.id, table.tenantId),
     foreignKey({
       columns: [table.createdBy, table.tenantId],
       foreignColumns: [users.id, users.tenantId],
@@ -72,21 +78,41 @@ export const healthTasks = pgTable(
   ]
 );
 
-export const healthTaskExecutions = pgTable("health_task_executions", {
-  id: serial("id").primaryKey(),
-  taskId: integer("task_id")
-    .notNull()
-    .references(() => healthTasks.id),
-  executedAt: timestamp("executed_at", { withTimezone: true }).notNull().defaultNow(),
-  quantityUsed: numeric("quantity_used", { precision: 10, scale: 3 }),
-  notes: text("notes"),
-  photoUrl: text("photo_url"),
-  executedBy: integer("executed_by")
-    .notNull()
-    .references(() => users.id),
-  failed: boolean("failed").notNull().default(false),
-  failureReason: text("failure_reason"),
-});
+export const healthTaskExecutions = pgTable(
+  "health_task_executions",
+  {
+    id: serial("id").primaryKey(),
+    /**
+     * **`tenant_id` أُضيف بالقرار 205.** **وأُثبت على القاعدة قبل الإصلاح**:
+     * تنفيذُ مهمةٍ صحية في مستأجرٍ **ينفّذه مستخدم مستأجرٍ آخر** قُبل صامتًا —
+     * `executed_by → users.id` مفردًا. **والكمية المستهلكة معه**، فالأثر
+     * مخزونٌ يخرج بتوقيع من لا يملك التوقيع.
+     */
+    tenantId: integer("tenant_id")
+      .notNull()
+      .references(() => tenants.id),
+    taskId: integer("task_id").notNull(),
+    executedAt: timestamp("executed_at", { withTimezone: true }).notNull().defaultNow(),
+    quantityUsed: numeric("quantity_used", { precision: 10, scale: 3 }),
+    notes: text("notes"),
+    photoUrl: text("photo_url"),
+    executedBy: integer("executed_by").notNull(),
+    failed: boolean("failed").notNull().default(false),
+    failureReason: text("failure_reason"),
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.taskId, table.tenantId],
+      foreignColumns: [healthTasks.id, healthTasks.tenantId],
+      name: "health_task_executions_task_id_tenant_fk",
+    }),
+    foreignKey({
+      columns: [table.executedBy, table.tenantId],
+      foreignColumns: [users.id, users.tenantId],
+      name: "health_task_executions_executed_by_tenant_fk",
+    }),
+  ]
+);
 
 /** بلاغ صحي — تصعيد آلي للمالك إن كان شديدًا بلا رد خلال ساعتين (app-complete-spec.md §3.9). */
 export const healthObservations = pgTable(
@@ -117,6 +143,9 @@ export const healthObservations = pgTable(
       foreignColumns: [batches.id, batches.tenantId],
       name: "health_observations_batch_id_tenant_fk",
     }),
+    // **مرجعٌ فريد صريح — يشترطه المفتاح المركَّب من `batch_diagnoses`**
+    // (القرار 205)، **ولم يكن موجودًا كذلك**.
+    uniqueIndex("health_observations_id_tenant_uq").on(table.id, table.tenantId),
     foreignKey({
       columns: [table.createdBy, table.tenantId],
       foreignColumns: [users.id, users.tenantId],
@@ -135,16 +164,40 @@ export const healthObservations = pgTable(
   ]
 );
 
-export const batchDiagnoses = pgTable("batch_diagnoses", {
-  id: serial("id").primaryKey(),
-  batchId: integer("batch_id")
-    .notNull()
-    .references(() => batches.id),
-  observationId: integer("observation_id").references(() => healthObservations.id),
-  diagnosis: text("diagnosis").notNull(),
-  treatmentPlan: text("treatment_plan"),
-  createdBy: integer("created_by")
-    .notNull()
-    .references(() => users.id), // vet
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const batchDiagnoses = pgTable(
+  "batch_diagnoses",
+  {
+    id: serial("id").primaryKey(),
+    /**
+     * **`tenant_id` أُضيف بالقرار 205** — وهو الرابع، **ووُجد بعد أن سُمّيت
+     * الثلاثة قبله**. **وأُثبت على القاعدة قبل الإصلاح**: تشخيصٌ على دفعة
+     * مستأجرٍ **يستشهد ببلاغٍ صحيّ من مستأجرٍ آخر ويكتبه طبيبه** قُبل صامتًا.
+     */
+    tenantId: integer("tenant_id")
+      .notNull()
+      .references(() => tenants.id),
+    batchId: integer("batch_id").notNull(),
+    observationId: integer("observation_id"),
+    diagnosis: text("diagnosis").notNull(),
+    treatmentPlan: text("treatment_plan"),
+    createdBy: integer("created_by").notNull(), // vet
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.batchId, table.tenantId],
+      foreignColumns: [batches.id, batches.tenantId],
+      name: "batch_diagnoses_batch_id_tenant_fk",
+    }),
+    foreignKey({
+      columns: [table.observationId, table.tenantId],
+      foreignColumns: [healthObservations.id, healthObservations.tenantId],
+      name: "batch_diagnoses_observation_id_tenant_fk",
+    }),
+    foreignKey({
+      columns: [table.createdBy, table.tenantId],
+      foreignColumns: [users.id, users.tenantId],
+      name: "batch_diagnoses_created_by_tenant_fk",
+    }),
+  ]
+);

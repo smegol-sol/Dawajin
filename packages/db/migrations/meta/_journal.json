@@ -134,6 +134,13 @@
       "when": 1788116434367,
       "tag": "0018_external_issue",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1788120666827,
+      "tag": "0019_tenant_id_four_tables",
+      "breakpoints": true
     }
   ]
 }

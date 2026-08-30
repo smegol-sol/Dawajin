@@ -176,8 +176,8 @@ describe(`السجل الميداني لقطة مجمَّدة لا مصدر يُ
     );
     // وزنٌ سائد يوم الكتابة يخالف عبوة الصنف — ٤٥ لا ٥٠
     await db.execute(
-      sql`INSERT INTO daily_log_feed_rows (daily_log_id, product_id, feed_stage, bags, kg, bag_weight_kg)
-          VALUES (${logId}, ${productId}, 'بادئ', 10, 450, 45)`
+      sql`INSERT INTO daily_log_feed_rows (tenant_id, daily_log_id, product_id, feed_stage, bags, kg, bag_weight_kg)
+          VALUES (${tenantId}, ${logId}, ${productId}, 'بادئ', 10, 450, 45)`
     );
 
     // ثم تتغيّر عبوة الصنف إلى ٦٠

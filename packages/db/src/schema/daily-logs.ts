@@ -84,40 +84,79 @@ export const dailyLogs = pgTable(
 );
 
 /** جدول منفصل لأن أيام الانتقال بين مراحل العلف تحمل نوعين معًا. */
-export const dailyLogFeedRows = pgTable("daily_log_feed_rows", {
-  id: serial("id").primaryKey(),
-  dailyLogId: integer("daily_log_id")
-    .notNull()
-    .references(() => dailyLogs.id),
-  productId: integer("product_id")
-    .notNull()
-    .references(() => products.id),
-  feedStage: feedStageEnum("feed_stage").notNull(),
-  bags: numeric("bags", { precision: 8, scale: 3 }).notNull(),
-  kg: numeric("kg", { precision: 10, scale: 2 }).notNull(), // محسوب
-  /**
-   * **لقطة مجمَّدة وقت الكتابة — لا مصدرٌ ثالث للوزن، فلا يُحذف** (القرار 201).
-   *
-   * المصدر الذي **يُقرأ منه اليوم** هو `products.package_size` وحده. وهذا
-   * العمود **لا يُقرأ منه شيء عند حساب جديد**، بل يحفظ ما كان سائدًا يوم
-   * كُتب الصفّ: **السجل الميداني لا يُعدَّل** (المبدأ الرابع)، **فسجلٌّ قديم
-   * يبقى محسوبًا بما كان لا بما صار**، وتغيير عبوة الصنف لاحقًا لا يُعيد
-   * حساب ماضٍ. **ومن يقرؤه مصدرًا فيحذفه توحيدًا للمصادر يمحو الماضي.**
-   *
-   * نفس نمط `tank_capacity_l` في الماء و`received_*` في حركة الاستلام (198).
-   */
-  bagWeightKg: numeric("bag_weight_kg", { precision: 6, scale: 2 }).notNull(),
-});
+export const dailyLogFeedRows = pgTable(
+  "daily_log_feed_rows",
+  {
+    id: serial("id").primaryKey(),
+    /**
+     * **`tenant_id` أُضيف بالقرار 205** — وكان الجدول بلا عمود مستأجر إطلاقًا،
+     * **فمفاتيحه مفردة حتمًا**: المفرد يتحقق من **وجود** الصفّ لا من **مالكه**.
+     * **وأُثبت على القاعدة قبل الإصلاح**: صفّ علف على سجلّ مستأجرٍ يستشهد بصنف
+     * مستأجرٍ آخر **قُبل صامتًا**.
+     */
+    tenantId: integer("tenant_id")
+      .notNull()
+      .references(() => tenants.id),
+    dailyLogId: integer("daily_log_id").notNull(),
+    productId: integer("product_id").notNull(),
+    feedStage: feedStageEnum("feed_stage").notNull(),
+    bags: numeric("bags", { precision: 8, scale: 3 }).notNull(),
+    kg: numeric("kg", { precision: 10, scale: 2 }).notNull(), // محسوب
+    /**
+     * **لقطة مجمَّدة وقت الكتابة — لا مصدرٌ ثالث للوزن، فلا يُحذف** (القرار 201).
+     *
+     * المصدر الذي **يُقرأ منه اليوم** هو `products.package_size` وحده. وهذا
+     * العمود **لا يُقرأ منه شيء عند حساب جديد**، بل يحفظ ما كان سائدًا يوم
+     * كُتب الصفّ: **السجل الميداني لا يُعدَّل** (المبدأ الرابع)، **فسجلٌّ قديم
+     * يبقى محسوبًا بما كان لا بما صار**، وتغيير عبوة الصنف لاحقًا لا يُعيد
+     * حساب ماضٍ. **ومن يقرؤه مصدرًا فيحذفه توحيدًا للمصادر يمحو الماضي.**
+     *
+     * نفس نمط `tank_capacity_l` في الماء و`received_*` في حركة الاستلام (198).
+     */
+    bagWeightKg: numeric("bag_weight_kg", { precision: 6, scale: 2 }).notNull(),
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.dailyLogId, table.tenantId],
+      foreignColumns: [dailyLogs.id, dailyLogs.tenantId],
+      name: "daily_log_feed_rows_daily_log_id_tenant_fk",
+    }),
+    foreignKey({
+      columns: [table.productId, table.tenantId],
+      foreignColumns: [products.id, products.tenantId],
+      name: "daily_log_feed_rows_product_id_tenant_fk",
+    }),
+  ]
+);
 
 /** غير قابلة للتعديل أو الحذف — إضافتها تنقل السجل لـ pending_review في نفس المعاملة. */
-export const logNotes = pgTable("log_notes", {
-  id: serial("id").primaryKey(),
-  dailyLogId: integer("daily_log_id")
-    .notNull()
-    .references(() => dailyLogs.id),
-  authorId: integer("author_id")
-    .notNull()
-    .references(() => users.id),
-  body: text("body").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const logNotes = pgTable(
+  "log_notes",
+  {
+    id: serial("id").primaryKey(),
+    /**
+     * **`tenant_id` أُضيف بالقرار 205.** **وأُثبت على القاعدة قبل الإصلاح**:
+     * ملاحظةٌ على سجلّ يومٍ في مزرعة مستأجرٍ **يكتبها مستخدم مستأجرٍ آخر**
+     * قُبلت صامتة — `author_id → users.id` مفردًا.
+     */
+    tenantId: integer("tenant_id")
+      .notNull()
+      .references(() => tenants.id),
+    dailyLogId: integer("daily_log_id").notNull(),
+    authorId: integer("author_id").notNull(),
+    body: text("body").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.dailyLogId, table.tenantId],
+      foreignColumns: [dailyLogs.id, dailyLogs.tenantId],
+      name: "log_notes_daily_log_id_tenant_fk",
+    }),
+    foreignKey({
+      columns: [table.authorId, table.tenantId],
+      foreignColumns: [users.id, users.tenantId],
+      name: "log_notes_author_id_tenant_fk",
+    }),
+  ]
+);
