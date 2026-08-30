@@ -58,7 +58,7 @@ export async function seedTenant(db: Database, label: string): Promise<number> {
   return firstRow(
     await db
       .insert(tenants)
-      .values({ name: `مستأجر ${label}`, timezone: "Asia/Aden", feedBagWeightKg: "50" })
+      .values({ name: `مستأجر ${label}`, timezone: "Asia/Aden" })
       .returning({ id: tenants.id })
   ).id;
 }

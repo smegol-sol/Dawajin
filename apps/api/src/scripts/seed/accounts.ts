@@ -111,7 +111,6 @@ export async function bootstrapAccounts(input: BootstrapInput): Promise<Bootstra
         timezone: "Asia/Aden",
         defaultCountryCode: countryCode,
         maxHouses: DEMO_MAX_HOUSES,
-        feedBagWeightKg: "50",
       })
       .returning({ id: tenants.id });
     if (tenant === undefined) throw new Error("[seed:demo] تعذّر إنشاء مستأجر العرض");

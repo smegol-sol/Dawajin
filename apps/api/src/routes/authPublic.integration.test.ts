@@ -70,7 +70,6 @@ async function seedTenant(label: string): Promise<number> {
       .values({
         name: `مزرعة الاختبار ${label} ${RUN_SUFFIX}`,
         timezone: "Asia/Aden",
-        feedBagWeightKg: "50",
       })
       .returning({ id: tenants.id })
   );

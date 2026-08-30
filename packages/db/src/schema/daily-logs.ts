@@ -95,7 +95,18 @@ export const dailyLogFeedRows = pgTable("daily_log_feed_rows", {
   feedStage: feedStageEnum("feed_stage").notNull(),
   bags: numeric("bags", { precision: 8, scale: 3 }).notNull(),
   kg: numeric("kg", { precision: 10, scale: 2 }).notNull(), // محسوب
-  bagWeightKg: numeric("bag_weight_kg", { precision: 6, scale: 2 }).notNull(), // السائد وقت الإدخال
+  /**
+   * **لقطة مجمَّدة وقت الكتابة — لا مصدرٌ ثالث للوزن، فلا يُحذف** (القرار 201).
+   *
+   * المصدر الذي **يُقرأ منه اليوم** هو `products.package_size` وحده. وهذا
+   * العمود **لا يُقرأ منه شيء عند حساب جديد**، بل يحفظ ما كان سائدًا يوم
+   * كُتب الصفّ: **السجل الميداني لا يُعدَّل** (المبدأ الرابع)، **فسجلٌّ قديم
+   * يبقى محسوبًا بما كان لا بما صار**، وتغيير عبوة الصنف لاحقًا لا يُعيد
+   * حساب ماضٍ. **ومن يقرؤه مصدرًا فيحذفه توحيدًا للمصادر يمحو الماضي.**
+   *
+   * نفس نمط `tank_capacity_l` في الماء و`received_*` في حركة الاستلام (198).
+   */
+  bagWeightKg: numeric("bag_weight_kg", { precision: 6, scale: 2 }).notNull(),
 });
 
 /** غير قابلة للتعديل أو الحذف — إضافتها تنقل السجل لـ pending_review في نفس المعاملة. */

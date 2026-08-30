@@ -111,6 +111,15 @@ export const products = pgTable(
     feedStage: feedStageEnum("feed_stage"), // للعلف فقط
     isSystem: boolean("is_system").notNull().default(false),
     stockUnit: stockUnitEnum("stock_unit").notNull(),
+    /**
+     * **حجم العبوة — المصدر الوحيد لوزن كيس العلف** (القرار 201، على حكم #161
+     * «ثالث عشر» ٥: «وزن الكيس مصدر واحد على الصنف»).
+     *
+     * **وافتراضي ٥٠ يخصّ العلف وحده** — الدواء واللقاح والمطهّر تختلف عبواتها،
+     * **فالحقل يبقى على الصنف ولا يُحوَّل إلى ثابت عام**. والتعبئة التلقائية
+     * بمُشغِّل `products_feed_package_size_default` في القاعدة (ترحيل 0016)،
+     * **لا برقم في منطق الحساب**؛ والقيد أدناه يضمن أثرها.
+     */
     packageSize: numeric("package_size", { precision: 10, scale: 3 }),
     packageUnit: varchar("package_unit", { length: 16 }),
     doseUnit: varchar("dose_unit", { length: 16 }),
@@ -138,6 +147,13 @@ export const products = pgTable(
     uniqueIndex("products_system_feed_uq")
       .on(table.tenantId, table.feedStage)
       .where(sql`${table.isSystem} = true AND ${table.category} = 'علف'`),
+    // **صنف علف بلا حجم عبوة لا يُقبل** (القرار 201) — والمُشغِّل يملأ ٥٠ قبل
+    // أن يصل الصفّ إلى هنا، **فالقيد ضامنٌ لأثره لا بديلٌ عنه**: مسارٌ يمحو
+    // القيمة صراحةً يُرفض بدل أن يُعيد الصنف إلى «بلا وزن».
+    check(
+      "products_feed_package_size_ck",
+      sql`${table.category} <> 'علف' OR ${table.packageSize} IS NOT NULL`
+    ),
   ]
 );
 

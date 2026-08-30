@@ -4,7 +4,6 @@ import {
   serial,
   varchar,
   integer,
-  numeric,
   jsonb,
   boolean,
   timestamp,
@@ -26,9 +25,12 @@ export const tenants = pgTable(
       withTimezone: true,
     }),
     maxHouses: integer("max_houses").notNull().default(5),
-    feedBagWeightKg: numeric("feed_bag_weight_kg", { precision: 6, scale: 2 })
-      .notNull()
-      .default("50"),
+    /**
+     * **`feed_bag_weight_kg` حُذف بالقرار 201.** وزن كيس العلف **ثابت لا
+     * إعداد** — ومصدره الوحيد `products.package_size` على الصنف. **وإعدادٌ
+     * يملك المالك تغييره يناقض «ثابت» من حيث المبدأ لا من حيث الاستعمال**:
+     * وجوده يُعيد التعارض الثلاثي (#161 «ثالث عشر» ٥) أول مرة يُغيَّر.
+     */
     feedStarterEndDay: integer("feed_starter_end_day").notNull().default(10),
     feedGrowerEndDay: integer("feed_grower_end_day").notNull().default(24),
     feedAnomalyThresholdPct: integer("feed_anomaly_threshold_pct").notNull().default(30),

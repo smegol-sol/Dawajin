@@ -63,7 +63,7 @@ beforeAll(async () => {
   const tenant = firstRow(
     await db
       .insert(tenants)
-      .values({ name: "Auth Protected Test Tenant", timezone: "Asia/Aden", feedBagWeightKg: "50" })
+      .values({ name: "Auth Protected Test Tenant", timezone: "Asia/Aden" })
       .returning({ id: tenants.id })
   );
   tenantId = tenant.id;
