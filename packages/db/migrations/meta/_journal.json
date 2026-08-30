@@ -127,6 +127,13 @@
       "when": 1788115148800,
       "tag": "0017_supplier_carrier_entities",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1788116434367,
+      "tag": "0018_external_issue",
+      "breakpoints": true
     }
   ]
 }
