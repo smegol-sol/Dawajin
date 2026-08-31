@@ -31,7 +31,7 @@ jobs:
         with:
           fetch-depth: 0 # لازم لفحص رسائل commit مقابل الفرع الأساس
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           version: 9.15.0
 
