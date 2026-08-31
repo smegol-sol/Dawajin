@@ -29,6 +29,7 @@ import {
   EXTERNAL_ISSUE_STATUS,
   EXTERNAL_ISSUE_REASON,
   FARMER_REQUEST_STATUS,
+  EMPTY_BAG_CONDITION,
 } from "@dawajin/shared";
 import { pgEnum } from "drizzle-orm/pg-core";
 
@@ -72,3 +73,4 @@ export const storageConditionsEnum = pgEnum("storage_conditions", STORAGE_CONDIT
 export const externalIssueStatusEnum = pgEnum("external_issue_status", EXTERNAL_ISSUE_STATUS);
 export const externalIssueReasonEnum = pgEnum("external_issue_reason", EXTERNAL_ISSUE_REASON);
 export const farmerRequestStatusEnum = pgEnum("farmer_request_status", FARMER_REQUEST_STATUS);
+export const emptyBagConditionEnum = pgEnum("empty_bag_condition", EMPTY_BAG_CONDITION);

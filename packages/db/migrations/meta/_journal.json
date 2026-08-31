@@ -148,6 +148,13 @@
       "when": 1788131360691,
       "tag": "0020_farmer_requests",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1788133452610,
+      "tag": "0021_empty_bags",
+      "breakpoints": true
     }
   ]
 }
