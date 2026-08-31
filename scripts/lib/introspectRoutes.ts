@@ -25,11 +25,21 @@ import type { Env } from "../../apps/api/src/lib/env";
 export interface RouteEntry {
   method: string;
   path: string;
+  /**
+   * **أدوار حارس `requireRole` على هذا المسار، أو `null` إن لم يُحرَس بدور**
+   * (القرار 218).
+   *
+   * **مقروءةٌ من الشجرة لا من قائمة تُكتب بيد:** `requireRole` يُعلن أدواره
+   * على الدالة التي يُرجعها (`RoleGuard.roles`)، **لأن الإغلاق لا يُقرأ من
+   * خارجه واسم الدالة في الشجرة `<anonymous>`** — مقيسٌ لا مفترَض.
+   */
+  guardRoles: readonly string[] | null;
 }
 
 interface ExpressRoute {
   path: string;
   methods: Record<string, boolean>;
+  stack?: { handle?: { roles?: readonly string[] } }[];
 }
 
 interface ExpressLayer {
@@ -45,8 +55,10 @@ function walk(stack: ExpressLayer[], routes: RouteEntry[]): void {
       const methods = Object.entries(layer.route.methods)
         .filter(([, enabled]) => enabled)
         .map(([method]) => method.toUpperCase());
+      const guard = (layer.route.stack ?? []).find((h) => Array.isArray(h.handle?.roles));
+      const guardRoles = guard?.handle?.roles ?? null;
       for (const method of methods) {
-        routes.push({ method, path: layer.route.path });
+        routes.push({ method, path: layer.route.path, guardRoles });
       }
     } else if (layer.name === "router" && layer.handle.stack) {
       if (!layer.regexp?.fast_slash) {

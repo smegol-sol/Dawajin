@@ -32,6 +32,27 @@ import { sitesRouter } from "./routes/sites";
  * اتصال قاعدة بيانات حقيقي.
  * @returns تطبيق Express جاهز — لم يُستدعَ عليه `.listen()` بعد
  */
+/**
+ * أنماط المسارات التي تحمل معرّف كيان في الرابط — كل نمط يُركَّب عليه
+ * `enforceEntityAccess`. `batchId` يُضاف مع مسارات الدفعات (المرحلة 2).
+ *
+ * **وكل مسار سرد جديد يُضاف هنا** — لا يكفي أن تفلتر الخدمة نتائجه: الفرض
+ * يقرّر «هل يصل هذه المزرعة أصلًا» والفلترة تقرّر «ماذا يرى داخلها»
+ * (`CLAUDE.md` — قاعدة السرد، القرار #129).
+ */
+export const ENTITY_ID_PATH_PATTERNS = [
+  "/api/houses/:houseId",
+  "/api/batches/:batchId",
+  // نمط واحد يغطي `/api/farms/:farmId` و`/api/farms/:farmId/houses` معًا —
+  // `api.use(pattern)` يطابق البادئة لا المسار الكامل، **كما في نمط الموقع
+  // أدناه** (القرار #131). وكان النمط هنا **للسرد وحده**، فمرّت قراءة
+  // المزرعة نفسها بلا فحص إسناد إطلاقًا (§7-ب البند 43، والقرار 191).
+  "/api/farms/:farmId",
+  // نمط واحد يغطي `/api/sites/:siteId` و`/api/sites/:siteId/farms` معًا —
+  // `api.use(pattern)` يطابق البادئة لا المسار الكامل (القرار #131).
+  "/api/sites/:siteId",
+] as const;
+
 export function createApp(db: Database, env: Env, logger: Logger): Express {
   const app = express();
 
@@ -90,26 +111,6 @@ export function createApp(db: Database, env: Env, logger: Logger): Express {
   // هذا يجعل شجرة توجيه Express قابلة للفحص البرمجي المباشر بلا حاجة
   // لإعادة بناء بادئة من regexp داخلي (scripts/lib/introspectRoutes.ts) —
   // لا اعتماد على اسم متغيّر ولا مطابقة نصية تفوّت مسارًا بالخطأ.
-  /**
-   * أنماط المسارات التي تحمل معرّف كيان في الرابط — كل نمط يُركَّب عليه
-   * `enforceEntityAccess`. `batchId` يُضاف مع مسارات الدفعات (المرحلة 2).
-   *
-   * **وكل مسار سرد جديد يُضاف هنا** — لا يكفي أن تفلتر الخدمة نتائجه: الفرض
-   * يقرّر «هل يصل هذه المزرعة أصلًا» والفلترة تقرّر «ماذا يرى داخلها»
-   * (`CLAUDE.md` — قاعدة السرد، القرار #129).
-   */
-  const ENTITY_ID_PATH_PATTERNS = [
-    "/api/houses/:houseId",
-    "/api/batches/:batchId",
-    // نمط واحد يغطي `/api/farms/:farmId` و`/api/farms/:farmId/houses` معًا —
-    // `api.use(pattern)` يطابق البادئة لا المسار الكامل، **كما في نمط الموقع
-    // أدناه** (القرار #131). وكان النمط هنا **للسرد وحده**، فمرّت قراءة
-    // المزرعة نفسها بلا فحص إسناد إطلاقًا (§7-ب البند 43، والقرار 191).
-    "/api/farms/:farmId",
-    // نمط واحد يغطي `/api/sites/:siteId` و`/api/sites/:siteId/farms` معًا —
-    // `api.use(pattern)` يطابق البادئة لا المسار الكامل (القرار #131).
-    "/api/sites/:siteId",
-  ] as const;
 
   const api = express.Router();
   api.use(

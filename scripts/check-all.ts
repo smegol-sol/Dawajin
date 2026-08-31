@@ -3,7 +3,8 @@
  * تُشغَّل محليًا وفي CI على كل PR بدءًا من المرحلة 0 (docs/work-plan.md §2).
  * ستة أصلية + سبعة أضيفت لاحقًا (ESLint، Prettier، التغطية — القرار #61/#63،
  * تأكيدات تخطيط RTL — القرار #81، والشعار مصدر واحد — القرار #109، والمفتاح
- * المركَّب — القرار 206، وسلسلة الترحيلات — القرار 215).
+ * المركَّب — القرار 206، وسلسلة الترحيلات — القرار 215، وتغطية أنماط الكيانات
+ * — القرار 218).
  *
  * **و«المفتاح المركَّب» أولها قراءةً من القاعدة لا من المصدر** — والأحد عشر
  * قبله تقرأ ملفات المستودع. **والفرق مقصود: هي القاعدة الوحيدة هنا التي تحرس
@@ -15,6 +16,7 @@ import { checkCompositeFk } from "./checks/composite-fk";
 import { checkCoverage } from "./checks/coverage";
 import { checkDesignTokens } from "./checks/design-tokens";
 import { checkDuplicateRoutes } from "./checks/duplicate-routes";
+import { checkEntityPatterns } from "./checks/entity-patterns";
 import { checkEnumUsage } from "./checks/enum-usage";
 import { checkEslint } from "./checks/eslint";
 import { checkLayoutRtl } from "./checks/layout-rtl";
@@ -37,6 +39,7 @@ const checks: { name: string; run: CheckFn }[] = [
   { name: "رموز التصميم", run: checkDesignTokens },
   { name: "تغطية التنقل", run: checkNavCoverage },
   { name: "صحة enum", run: checkEnumUsage },
+  { name: "تغطية أنماط الكيانات", run: checkEntityPatterns },
   { name: "المفتاح المركَّب", run: checkCompositeFk },
   { name: "سلسلة الترحيلات", run: checkMigrationChain },
   { name: "الشعار مصدر واحد", run: checkLogoSingleSource },
