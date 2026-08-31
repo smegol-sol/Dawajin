@@ -875,6 +875,72 @@
         }
       }
     },
+    "/api/houses/{houseId}/status": {
+      "patch": {
+        "summary": "تغيير حالة العنبر (المشرف والمالك) — آلة الحالات، القرار 220",
+        "description": "قفل الصفّ ثم إعادة قراءة الحالة والحرّاس تحته، ثم houses و house_status_history في معاملة واحدة. والثلاثة الباقية من انتقالات §3.3 أثرُ عمليات أخرى ولا تُفتح هنا: تصفية الدفعة · اكتمال خطوات التجهيز · إسكان الدفعة.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "houseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HouseStatusChangeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "الانتقال بعد وقوعه",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HouseStatusChange"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "description": "انتقال غير صالح أو حارسٌ لم يُستوفَ — بسبب يسمّي الحالة الحالية والانتقال المرفوض (`invalid_house_transition` · `reason_required` · `house_has_active_batch` · `no_open_prep_cycle` · `rest_not_started` · `rest_not_elapsed`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/platform/auth/login": {
       "post": {
         "summary": "دخول مدير المنصة — مسار منفصل تمامًا عن /api (القراران #146 و#147)",
@@ -1588,6 +1654,70 @@
           "temporaryPassword": {
             "type": "string",
             "description": "تُعرض مرة واحدة لتُسلَّم لصاحبها — ولا تُخزَّن بنصّها"
+          }
+        }
+      },
+      "HouseStatusChangeRequest": {
+        "type": "object",
+        "required": ["status"],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "مشغول",
+              "تحت الإخلاء",
+              "تحت التنظيف والتطهير",
+              "في فترة الراحة",
+              "جاهز للإسكان",
+              "تحت الصيانة",
+              "معطّل"
+            ],
+            "description": "الحالة المقصودة. والانتقالات الأربعة التي يملكها هذا المسار: تحت الإخلاء←تحت التنظيف والتطهير · في فترة الراحة←جاهز للإسكان · أي حالة←تحت الصيانة/معطّل · والعودة منهما باختيار صريح (القرار 220)"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 500,
+            "description": "إلزامي عند الخروج من الخدمة (تحت الصيانة أو معطّل) — وهو الأثر الوحيد الباقي يشرح لماذا توقّف العنبر. واختياري عند العودة"
+          }
+        }
+      },
+      "HouseStatusChange": {
+        "type": "object",
+        "required": ["houseId", "fromStatus", "toStatus", "statusChangedAt", "reason"],
+        "properties": {
+          "houseId": {
+            "type": "integer"
+          },
+          "fromStatus": {
+            "type": "string",
+            "enum": [
+              "مشغول",
+              "تحت الإخلاء",
+              "تحت التنظيف والتطهير",
+              "في فترة الراحة",
+              "جاهز للإسكان",
+              "تحت الصيانة",
+              "معطّل"
+            ]
+          },
+          "toStatus": {
+            "type": "string",
+            "enum": [
+              "مشغول",
+              "تحت الإخلاء",
+              "تحت التنظيف والتطهير",
+              "في فترة الراحة",
+              "جاهز للإسكان",
+              "تحت الصيانة",
+              "معطّل"
+            ]
+          },
+          "statusChangedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reason": {
+            "type": ["string", "null"]
           }
         }
       }

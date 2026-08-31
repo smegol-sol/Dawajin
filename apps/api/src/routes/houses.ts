@@ -1,5 +1,5 @@
 import type { Database } from "@dawajin/db";
-import { HOUSE_TYPE } from "@dawajin/shared";
+import { HOUSE_STATUS, HOUSE_TYPE } from "@dawajin/shared";
 import { Router } from "express";
 import { z } from "zod";
 
@@ -12,14 +12,16 @@ import {
   updateHouse,
   type CreateHouseInput,
 } from "../services/housesService";
+import { changeHouseStatus } from "../services/houseStatusService";
 
 /**
  * GET/POST /farms/:farmId/houses · GET/PATCH /houses/:houseId — العنابر،
  * الوحدة الأساسية (القرار #112).
  *
  * **القراءة لكل الأدوار والكتابة للمالك حصرًا** — نفس قسمة المواقع والمزارع
- * (#118 و#121). والمشرف يبقى على **تغيير الحالة** كما في §12.2، وهو مسار
- * منفصل في المرحلة 3 لا هنا.
+ * (#118 و#121). **وتغيير الحالة مسارٌ منفصل بصلاحيته**: `PATCH
+ * /houses/:houseId/status` **للمشرف والمالك** (§12.2 صفّ «تغيير حالة عنبر»)،
+ * وآلته في `services/houseStatusService.ts` (القرار 220).
  *
  * **لا `DELETE`** (§7-ب البند 13). والمنطق في services (القرار #61).
  */
@@ -65,6 +67,54 @@ function buildCreateInput(
     type: input.type,
     ...(input.waterTankCapacityL == null ? {} : { waterTankCapacityL: input.waterTankCapacityL }),
   };
+}
+
+/**
+ * جسم تغيير الحالة. **السبب اختياريّ هنا وإلزامه في الآلة لا في المخطط**:
+ * إلزامه يخصّ **صنف الانتقال** (الخروج من الخدمة) لا الحقلَ نفسه، **والصنف
+ * لا يُعرف إلا بعد قراءة الحالة الحالية تحت القفل** (القرار 220).
+ */
+const houseStatusSchema = z.object({
+  status: z.enum(HOUSE_STATUS),
+  reason: z
+    .string()
+    .trim()
+    .min(1, "السبب لا يكون فارغًا")
+    .max(500, "السبب أطول من الحد")
+    .optional(),
+});
+
+/**
+ * يسجّل مسار تغيير الحالة — **دالّة مستقلة لا سطورًا داخل الموجّه**: الموجّه
+ * تجاوز حدّ الأسطر، **والحدّ يُحترم بالفصل لا برفعه**.
+ *
+ * **الصلاحية للمشرف والمالك** (§12.2)، **قائمة موجبة لا سكوت** (القرار 184).
+ * **ولا فحص إسناد هنا:** `/api/houses/:houseId` مركَّب عليه `enforceEntityAccess`
+ * بنمط بادئة في `app.ts`، فيغطّي هذا المسار أصلًا (القرار 220).
+ */
+function registerStatusRoute(router: Router, db: Database): void {
+  router.patch(
+    "/api/houses/:houseId/status",
+    requireRole("supervisor", "owner"),
+    async (req, res, next) => {
+      try {
+        const user = requireTenantUser(req);
+        const houseId = idSchema.parse(req.params.houseId);
+        const input = houseStatusSchema.parse(req.body);
+        res.json(
+          await changeHouseStatus(db, {
+            tenantId: user.tenantId,
+            actorId: user.id,
+            houseId,
+            toStatus: input.status,
+            reason: input.reason,
+          })
+        );
+      } catch (error) {
+        next(error);
+      }
+    }
+  );
 }
 
 /**
@@ -130,6 +180,8 @@ export function housesRouter(db: Database): Router {
       next(error);
     }
   });
+
+  registerStatusRoute(router, db);
 
   return router;
 }
