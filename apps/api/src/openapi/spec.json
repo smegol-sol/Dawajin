@@ -1105,6 +1105,109 @@
           }
         }
       }
+    },
+    "/api/houses/{houseId}/prep-cycle": {
+      "get": {
+        "summary": "الدورة المفتوحة لعنبر بخطواتها مرتّبةً — القرار 221",
+        "description": "قراءة بيانات عنبر بقواعد §12.2 — الفرض المركزي على /api/houses/:houseId يغطّيها. لا POST لفتح دورة: الفتح أثرُ تصفية الدفعة (§14.6، المرحلة 4) عبر الدالة المشتركة openPrepCycle.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "houseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "الدورة المفتوحة وخطواتها",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrepCycle"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "description": "العنبر غير موجود أو لا دورة مفتوحة له (`no_open_prep_cycle`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/prep-steps/{stepId}/complete": {
+      "patch": {
+        "summary": "إكمال خطوة تجهيز — وانتقال تلقائي إلى «في فترة الراحة» عند اكتمال الإلزامية (§14.6)",
+        "description": "المربّي يُكمل خطوتَه المُسنَدة وحدها، والمشرف والمالك بلا هذا الشرط (§12.2). قفل العنبر ثم الدورة، وإعادة قراءة الخطوة تحتهما. وحركة الاستهلاك مؤجَّلة إلى دفعة المخزون فلا مُنتَج ولا كمية هنا (القرار 221).",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "stepId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "الإكمال — وهل وقع الانتقال التلقائي به",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrepStepCompletion"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "description": "دورة مكتملة (`prep_cycle_completed`) · خطوة مكتملة (`step_already_completed`) · اكتملت الإلزامية والعنبر ليس في «تحت التنظيف والتطهير» (`house_not_in_cleaning`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1720,6 +1823,132 @@
             "type": ["string", "null"]
           }
         }
+      },
+      "PrepStep": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "stepKey": {
+            "type": "string"
+          },
+          "stepOrder": {
+            "type": "integer"
+          },
+          "label": {
+            "type": "string"
+          },
+          "isRequired": {
+            "type": "boolean"
+          },
+          "assignedTo": {
+            "type": "integer",
+            "nullable": true
+          },
+          "targetHours": {
+            "type": "integer",
+            "nullable": true
+          },
+          "completedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "completedBy": {
+            "type": "integer",
+            "nullable": true
+          },
+          "approvedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "approvedBy": {
+            "type": "integer",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "stepKey",
+          "stepOrder",
+          "label",
+          "isRequired",
+          "assignedTo",
+          "targetHours",
+          "completedAt",
+          "completedBy",
+          "approvedAt",
+          "approvedBy"
+        ]
+      },
+      "PrepCycle": {
+        "type": "object",
+        "description": "الدورة المفتوحة — rest_target_days مثبَّت عليها يوم فُتحت (القرار #153)، ولا يُقرأ من السياسة وقت التأكيد",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "houseId": {
+            "type": "integer"
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "restTargetDays": {
+            "type": "integer",
+            "minimum": 3
+          },
+          "restStartedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "restConfirmedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PrepStep"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "houseId",
+          "startedAt",
+          "restTargetDays",
+          "restStartedAt",
+          "restConfirmedAt",
+          "steps"
+        ]
+      },
+      "PrepStepCompletion": {
+        "type": "object",
+        "properties": {
+          "stepId": {
+            "type": "integer"
+          },
+          "cycleId": {
+            "type": "integer"
+          },
+          "completedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "transitionedToRest": {
+            "type": "boolean"
+          },
+          "requiredRemaining": {
+            "type": "integer"
+          }
+        },
+        "required": ["stepId", "cycleId", "completedAt", "transitionedToRest", "requiredRemaining"]
       }
     },
     "responses": {

@@ -220,6 +220,18 @@ export async function changeHouseStatus(
     const rule = classifyHouseTransition(fromStatus, toStatus);
     if (!rule) rejectTransition(fromStatus, toStatus);
 
+    // **الانتقال التلقائي لا يُطلب يدويًّا** (القرار 221): «تنظيف ← راحة» في
+    // الجدول لأن الآلة تملك كل انتقال، **ومُجريه إكمالُ الخطوات لا هذا
+    // المسار** — وقبوله هنا بابٌ خلفيّ يتخطّى «الخطوات تفتح العنبر» (#153).
+    if (rule.performedBy !== "status-route") {
+      throw new HttpError(
+        422,
+        "transition_not_manual",
+        `انتقال غير صالح يدويًّا: العنبر في «${fromStatus}» ولا يُنقل منها إلى «${toStatus}» بطلبٍ مباشر — ${rule.source}`,
+        { fromStatus, toStatus, source: rule.source }
+      );
+    }
+
     await enforceGuards(tx, rule, { ...input, fromStatus });
 
     const [updated] = await tx

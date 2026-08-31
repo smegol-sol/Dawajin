@@ -1,6 +1,8 @@
 import {
   batches,
   farms,
+  housePrepCycles,
+  housePrepSteps,
   houses,
   sites,
   userAssignments,
@@ -30,9 +32,11 @@ function firstDefinedPrimitive(...values: unknown[]): string | undefined {
 type AuthenticatedUser = NonNullable<Request["user"]>;
 
 /**
- * يشتق houseId من houseId مباشر أو من batchId (يُحل لعنبره) — القيمة الوحيدة
- * المخوَّلة باشتقاق العنبر من الدفعة في كل المشروع (راجع تعليق
- * no-unvetted-house-id-reuse أعلى eslint-rules/no-unvetted-house-id-reuse.mjs).
+ * يشتق houseId من houseId مباشر، أو من batchId (يُحل لعنبره)، أو من stepId
+ * (خطوة ← دورتها ← عنبرها، القرار 221) — القيمة الوحيدة المخوَّلة باشتقاق
+ * العنبر من كيانٍ آخر في كل المشروع (راجع تعليق no-unvetted-house-id-reuse
+ * أعلى eslint-rules/no-unvetted-house-id-reuse.mjs). **فالمعرّف المشتق يُحلّ
+ * في الفرض المركزي لا بدالة جلب في كل خدمة** — المبدأ الأول.
  */
 async function resolveHouseId(db: Database, req: Request): Promise<number | undefined> {
   const rawHouseId = firstDefinedPrimitive(
@@ -47,15 +51,37 @@ async function resolveHouseId(db: Database, req: Request): Promise<number | unde
     req.query.batchId,
     (req.body as Record<string, unknown> | undefined)?.batchId
   );
-  if (!rawBatchId) return undefined;
+  if (rawBatchId) {
+    const [batch] = await db
+      .select({ houseId: batches.houseId })
+      .from(batches)
+      .where(eq(batches.id, Number(rawBatchId)))
+      .limit(1);
+    if (!batch) throw new HttpError(404, "not_found", "الدفعة غير موجودة");
+    return batch.houseId;
+  }
 
-  const [batch] = await db
-    .select({ houseId: batches.houseId })
-    .from(batches)
-    .where(eq(batches.id, Number(rawBatchId)))
+  const rawStepId = firstDefinedPrimitive(
+    req.params.stepId,
+    req.query.stepId,
+    (req.body as Record<string, unknown> | undefined)?.stepId
+  );
+  if (!rawStepId) return undefined;
+
+  const [step] = await db
+    .select({ houseId: housePrepCycles.houseId })
+    .from(housePrepSteps)
+    .innerJoin(
+      housePrepCycles,
+      and(
+        eq(housePrepCycles.id, housePrepSteps.cycleId),
+        eq(housePrepCycles.tenantId, housePrepSteps.tenantId)
+      )
+    )
+    .where(eq(housePrepSteps.id, Number(rawStepId)))
     .limit(1);
-  if (!batch) throw new HttpError(404, "not_found", "الدفعة غير موجودة");
-  return batch.houseId;
+  if (!step) throw new HttpError(404, "not_found", "خطوة التجهيز غير موجودة");
+  return step.houseId;
 }
 
 /**

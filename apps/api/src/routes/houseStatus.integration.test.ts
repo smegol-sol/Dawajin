@@ -198,11 +198,21 @@ describe("الصلاحية — §12.2 صفّ «تغيير حالة عنبر»", 
 });
 
 describe("مخالفات متعمَّدة — بأسمائها لا بعدّها", () => {
+  it("«تنظيف ← راحة» في الجدول منذ 221 وصنفُه تلقائيّ — يدويًّا 422 transition_not_manual", async () => {
+    await setStatus(subjectId, "تحت التنظيف والتطهير");
+    const res = await patchStatus(subjectId, ownerToken, { status: "في فترة الراحة" });
+    expect(res.status).toBe(422);
+    const body = res.body as { code: string; message: string };
+    expect(body.code).toBe("transition_not_manual");
+    expect(body.message).toContain("prep-steps");
+    expect(await statusOf(subjectId)).toBe("تحت التنظيف والتطهير");
+    expect(await historyCount(subjectId)).toBe(0);
+  });
+
   it.each([
     ["مشغول", "تحت الإخلاء", "أثرُ تصفية الدفعة"],
-    ["تحت التنظيف والتطهير", "في فترة الراحة", "انتقالٌ تلقائي"],
     ["جاهز للإسكان", "مشغول", "أثرُ إسكان الدفعة"],
-  ] as const)("«%s ← %s» يملكه غيرُ هذا المسار ← 422 يسمّي صاحبه", async (from, to, _why) => {
+  ] as const)("«%s ← %s» يملكه غيرُ الآلة كلّها ← 422 يسمّي صاحبه", async (from, to, _why) => {
     await setStatus(subjectId, from);
     const res = await patchStatus(subjectId, ownerToken, { status: to });
     expect(res.status).toBe(422);

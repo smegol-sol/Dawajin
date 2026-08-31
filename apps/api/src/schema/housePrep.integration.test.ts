@@ -64,6 +64,12 @@ async function seedTenantTree(label: string): Promise<{
 
 /** دورة جاهزة بمدة عشرة أيام بدأت راحتها قبل عشرين يومًا. */
 async function seedCycle(): Promise<number> {
+  // تُغلق المفتوحة السابقة أولًا — **دورة مفتوحة واحدة لكل عنبر** صار قيدًا
+  // في القاعدة (`house_prep_cycles_open_per_house_uq`، القرار 221)
+  await db.execute(
+    sql`UPDATE house_prep_cycles SET completed_at = now()
+        WHERE house_id = ${houseA} AND completed_at IS NULL`
+  );
   return insertReturningId(
     sql`INSERT INTO house_prep_cycles (tenant_id, house_id, rest_target_days, rest_started_at)
         VALUES (${tenantA}, ${houseA}, 10, now() - interval '20 days') RETURNING id`

@@ -22,6 +22,7 @@ import { farmsRouter } from "./routes/farms";
 import { healthRouter } from "./routes/health";
 import { housesRouter } from "./routes/houses";
 import { platformAuthRouter } from "./routes/platformAuth";
+import { prepCycleRouter } from "./routes/prepCycle";
 import { settingsRouter } from "./routes/settings";
 import { sitesRouter } from "./routes/sites";
 
@@ -43,6 +44,8 @@ import { sitesRouter } from "./routes/sites";
 export const ENTITY_ID_PATH_PATTERNS = [
   "/api/houses/:houseId",
   "/api/batches/:batchId",
+  // خطوة التجهيز معرّفٌ مشتق — `resolveHouseId` يحلّها لعنبرها (القرار 221)
+  "/api/prep-steps/:stepId",
   // نمط واحد يغطي `/api/farms/:farmId` و`/api/farms/:farmId/houses` معًا —
   // `api.use(pattern)` يطابق البادئة لا المسار الكامل، **كما في نمط الموقع
   // أدناه** (القرار #131). وكان النمط هنا **للسرد وحده**، فمرّت قراءة
@@ -136,6 +139,7 @@ export function createApp(db: Database, env: Env, logger: Logger): Express {
   api.use(sitesRouter(db));
   api.use(farmsRouter(db));
   api.use(housesRouter(db));
+  api.use(prepCycleRouter(db));
   app.use(api);
 
   app.use(errorHandler(logger));
