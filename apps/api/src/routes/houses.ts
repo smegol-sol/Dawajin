@@ -35,8 +35,24 @@ const nameSchema = z.string().trim().min(1, "اسم العنبر مطلوب").ma
  */
 const waterSchema = z.number().positive().max(99999999).nullable();
 
+/**
+ * **الحالة الابتدائية إلزاميّة بلا افتراضي** (القرار 222، تنفيذًا لـ186).
+ *
+ * **والتحقّق هنا شكلٌ لا حكم**: أنّ الحقل موجود وأنّ قيمته إحدى السبع —
+ * **والحكمُ أيّ الثلاث تُولد** في `housesService` بعلّته، **كما يفصل مسارُ
+ * الانتقال شكلَه عن حكم آلته** (القرار 220). **والرسالة عربيّة صريحة لأن
+ * رسالة القاعدة الخام لا تصلح لمستخدم** — ولن تصدر عنها أصلًا بعد إسقاط
+ * الافتراضي: **التحقّق يسبقها**.
+ */
 const createHouseSchema = z.object({
   name: nameSchema,
+  status: z.enum(HOUSE_STATUS, { message: "الحالة الابتدائية مطلوبة وتُختار صراحةً" }),
+  reason: z
+    .string()
+    .trim()
+    .min(1, "السبب لا يكون فارغًا")
+    .max(500, "السبب أطول من الحد")
+    .optional(),
   type: z.enum(HOUSE_TYPE).optional(),
   waterTankCapacityL: waterSchema.optional(),
 });
@@ -64,6 +80,8 @@ function buildCreateInput(
     actorId: user.id,
     farmId,
     name: input.name,
+    status: input.status,
+    reason: input.reason,
     type: input.type,
     ...(input.waterTankCapacityL == null ? {} : { waterTankCapacityL: input.waterTankCapacityL }),
   };

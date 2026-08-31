@@ -107,8 +107,19 @@ export async function updateFarm(
   await apiClient.patch(`/farms/${String(farmId)}`, input, auth(token)).catch(fail);
 }
 
+/**
+ * **الحالة الابتدائية إلزاميّة على العقد** (القرار 222): الخادم يرفض الإنشاء
+ * بلا حالة، **ولا افتراضي في القاعدة يسدّ مسدّها**.
+ *
+ * **وشاشة البنية التحتية لا تسأل عنها بعد** — فتُرسَل «جاهز للإسكان» صراحةً
+ * **ريثما تُبنى خانةُ الاختيار**، **وهذا حدٌّ معلن لا سكوت**: العنبر الذي
+ * يُنشأ من الشاشة اليوم يُدَّعى له جاهزية، **وهو ما رفضه 186 في القاعدة
+ * وينتظر إصلاحه في الواجهة** (§7-ب البند 40، شقّ الشاشة).
+ */
 export async function createHouse(token: string, farmId: number, name: string): Promise<void> {
-  await apiClient.post(`/farms/${String(farmId)}/houses`, { name }, auth(token)).catch(fail);
+  await apiClient
+    .post(`/farms/${String(farmId)}/houses`, { name, status: "جاهز للإسكان" }, auth(token))
+    .catch(fail);
 }
 
 export async function renameHouse(token: string, houseId: number, name: string): Promise<void> {

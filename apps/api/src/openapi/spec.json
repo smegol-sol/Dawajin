@@ -756,6 +756,16 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "description": "حالة ابتدائية ممنوعة (`invalid_initial_status`) أو ميلاد خارج الخدمة بلا سبب (`reason_required`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
           }
         }
       }
@@ -1559,12 +1569,23 @@
       },
       "HouseCreateRequest": {
         "type": "object",
-        "required": ["name"],
+        "required": ["name", "status"],
         "properties": {
           "name": {
             "type": "string",
             "minLength": 1,
             "maxLength": 64
+          },
+          "status": {
+            "type": "string",
+            "description": "الحالة الابتدائية — تُختار صراحةً ولا تُفترض (القرار 222، تنفيذًا لـ186). والمسموح ثلاث من السبع؛ والأربع الأخرى تفترض دفعةً أو دورة تجهيز لا يملكها عنبر وُلد للتوّ، فتُرفض بـ422 invalid_initial_status.",
+            "enum": ["جاهز للإسكان", "تحت الصيانة", "معطّل"]
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500,
+            "description": "إلزاميّ حين يُولد العنبر خارج الخدمة (تحت الصيانة · معطّل) — وهو الأثر الوحيد الباقي يشرح لماذا العنبر متوقّف. ويُكتب في صفّ الميلاد بـfrom_status = NULL."
           },
           "type": {
             "type": "string",

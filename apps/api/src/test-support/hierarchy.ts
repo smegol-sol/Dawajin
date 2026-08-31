@@ -1,7 +1,7 @@
 import { randomInt } from "node:crypto";
 
 import { type Database, tenants, users, ensureSystemProducts } from "@dawajin/db";
-import { normalizePhoneE164, type UserRole } from "@dawajin/shared";
+import { normalizePhoneE164, type HouseCreatableStatus, type UserRole } from "@dawajin/shared";
 import { sql, type SQL } from "drizzle-orm";
 import request from "supertest";
 
@@ -131,7 +131,21 @@ export async function farmVia(
   );
 }
 
-/** عنبر عبر `POST /api/farms/:farmId/houses` — المسار الحقيقي منذ الدفعة 4. */
+/**
+ * **حالة ميلاد التجهيزات** — تُرسَل صراحةً لأن **لا افتراضي في القاعدة بعد
+ * القرار 222**، **ومكتوبةٌ باسمٍ لا مبثوثةً حرفيًّا** في عشرات المواضع.
+ */
+const BORN_READY: HouseCreatableStatus = "جاهز للإسكان";
+
+/**
+ * عنبر عبر `POST /api/farms/:farmId/houses` — المسار الحقيقي منذ الدفعة 4.
+ *
+ * **ويولد «جاهزًا للإسكان» دائمًا** — وهي حالة كل تجهيزةٍ قائمة اليوم.
+ * **ولا معامِلَ حالةٍ هنا عمدًا:** لا مستدعي يحتاجه (مقيس)، **ومعامِلٌ
+ * يُضاف قبل أن يُطلب توسعةٌ تُصان بلا نفع**. **ومن يختبر ميلادًا بحالةٍ
+ * أخرى ينشئ بالطلب المباشر** كما في `houseInitialStatus.integration.test.ts`
+ * — **فالتجهيزة تخدم المتكرّر، والحالةُ الخاصة تُكتب حيث تُختبَر**.
+ */
 export async function houseVia(
   app: App,
   token: string,
@@ -142,7 +156,7 @@ export async function houseVia(
     await request(app)
       .post(`/api/farms/${String(farmId)}/houses`)
       .set("Authorization", `Bearer ${token}`)
-      .send({ name }),
+      .send({ name, status: BORN_READY }),
     "العنبر"
   );
 }
