@@ -18,7 +18,8 @@
     "test:layout": "playwright test",
     "typecheck": "pnpm -r run typecheck",
     "check:all": "tsx scripts/check-all.ts",
-    "api:generate": "pnpm --filter @dawajin/api run api:generate"
+    "api:generate": "pnpm --filter @dawajin/api run api:generate",
+    "audit:gate": "tsx scripts/audit-gate.ts"
   },
   "devDependencies": {
     "@dawajin/db": "workspace:^",
