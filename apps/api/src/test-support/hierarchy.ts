@@ -1,6 +1,6 @@
 import { randomInt } from "node:crypto";
 
-import { type Database, tenants, users } from "@dawajin/db";
+import { type Database, tenants, users, ensureSystemProducts } from "@dawajin/db";
 import { normalizePhoneE164, type UserRole } from "@dawajin/shared";
 import { sql, type SQL } from "drizzle-orm";
 import request from "supertest";
@@ -55,12 +55,16 @@ export function firstRow<T>(rows: T[]): T {
 
 /** مستأجر باسم مميَّز لهذه الجولة — يمنع تصادم الجولات المتتابعة. */
 export async function seedTenant(db: Database, label: string): Promise<number> {
-  return firstRow(
+  const tenantId = firstRow(
     await db
       .insert(tenants)
       .values({ name: `مستأجر ${label}`, timezone: "Asia/Aden" })
       .returning({ id: tenants.id })
   ).id;
+  // **نفس دالة الإنتاج لا نسخة منها** (القرار 213) — فتجهيزة الاختبار تُنشئ
+  // مستأجرًا كما يُنشأ فعلًا، **ولا تُختبر أصنافٌ لا تشبه ما سيوجد**.
+  await ensureSystemProducts(db, tenantId);
+  return tenantId;
 }
 
 /**

@@ -155,6 +155,13 @@
       "when": 1788133452610,
       "tag": "0021_empty_bags",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1788133453610,
+      "tag": "0022_system_products_guard",
+      "breakpoints": true
     }
   ]
 }
