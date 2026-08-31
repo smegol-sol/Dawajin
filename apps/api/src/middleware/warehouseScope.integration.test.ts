@@ -55,6 +55,47 @@ let warehouseId: number;
 let assignedHouseWarehouse: number;
 let unassignedHouseWarehouse: number;
 let otherTenantWarehouse: number;
+/** مخزن موقعٍ فيه مزرعتان لمشرفَين مختلفين — شاهدُ حكم القرار 225. */
+let siteWarehouseId: number;
+let supervisorAId: number;
+let supervisorAToken: string;
+let supervisorBId: number;
+let supervisorBToken: string;
+
+/**
+ * موقعٌ بمزرعتين ومشرفَين ومخزنِ موقعٍ واحد — **تجهيزةُ حكم القرار 225**.
+ * **والاشتقاق كان سيجعل كليهما صاحبًا لمخزنٍ واحد.**
+ */
+async function seedSplitSite(app: express.Express): Promise<number> {
+  // **موقعٌ بمزرعتين ومشرفَين — تجهيزةُ حكم القرار 225.** الانقسام هو الغالب
+  // (خمسةٌ من سبعة مواقع في بيانات المالك)، **والاشتقاق كان سيجعل كليهما
+  // صاحبًا لمخزن الموقع الواحد**.
+  const splitSiteId = await siteVia(app, ownerToken, `موقع منقسم ${S}`);
+  const farmAId = await farmVia(app, ownerToken, splitSiteId, `مزرعة أ ${S}`);
+  const farmBId = await farmVia(app, ownerToken, splitSiteId, `مزرعة ب ${S}`);
+
+  ({ id: supervisorAId, token: supervisorAToken } = await seedUser(db, {
+    tenantId,
+    role: "supervisor",
+    secret: JWT_SECRET,
+  }));
+  ({ id: supervisorBId, token: supervisorBToken } = await seedUser(db, {
+    tenantId,
+    role: "supervisor",
+    secret: JWT_SECRET,
+  }));
+  await db.insert(userAssignments).values([
+    { tenantId, userId: supervisorAId, farmId: farmAId, startDate: today() },
+    { tenantId, userId: supervisorBId, farmId: farmBId, startDate: today() },
+  ]);
+
+  const [siteWarehouse] = await db
+    .insert(warehouses)
+    .values({ tenantId, name: `مخزن موقع منقسم ${S}`, level: "موقع", siteId: splitSiteId })
+    .returning({ id: warehouses.id });
+  if (!siteWarehouse) throw new Error("تعذّر تجهيز مخزن الموقع");
+  return siteWarehouse.id;
+}
 
 /** مسار مؤقت واحد يمرّر جسمه كما هو عبر السلسلة الحقيقية. */
 function buildProbeApp(): express.Express {
@@ -148,6 +189,8 @@ beforeAll(async () => {
   };
   assignedHouseWarehouse = await warehouseOfHouse(assignedHouse);
   unassignedHouseWarehouse = await warehouseOfHouse(unassignedHouse);
+
+  siteWarehouseId = await seedSplitSite(app);
 
   otherTenantWarehouse = await seedOtherTenant(app, { JWT_SECRET });
 });
@@ -253,5 +296,52 @@ describe(`عنونة المخزن — طرفا التحويل معًا (${S})`, 
       toWarehouseId: assignedHouseWarehouse,
     });
     expect(res.status).toBe(200);
+  });
+});
+
+/**
+ * **مخزن الموقع يُسنَد صراحةً ولا يُشتق من إسناد المزارع** — قرار المالك
+ * (القرار 225، §7-ب البند 32 الخانة الثالثة).
+ *
+ * **والعلّة مسؤولية لا أمن:** جردُ مخزن الموقع مسؤولية المشرف بمصادقة المالك
+ * (القرار 207)، **وموقعٌ بثلاث مزارع قد يكون له ثلاثة مشرفين** — **ومسؤوليةٌ
+ * يشترك فيها ثلاثة لا يحملها أحد**. **والإسناد الصريح يسمّي واحدًا يُسأل.**
+ *
+ * **والحالة الثالثة هي البرهان:** مشرفُ المزرعة الأخرى **يبقى محجوبًا بعد
+ * إسناد المخزن لزميله** — **فلو اشتُقّ الوصول من إسناد المزارع لمرّ**.
+ */
+describe(`مخزن الموقع — إسنادٌ صريح لا اشتقاق (${S})`, () => {
+  it("مشرفٌ مُسنَدٌ لمزرعةٍ في الموقع، بلا إسناد المخزن ← 403", async () => {
+    const res = await post(supervisorAToken, { warehouseId: siteWarehouseId });
+    expect(res.status).toBe(403);
+  });
+
+  it("**وإسنادٌ منتهي المدة لا يفتحه** — «سارٍ اليوم» يسري هنا كغيره", async () => {
+    // **الصفّ موجود ولا يكفي وجودُه** (القرار 190، وشرط #158)
+    await db.insert(userAssignments).values({
+      tenantId,
+      userId: supervisorBId,
+      warehouseId: siteWarehouseId,
+      startDate: daysAgo(30),
+      endDate: daysAgo(1),
+    });
+    const res = await post(supervisorBToken, { warehouseId: siteWarehouseId });
+    expect(res.status).toBe(403);
+  });
+
+  it("ثم يُسنَد المخزن صراحةً للمشرف (أ) ← يمرّ", async () => {
+    await db.insert(userAssignments).values({
+      tenantId,
+      userId: supervisorAId,
+      warehouseId: siteWarehouseId,
+      startDate: today(),
+    });
+    const res = await post(supervisorAToken, { warehouseId: siteWarehouseId });
+    expect(res.status).toBe(200);
+  });
+
+  it("**ومشرفُ المزرعة الأخرى في نفس الموقع يبقى 403** — فالاشتقاق لم يقع", async () => {
+    const res = await post(supervisorBToken, { warehouseId: siteWarehouseId });
+    expect(res.status).toBe(403);
   });
 });
