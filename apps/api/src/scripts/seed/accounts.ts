@@ -1,4 +1,4 @@
-import { type Database, tenants, userAssignments, users } from "@dawajin/db";
+import { type Database, tenants, userAssignments, users, ensureSystemProducts } from "@dawajin/db";
 import { normalizePhoneE164 } from "@dawajin/shared";
 import bcrypt from "bcryptjs";
 import { and, eq, sql } from "drizzle-orm";
@@ -114,6 +114,12 @@ export async function bootstrapAccounts(input: BootstrapInput): Promise<Bootstra
       })
       .returning({ id: tenants.id });
     if (tenant === undefined) throw new Error("[seed:demo] تعذّر إنشاء مستأجر العرض");
+
+    // **الأصناف النظامية بنيةٌ لا بيانات عرض** (القرار 213) — **تُنشأ في نفس
+    // معاملة المستأجر** كالمخزن المركزي في القرار 198، **فلا يوجد مستأجر بلا
+    // أصنافه لحظةً واحدة**. **ولا تمرّ عبر الـAPI لأن لا مسار لها**: لا دور
+    // يملك إنشاءها، والحارس يمنع تعديل بنيتها.
+    await ensureSystemProducts(tx, tenant.id);
 
     await tx.insert(users).values(
       DEMO_ACCOUNTS.map((account) => ({
