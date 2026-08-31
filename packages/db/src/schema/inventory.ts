@@ -30,6 +30,7 @@ import {
   disputeStatusEnum,
   wastageReasonEnum,
   storageConditionsEnum,
+  emptyBagConditionEnum,
 } from "./enums";
 import { farmerRequests } from "./farmer-requests";
 import { farms, houses, sites, batches } from "./farms";
@@ -237,6 +238,21 @@ export const products = pgTable(
      * حركة الاستلام قرارُ نموذج لا تفصيل مخطط** — يُسمّى ويُوقف عنده.
      */
     supplierId: integer("supplier_id"),
+    /**
+     * **الكيس الفارغ صنفٌ مستقل، وهذا العمود ما يجعله كذلك** (القرار 212، على
+     * #161 «عاشرًا»: «مخزن العنبر يحمل رصيدين: أكياس ممتلئة وأكياس فارغة»).
+     *
+     * **غير معدوم ⇔ الصنف كيسٌ فارغ**، وقيمته حالته: **صالح · تالف لا غير**.
+     * **وصنفان لكل مستأجر بالضبط** بفهرس جزئي أدناه — **ورصيد الفارغ مجموعهما**.
+     *
+     * **ولماذا صنفٌ مستقل لا بُعدًا على الحركة ولا مخزنًا ثانيًا:** الدفتر
+     * يعنون `(warehouse_id, product_id)` (القرار 199)، **فصنفٌ جديد لا يمسّ
+     * عنونته ولا يمسّ ثابت §13.3 بحرف** — يسري عليه كما يسري على كل صنف.
+     * **وبُعدٌ على الحركة كان يوسّع مفتاح الرصيد لكل الأصناف ليخدم فئة واحدة**،
+     * **ومخزنٌ ثانٍ للعنبر يخالف `warehouses_house_uq`** («مخزن العنبر واحد لكل
+     * عنبر»، القرار 198).
+     */
+    emptyBagCondition: emptyBagConditionEnum("empty_bag_condition"),
     notes: text("notes"),
     isActive: boolean("is_active").notNull().default(true),
     createdBy: integer("created_by"),
@@ -257,6 +273,20 @@ export const products = pgTable(
     uniqueIndex("products_system_feed_uq")
       .on(table.tenantId, table.feedStage)
       .where(sql`${table.isSystem} = true AND ${table.category} = 'علف'`),
+    // **صنفا كيسٍ فارغ لكل مستأجر بالضبط — لا ثالث** (القرار 212): صالح وتالف.
+    // **وجزئي لأن `NULL` في الفهرس الفريد «مميّزة دائمًا»** فلا تمنع بقية
+    // الأصناف (نفس علّة #128).
+    uniqueIndex("products_empty_bag_uq")
+      .on(table.tenantId, table.emptyBagCondition)
+      .where(sql`${table.emptyBagCondition} IS NOT NULL`),
+    // **والكيس الفارغ صنفٌ نظاميّ يُعدّ بالكيس** — لا يُنشئه مستخدم ولا يُقاس
+    // بغير وحدته. **و«مستلزمات» أقرب فئة قائمة** — ولا تُضاف فئة سابعة لأجله.
+    check(
+      "products_empty_bag_shape_ck",
+      sql`${table.emptyBagCondition} IS NULL
+          OR (${table.isSystem} = true AND ${table.category} = 'مستلزمات'
+              AND ${table.stockUnit} = 'كيس')`
+    ),
     // **صنف علف بلا حجم عبوة أو بلا وحدتها لا يُقبل** (القرار 201) —
     // والمُشغِّل يملأ الاثنين قبل أن يصل الصفّ إلى هنا، **فالقيد ضامنٌ لأثره
     // لا بديلٌ عنه**: مسارٌ يمحو قيمةً صراحةً يُرفض بدل أن يُعيد الصنف إلى
