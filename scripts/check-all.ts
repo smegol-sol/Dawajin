@@ -1,9 +1,9 @@
 /**
  * الفحوص الآلية — تفشل البناء، لا تحذيرات (backend-technical-spec.md §21).
  * تُشغَّل محليًا وفي CI على كل PR بدءًا من المرحلة 0 (docs/work-plan.md §2).
- * ستة أصلية + ستة أضيفت لاحقًا (ESLint، Prettier، التغطية — القرار #61/#63،
+ * ستة أصلية + سبعة أضيفت لاحقًا (ESLint، Prettier، التغطية — القرار #61/#63،
  * تأكيدات تخطيط RTL — القرار #81، والشعار مصدر واحد — القرار #109، والمفتاح
- * المركَّب — القرار 206).
+ * المركَّب — القرار 206، وسلسلة الترحيلات — القرار 215).
  *
  * **و«المفتاح المركَّب» أولها قراءةً من القاعدة لا من المصدر** — والأحد عشر
  * قبله تقرأ ملفات المستودع. **والفرق مقصود: هي القاعدة الوحيدة هنا التي تحرس
@@ -19,6 +19,7 @@ import { checkEnumUsage } from "./checks/enum-usage";
 import { checkEslint } from "./checks/eslint";
 import { checkLayoutRtl } from "./checks/layout-rtl";
 import { checkLogoSingleSource } from "./checks/logo-single-source";
+import { checkMigrationChain } from "./checks/migration-chain";
 import { checkNavCoverage } from "./checks/nav-coverage";
 import { checkOpenApiCoverage } from "./checks/openapi-coverage";
 import { checkPrettier } from "./checks/prettier";
@@ -37,6 +38,7 @@ const checks: { name: string; run: CheckFn }[] = [
   { name: "تغطية التنقل", run: checkNavCoverage },
   { name: "صحة enum", run: checkEnumUsage },
   { name: "المفتاح المركَّب", run: checkCompositeFk },
+  { name: "سلسلة الترحيلات", run: checkMigrationChain },
   { name: "الشعار مصدر واحد", run: checkLogoSingleSource },
   { name: "typecheck", run: checkTypecheck },
   { name: "ESLint", run: checkEslint },
