@@ -169,6 +169,13 @@
       "when": 1788206545535,
       "tag": "0023_prep_open_cycle_guard",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1788209083153,
+      "tag": "0024_house_status_no_default",
+      "breakpoints": true
     }
   ]
 }

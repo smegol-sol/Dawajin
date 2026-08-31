@@ -72,7 +72,7 @@ async function siteVia(token: string, name: string): Promise<number> {
   const res = await request(app)
     .post("/api/sites")
     .set("Authorization", `Bearer ${token}`)
-    .send({ name });
+    .send({ name, status: "جاهز للإسكان" });
   expect(res.status).toBe(201);
   return (res.body as { id: number }).id;
 }
@@ -96,7 +96,7 @@ async function addHouse(_tenantId: number, farmId: number, name: string): Promis
   const res = await request(app)
     .post(`/api/farms/${String(farmId)}/houses`)
     .set("Authorization", `Bearer ${ownerToken}`)
-    .send({ name });
+    .send({ name, status: "جاهز للإسكان" });
   expect(res.status).toBe(201);
 }
 

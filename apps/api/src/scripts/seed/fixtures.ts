@@ -1,4 +1,4 @@
-import type { HouseType, UserRole } from "@dawajin/shared";
+import type { HouseCreatableStatus, HouseType, UserRole } from "@dawajin/shared";
 
 /**
  * بيانات البذر الثابتة — **المواقع السبعة في ميدان المالك** (القرار #113):
@@ -20,6 +20,8 @@ export interface HouseFixture {
   readonly name: string;
   readonly type: HouseType;
   readonly waterTankCapacityL: number;
+  /** **تُختار صراحةً ولا تُفترض** (القرار 222) — ولا افتراضي في القاعدة يسدّها. */
+  readonly status: HouseCreatableStatus;
 }
 
 export interface FarmFixture {
@@ -46,6 +48,8 @@ function houses(_farmLabel: string, specs: readonly [HouseType, number][]): Hous
     name: `عنبر ${(index + 1).toString()}`,
     type,
     waterTankCapacityL,
+    // بيانات عرضٍ لعنابر عاملة — **مكتوبةٌ لا موروثةٌ عن افتراضيّ**
+    status: "جاهز للإسكان" as const,
   }));
 }
 

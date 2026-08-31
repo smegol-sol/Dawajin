@@ -69,7 +69,7 @@ async function seedLedgerEntities(): Promise<void> {
   const houseA = firstRow(
     await db
       .insert(houses)
-      .values({ tenantId, farmId: farm.id, name: "عنبر أ" })
+      .values({ status: "جاهز للإسكان", tenantId, farmId: farm.id, name: "عنبر أ" })
       .returning({ id: houses.id })
   );
   houseAId = houseA.id;
@@ -77,7 +77,7 @@ async function seedLedgerEntities(): Promise<void> {
   const houseB = firstRow(
     await db
       .insert(houses)
-      .values({ tenantId, farmId: farm.id, name: "عنبر ب" })
+      .values({ status: "جاهز للإسكان", tenantId, farmId: farm.id, name: "عنبر ب" })
       .returning({ id: houses.id })
   );
   houseBId = houseB.id;

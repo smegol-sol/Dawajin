@@ -1,5 +1,20 @@
-import { batches, entityAuditLog, farms, houses, type Database } from "@dawajin/db";
-import { HttpError, type HouseStatus, type HouseType } from "@dawajin/shared";
+import {
+  batches,
+  entityAuditLog,
+  farms,
+  houseStatusHistory,
+  houses,
+  type Database,
+} from "@dawajin/db";
+import {
+  HOUSE_BIRTH_EXCLUSIONS,
+  HOUSE_CREATABLE_STATUSES,
+  HttpError,
+  isHouseCreatableStatus,
+  isOutOfService,
+  type HouseStatus,
+  type HouseType,
+} from "@dawajin/shared";
 import { and, asc, eq, sql } from "drizzle-orm";
 
 import { writeAuditLog } from "../lib/auditLog";
@@ -9,9 +24,10 @@ import { visibleHouseScope, type Role } from "../lib/entityScope";
  * طبقة services للعنابر — الوحدة الأساسية وأدنى مستويات الهرم
  * (الموقع ← المزرعة ← العنبر، القرار #112).
  *
- * **حالة العنبر خارج نطاق هذه الطبقة**: `PATCH /houses/:id/status` بآلة
- * الحالات السبع وقفلها وحرّاسها نطاق قائم بذاته في المرحلة 3. هنا الحالة
- * **تُقرأ ولا تُكتب** — تبقى على `جاهز للإسكان` الافتراضية.
+ * **وانتقالُ الحالة خارج نطاق هذه الطبقة**: `PATCH /houses/:id/status` بآلته
+ * وقفله وحرّاسه (القرار 220). **والميلاد هنا لا هناك** — والحالة الابتدائية
+ * **تُختار صراحةً ولا تُفترض** (القرار 222، تنفيذًا لـ186)، **ولا افتراضي في
+ * القاعدة يسدّ مسدّها**.
  */
 
 export interface House {
@@ -110,8 +126,40 @@ export interface CreateHouseInput {
   actorId: number;
   farmId: number;
   name: string;
+  /** **إلزاميّ ولا افتراضي له** — القرار 222، تنفيذًا لـ186. */
+  status: HouseStatus;
+  /** **إلزاميّ حين يُولد خارج الخدمة** — القرار 222، امتدادًا لحكم 220. */
+  reason?: string | undefined;
   type?: HouseType | undefined;
   waterTankCapacityL?: number | undefined;
+}
+
+/**
+ * يفرض حكم الميلاد: **الحالة من القائمة الموجبة، والسبب حين يُولد خارج الخدمة**.
+ *
+ * **والرفض من التحقّق لا من القاعدة** — رسالةُ القاعدة الخام لا تصلح لمستخدم،
+ * **والقاعدة لا تعرف أن «مشغول» ممنوعة ميلادًا وهي مسموحة انتقالًا**.
+ *
+ * @throws HttpError 422 `invalid_initial_status` بعلّة المنع · 422
+ *   `reason_required` حين يُولد خارج الخدمة بلا سبب
+ */
+function assertBirthAllowed(status: HouseStatus, reason: string | undefined): void {
+  if (!isHouseCreatableStatus(status)) {
+    throw new HttpError(
+      422,
+      "invalid_initial_status",
+      `لا يُنشأ عنبر في «${status}» — ${HOUSE_BIRTH_EXCLUSIONS[status] ?? "حالةٌ خارج قائمة الميلاد"}`,
+      { status, creatable: HOUSE_CREATABLE_STATUSES }
+    );
+  }
+  // **نفس حكم 220 على الخروج من الخدمة، ممتدًّا إلى الميلاد** — والسؤال الذي
+  // يجيب عنه الحقل واحد: **لماذا هذا العنبر متوقّف؟** **والمولود خارج الخدمة
+  // أحوجُ إليه لا أقلّ: من انتقل له حالةٌ سابقة ووقتُ انتقال، والمولود لا شيء له.**
+  if (isOutOfService(status) && (reason === undefined || reason.length === 0)) {
+    throw new HttpError(422, "reason_required", `ميلاد العنبر في «${status}» يلزمه سبب مكتوب`, {
+      status,
+    });
+  }
 }
 
 /**
@@ -120,7 +168,9 @@ export interface CreateHouseInput {
  * @throws HttpError 404 إن لم توجد المزرعة · 409 إن تكرّر الاسم داخلها
  */
 export async function createHouse(db: Database, input: CreateHouseInput): Promise<House> {
-  const { tenantId, actorId, farmId, name, type, waterTankCapacityL } = input;
+  const { tenantId, actorId, farmId, name, status, reason, type, waterTankCapacityL } = input;
+  assertBirthAllowed(status, reason);
+
   return db.transaction(async (tx) => {
     await assertFarmInTenant(tx, tenantId, farmId);
 
@@ -130,6 +180,7 @@ export async function createHouse(db: Database, input: CreateHouseInput): Promis
         tenantId,
         farmId,
         name,
+        status,
         ...(type === undefined ? {} : { type }),
         ...(waterTankCapacityL === undefined
           ? {}
@@ -137,6 +188,22 @@ export async function createHouse(db: Database, input: CreateHouseInput): Promis
       })
       .returning(HOUSE_COLUMNS);
     if (!created) throw new HttpError(500, "internal_error", "تعذّر إنشاء العنبر");
+
+    // **صفُّ ميلادٍ بـ`from_status = NULL`** (القرار 222): الميلاد ليس انتقالًا،
+    // **لكن ثابت 220 «لا انتقال بلا صفّ» غرضُه أن يُجيب السجلُّ سؤالَ «كيف صار
+    // العنبر إلى ما هو فيه؟»** — **وسجلٌّ فارغ لا يُجيبه بل يُبهمه**: لا يفرّق
+    // بين «وُلد هنا ولم ينتقل» و«حُذف تاريخه». **والحاسم أن سبب الميلاد خارج
+    // الخدمة إلزاميّ ولا موضع له غير هذا الحقل** — لا عمود له في `houses`.
+    // **والعمود `from_status` يقبل العدم في المخطط ولا كاتب له اليوم** —
+    // فراغٌ كان ينتظر هذا بعينه.
+    await tx.insert(houseStatusHistory).values({
+      tenantId,
+      houseId: created.id,
+      fromStatus: null,
+      toStatus: status,
+      changedBy: actorId,
+      ...(reason === undefined ? {} : { reason }),
+    });
 
     await writeAuditLog(tx, entityAuditLog, {
       tenantId,

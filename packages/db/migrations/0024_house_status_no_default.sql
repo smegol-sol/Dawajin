@@ -1,0 +1,1 @@
+ALTER TABLE "houses" ALTER COLUMN "status" DROP DEFAULT;

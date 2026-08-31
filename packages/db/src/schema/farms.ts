@@ -119,7 +119,14 @@ export const houses = pgTable(
     farmId: integer("farm_id").notNull(),
     name: varchar("name", { length: 64 }).notNull(),
     type: houseTypeEnum("type"),
-    status: houseStatusEnum("status").notNull().default("جاهز للإسكان"),
+    /**
+     * **بلا قيمة افتراضية عمدًا** (القرار 222، تنفيذًا لـ186): الافتراضي الصامت
+     * **ادّعاءُ جاهزيةٍ لم يؤكّدها أحد** — عنبرٌ أُنشئ للتوّ قد يكون تحت الصيانة
+     * أو معطّلًا، **ومن له الصلاحية هو من يقرّر لا المخطط**. **وإسقاطُ
+     * الافتراضي هو ما يجعل الاختيار إلزامًا**: مع بقائه يبقى الإغفال ممكنًا
+     * صامتًا. **والمسموح ثلاثٌ من السبع** — `HOUSE_CREATABLE_STATUSES`.
+     */
+    status: houseStatusEnum("status").notNull(),
     statusChangedAt: timestamp("status_changed_at", { withTimezone: true }).notNull().defaultNow(),
     // NULL = حقل الماء مخفي في الواجهة (backend-technical-spec.md §7.1)
     waterTankCapacityL: numeric("water_tank_capacity_l", {

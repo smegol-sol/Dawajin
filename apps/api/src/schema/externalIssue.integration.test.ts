@@ -134,8 +134,8 @@ beforeAll(async () => {
         VALUES (${tenantA}, ${siteA}, ${`مزرعة ${S}`}, ARRAY['شمسية']::power_source[]) RETURNING id`
   );
   const houseA = await insertId(
-    sql`INSERT INTO houses (tenant_id, farm_id, name)
-        VALUES (${tenantA}, ${farmA}, ${`عنبر ${S}`}) RETURNING id`
+    sql`INSERT INTO houses (tenant_id, farm_id, name, status)
+        VALUES (${tenantA}, ${farmA}, ${`عنبر ${S}`}, 'جاهز للإسكان') RETURNING id`
   );
   centralA = await insertId(
     sql`INSERT INTO warehouses (tenant_id, name, level)

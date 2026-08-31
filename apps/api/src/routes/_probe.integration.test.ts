@@ -172,7 +172,7 @@ async function seedHouseInTenantB(): Promise<void> {
   const houseB = firstRow(
     await db
       .insert(houses)
-      .values({ tenantId: tenantBId, farmId: farmB.id, name: "عنبر 1" })
+      .values({ status: "جاهز للإسكان", tenantId: tenantBId, farmId: farmB.id, name: "عنبر 1" })
       .returning({ id: houses.id })
   );
   houseInTenantBId = houseB.id;
@@ -334,7 +334,7 @@ async function createHouseInTenantA(farmName: string, houseName: string): Promis
   const house = firstRow(
     await db
       .insert(houses)
-      .values({ tenantId: tenantAId, farmId: farm.id, name: houseName })
+      .values({ status: "جاهز للإسكان", tenantId: tenantAId, farmId: farm.id, name: houseName })
       .returning({ id: houses.id })
   );
   return house.id;

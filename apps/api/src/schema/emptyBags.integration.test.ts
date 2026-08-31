@@ -55,8 +55,8 @@ async function seedTenant(label: string): Promise<Tree> {
         RETURNING id`
   );
   const houseId = await insertId(
-    sql`INSERT INTO houses (tenant_id, farm_id, name)
-        VALUES (${tenantId}, ${farmId}, ${`عنبر ${label} ${S}`}) RETURNING id`
+    sql`INSERT INTO houses (tenant_id, farm_id, name, status)
+        VALUES (${tenantId}, ${farmId}, ${`عنبر ${label} ${S}`}, 'جاهز للإسكان') RETURNING id`
   );
   const feedId = await insertId(
     sql`INSERT INTO products (tenant_id, category, name, stock_unit)

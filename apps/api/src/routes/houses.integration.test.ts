@@ -103,7 +103,12 @@ describe(`POST /api/farms/:farmId/houses — الإنشاء (${S})`, () => {
     const res = await request(app)
       .post(`/api/farms/${String(farmAId)}/houses`)
       .set("Authorization", `Bearer ${ownerToken}`)
-      .send({ name: `عنبر 1 ${S}`, type: "مغلق", waterTankCapacityL: 5000 });
+      .send({
+        name: `عنبر 1 ${S}`,
+        status: "جاهز للإسكان",
+        type: "مغلق",
+        waterTankCapacityL: 5000,
+      });
 
     expect(res.status).toBe(201);
     const id = (res.body as { id: number }).id;
@@ -144,7 +149,7 @@ describe(`POST /api/farms/:farmId/houses — الصلاحية (${S})`, () => {
     const res = await request(app)
       .post(`/api/farms/${String(farmAId)}/houses`)
       .set("Authorization", `Bearer ${token()}`)
-      .send({ name: `محاولة ${String(randomInt(1000, 9999))}` });
+      .send({ name: `محاولة ${String(randomInt(1000, 9999))}`, status: "جاهز للإسكان" });
     expect(res.status).toBe(403);
   });
 
@@ -152,7 +157,7 @@ describe(`POST /api/farms/:farmId/houses — الصلاحية (${S})`, () => {
     const res = await request(app)
       .post(`/api/farms/${String(farmAId)}/houses`)
       .set("Authorization", `Bearer ${ownerToken}`)
-      .send({ name: `نوع خاطئ ${S}`, type: "خيمة" });
+      .send({ name: `نوع خاطئ ${S}`, status: "جاهز للإسكان", type: "خيمة" });
     expect(res.status).toBe(400);
   });
 
@@ -162,7 +167,7 @@ describe(`POST /api/farms/:farmId/houses — الصلاحية (${S})`, () => {
     const res = await request(app)
       .post(`/api/farms/${String(farmB)}/houses`)
       .set("Authorization", `Bearer ${ownerToken}`)
-      .send({ name: `تسلل ${S}` });
+      .send({ name: `تسلل ${S}`, status: "جاهز للإسكان" });
     expect(res.status).toBe(404);
   });
 });
@@ -175,13 +180,13 @@ describe(`POST /api/farms/:farmId/houses — التحقق والعزل (${S})`, 
     const dup = await request(app)
       .post(`/api/farms/${String(farmAId)}/houses`)
       .set("Authorization", `Bearer ${ownerToken}`)
-      .send({ name });
+      .send({ name, status: "جاهز للإسكان" });
     expect(dup.status).toBe(409);
 
     const other = await request(app)
       .post(`/api/farms/${String(farmA2Id)}/houses`)
       .set("Authorization", `Bearer ${ownerToken}`)
-      .send({ name });
+      .send({ name, status: "جاهز للإسكان" });
     expect(other.status).toBe(201);
   });
 

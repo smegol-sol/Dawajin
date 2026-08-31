@@ -61,8 +61,8 @@ async function seedTree(label: string): Promise<{
         RETURNING id`
   );
   const houseId = await insertId(
-    sql`INSERT INTO houses (tenant_id, farm_id, name)
-        VALUES (${tenantId}, ${farmId}, ${`عنبر ${label} ${S}`}) RETURNING id`
+    sql`INSERT INTO houses (tenant_id, farm_id, name, status)
+        VALUES (${tenantId}, ${farmId}, ${`عنبر ${label} ${S}`}, 'جاهز للإسكان') RETURNING id`
   );
   return { tenantId, siteId, houseId, farmerId, ownerId };
 }
@@ -79,8 +79,8 @@ async function centralWarehouse(): Promise<number> {
 async function houseWarehouse(): Promise<number> {
   const farmId = await insertId(sql`SELECT farm_id AS id FROM houses WHERE id = ${houseA}`);
   const houseId = await insertId(
-    sql`INSERT INTO houses (tenant_id, farm_id, name)
-        VALUES (${tenantA}, ${farmId}, ${`عنبر جرد ${randomInt(100000, 999999).toString()}`})
+    sql`INSERT INTO houses (tenant_id, farm_id, name, status)
+        VALUES (${tenantA}, ${farmId}, ${`عنبر جرد ${randomInt(100000, 999999).toString()}`}, 'جاهز للإسكان')
         RETURNING id`
   );
   return insertId(

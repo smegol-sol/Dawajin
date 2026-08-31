@@ -214,8 +214,8 @@ describe(`وبه صار القرار 212 يعمل — معادلة الأكيا�
           VALUES (${tenantId}, ${siteId}, ${`مزرعة ${S}`}, ARRAY['شمسية']::power_source[]) RETURNING id`
     );
     const houseId = await insertId(
-      sql`INSERT INTO houses (tenant_id, farm_id, name)
-          VALUES (${tenantId}, ${farmId}, ${`عنبر ${S}`}) RETURNING id`
+      sql`INSERT INTO houses (tenant_id, farm_id, name, status)
+          VALUES (${tenantId}, ${farmId}, ${`عنبر ${S}`}, 'جاهز للإسكان') RETURNING id`
     );
     const warehouseId = await insertId(
       sql`INSERT INTO warehouses (tenant_id, name, level, house_id)
