@@ -11,10 +11,66 @@ import { HttpError } from "@dawajin/shared";
  * السبب الحقيقي «تتداخل المدّتان» لا «مُسند بالفعل»**، **واسم القيد الذي
  * تُطابَق عليه الرسالة تغيّر** — فبلا هذا الفرع تسقط المطابقة صامتة ويرى
  * المستخدم رسالة عامة لا تقول له ما المشكلة.
+ *
+ * **ويُبحث عن الرمز في سلسلة `cause` لا في الخطأ وحده** (القرار 216):
+ * `drizzle-orm` **منذ 0.45 يغلّف خطأ المشغّل في `DrizzleQueryError`** ويضع
+ * خطأ `pg` الأصلي في `cause` — **فالرمز واسم القيد يصيران `undefined` على
+ * الخطأ المرميّ**، **فيسقط 23505 من التعرّف ويصير 500 بدل 409**. **وهو ما
+ * أسقط خمسة اختبارات عند الترقية.**
+ *
+ * **والمشي في السلسلة لا في مستوى واحد** — **ولا يُقرأ الرمز من الأعلى فقط
+ * ولا من `cause` فقط**: **الخطأ الخام يحمله في جذره، والمغلَّف في ابنه،
+ * وغلافٌ ثانٍ يضعه أعمق**. **فالدالة تعمل قبل الترقية وبعدها بلا فرعين**،
+ * **ولا تُكسر بغلافٍ ثالث يأتي غدًا**.
+ *
+ * **والبحث عن شكل `SQLSTATE` لا عن أي `code` نصيّ** — **وإلا توقّف عند أول
+ * غلافٍ يحمل رمزه هو** (`ECONNRESET` في أخطاء Node، و`ERR_…` في مكتبات)
+ * **فلا يبلغ خطأ `pg` تحته**، **فيعود 500 بدل 409 — وهو العطب نفسه من باب
+ * آخر**. **والغلافُ غير المطابق يُتجاوَز ولا يُنهي البحث.**
  */
+
+/** حدٌّ للنزول يمنع دورة `cause` لا نهائية — أعماقٌ أكثر من هذه لا تقع عمليًّا. */
+const MAX_CAUSE_DEPTH = 5;
+
+/**
+ * شكل `SQLSTATE`: **خمسة محارف من أرقام وحروف كبيرة** (`23505` · `23P01` ·
+ * `42P01`). **ورمز `pg` دائمًا كذلك، فالتضييق لا يفقد شيئًا.**
+ *
+ * **وبلا هذا الشكل يتوقّف البحث عند أول `code` نصيّ أيًّا كان** — **وأخطاء
+ * Node تحمل `code` نصيًّا** (`ECONNRESET`) **ومكتبات تضع `ERR_…`** — **فغلافٌ
+ * حاملٌ لرمزه يحجب خطأ `pg` تحته فيعود 500 بدل 409**، وهو العطب نفسه من باب
+ * آخر.
+ */
+const SQLSTATE_PATTERN = /^[0-9A-Z]{5}$/;
+
+interface PgErrorShape {
+  code?: string;
+  constraint?: string;
+  table?: string;
+}
+
+/**
+ * ينزل في سلسلة `cause` بحثًا عن أول خطأ يحمل رمز `SQLSTATE`.
+ * @returns الخطأ الحامل للرمز، أو `null` إن لم يوجد في السلسلة
+ */
+function findPgError(error: unknown): PgErrorShape | null {
+  let current: unknown = error;
+  for (let depth = 0; depth <= MAX_CAUSE_DEPTH; depth += 1) {
+    if (!current || typeof current !== "object") return null;
+    const candidate = current as PgErrorShape & { cause?: unknown };
+    // **والغلافُ الحامل لرمزٍ غير `SQLSTATE` يُتجاوَز ولا يُنهي البحث** —
+    // فالنزول يستمرّ إلى ما تحته.
+    if (typeof candidate.code === "string" && SQLSTATE_PATTERN.test(candidate.code)) {
+      return candidate;
+    }
+    current = candidate.cause;
+  }
+  return null;
+}
+
 export function translatePgError(error: unknown): HttpError | null {
-  if (!error || typeof error !== "object") return null;
-  const pgError = error as { code?: string; constraint?: string; table?: string };
+  const pgError = findPgError(error);
+  if (!pgError) return null;
 
   if (pgError.code === "23505" || pgError.code === "23P01") {
     const response = constraintResponse(pgError.constraint);
