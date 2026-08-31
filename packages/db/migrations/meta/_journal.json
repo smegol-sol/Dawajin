@@ -176,6 +176,20 @@
       "when": 1788209083153,
       "tag": "0024_house_status_no_default",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1788211492888,
+      "tag": "0025_inventory_balance_snapshots",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1788211493888,
+      "tag": "0026_balance_snapshot_freeze_guard",
+      "breakpoints": true
     }
   ]
 }
