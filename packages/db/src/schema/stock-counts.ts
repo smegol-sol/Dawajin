@@ -129,3 +129,73 @@ export const stocktakeItems = pgTable(
     }),
   ]
 );
+
+/**
+ * لقطة الرصيد الدورية — §7-ب البند 45، والقرار 223.
+ *
+ * **الرصيد = آخر لقطة + مجموع ما بعدها**، فتصير قراءة الرصيد محدودة الكلفة
+ * بدل مسح تاريخ الصنف كاملًا في كل مرة. **والدفتر يبقى الحقيقة**: اللقطة
+ * **مشتقّة لا مصدر** — **تُحذف كلها فيُعاد حسابها من الحركات بلا فقد**،
+ * والمبدآن الثالث والرابع سليمان (لا عمود رصيد يُحدَّث، ولا تعديل على سجل).
+ *
+ * **ومتى تُكتب؟ عند اعتماد الجرد، لا بدورةٍ رقمية** (القرار 223): **الجرد
+ * لحظةُ رصيدٍ شهد عليه إنسان** — فاللقطة عنده **تُثبّت رقمًا مصادَقًا عليه لا
+ * رقمًا محسوبًا وحده**. **ورقمُ دوريةٍ اليوم بلا سند** (لا قاعدة إنتاج ولا حجم
+ * مقيس — §7-ب البند 42، والقاعدة #143).
+ *
+ * **والقطعُ بمعرّف الحركة لا بوقتها** (`through_movement_id`): الدفتر **بلا
+ * عمود تاريخ حدث** — الحركة مؤرَّخة بكتابتها، **والتصحيح حركةٌ جديدة بالفرق**
+ * لا تعديلٌ لقديمة. **فترتيب الكتابة هو الترتيب الوحيد الموجود، والقطع عليه
+ * دقيق.**
+ *
+ * **وتُكتب تحت قفل صفّ المخزن** — القفل الذي يحتاجه الجرد أصلًا: **عدٌّ
+ * يسابقه إدخالُ حركةٍ عدٌّ خاطئ قبل أن يكون لقطةً خاطئة**. **وبه يكون
+ * `MAX(id)` لحظتَها قطعًا تامًّا**: لا حركة أدنى منه تلتزم بعده.
+ */
+export const inventoryBalanceSnapshots = pgTable(
+  "inventory_balance_snapshots",
+  {
+    id: serial("id").primaryKey(),
+    tenantId: integer("tenant_id")
+      .notNull()
+      .references(() => tenants.id),
+    warehouseId: integer("warehouse_id").notNull(),
+    productId: integer("product_id").notNull(),
+    /** **حدُّ القطع** — كل حركة `id` أكبر منه تُجمع فوق اللقطة. */
+    throughMovementId: integer("through_movement_id").notNull(),
+    /** الرصيد المحسوب حتى `through_movement_id` ضمنًا. */
+    balance: numeric("balance", { precision: 12, scale: 3 }).notNull(),
+    /** **الجرد الذي وُلدت عنده** — فلا لقطة بلا شاهد يُنسب إليه. */
+    stocktakeId: integer("stocktake_id").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("inventory_balance_snapshots_id_tenant_uq").on(table.id, table.tenantId),
+    foreignKey({
+      columns: [table.warehouseId, table.tenantId],
+      foreignColumns: [warehouses.id, warehouses.tenantId],
+      name: "inventory_balance_snapshots_warehouse_id_tenant_fk",
+    }),
+    foreignKey({
+      columns: [table.productId, table.tenantId],
+      foreignColumns: [products.id, products.tenantId],
+      name: "inventory_balance_snapshots_product_id_tenant_fk",
+    }),
+    foreignKey({
+      columns: [table.stocktakeId, table.tenantId],
+      foreignColumns: [stocktakes.id, stocktakes.tenantId],
+      name: "inventory_balance_snapshots_stocktake_id_tenant_fk",
+    }),
+    // **لقطة واحدة لكل (مخزن · صنف · حدّ قطع)** — إعادةُ كتابةٍ بنفس الحدّ
+    // تكرارٌ لا معلومة، **والقراءة تأخذ الأحدث حدًّا فلا تتأثر بعددها**.
+    //
+    // **وهو فهرس القراءة نفسه فلا يُضاف ثانٍ بجواره:** سؤال القراءة «أحدثُ
+    // حدٍّ لهذا (المخزن · الصنف)» **بادئةُ هذا الفهرس بعينها** — **وفهرسٌ
+    // مكرّر يُبطئ الكتابة بلا قارئ يزيد** (§7-ب البند 45 في التدقيق).
+    uniqueIndex("inventory_balance_snapshots_cut_uq").on(
+      table.warehouseId,
+      table.productId,
+      table.throughMovementId
+    ),
+  ]
+);
