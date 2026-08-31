@@ -1,6 +1,7 @@
 import { randomInt } from "node:crypto";
 
 import { createDbClient, type Database, userAssignments, warehouses } from "@dawajin/db";
+import { eq } from "drizzle-orm";
 import express from "express";
 import pino from "pino";
 import request from "supertest";
@@ -123,24 +124,30 @@ beforeAll(async () => {
     .insert(userAssignments)
     .values({ tenantId, userId: farmerId, houseId: assignedHouse, startDate: today() });
 
-  // مخازن بإدراج مباشر — لا مسار API للمخازن ولا يُبنى في هذه الدفعة.
-  // **مركزيّ ومخزن لكل عنبر** (القراران 198 و199).
-  const mkWarehouse = async (name: string, houseId?: number): Promise<number> => {
+  // المركزيّ بإدراج مباشر — لا مسار API للمخازن ولا يُبنى في هذه الدفعة.
+  const [central] = await db
+    .insert(warehouses)
+    .values({ tenantId, name: `مخزن مركزي ${S}`, level: "مركزي" })
+    .returning({ id: warehouses.id });
+  if (!central) throw new Error("تعذّر تجهيز المخزن المركزي");
+  warehouseId = central.id;
+
+  // **ومخزنا العنبرين يُقرآن ولا يُنشآن** (القرار 224): `createHouse` أنشأهما
+  // في معاملة العنبر، **والفهرس الجزئي يرفض ثانيًا** — فالتجهيزة تقرأ ما بناه
+  // المسار الحقيقي لا تبني نسخةً بجواره.
+  const warehouseOfHouse = async (houseId: number): Promise<number> => {
     const [row] = await db
-      .insert(warehouses)
-      .values({
-        tenantId,
-        name,
-        level: houseId === undefined ? "مركزي" : "عنبر",
-        ...(houseId === undefined ? {} : { houseId }),
-      })
-      .returning({ id: warehouses.id });
-    if (!row) throw new Error("تعذّر تجهيز المخزن");
+      .select({ id: warehouses.id })
+      .from(warehouses)
+      // تجهيزةُ اختبار تقرأ مخزن عنبرٍ أنشأه `createHouse` (القرار 224) —
+      // **لا فرضَ صلاحية هنا**، والمعرّف عائدٌ من إنشاء العنبر في التجهيزة.
+      // eslint-disable-next-line dawajin/no-unvetted-house-id-reuse
+      .where(eq(warehouses.houseId, houseId));
+    if (!row) throw new Error("مخزن العنبر غير موجود — يُنشأ مع العنبر (القرار 224)");
     return row.id;
   };
-  warehouseId = await mkWarehouse(`مخزن مركزي ${S}`);
-  assignedHouseWarehouse = await mkWarehouse(`مخزن العنبر المُسند ${S}`, assignedHouse);
-  unassignedHouseWarehouse = await mkWarehouse(`مخزن العنبر غير المُسند ${S}`, unassignedHouse);
+  assignedHouseWarehouse = await warehouseOfHouse(assignedHouse);
+  unassignedHouseWarehouse = await warehouseOfHouse(unassignedHouse);
 
   otherTenantWarehouse = await seedOtherTenant(app, { JWT_SECRET });
 });
