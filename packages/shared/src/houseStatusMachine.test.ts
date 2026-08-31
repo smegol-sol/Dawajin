@@ -21,6 +21,8 @@ import {
 /** الانتقالات المسموحة كاملة — تُكتب بأسمائها لا تُشتق من الجدول المفحوص. */
 const ALLOWED: readonly (readonly [HouseStatus, HouseStatus])[] = [
   ["تحت الإخلاء", "تحت التنظيف والتطهير"],
+  // في الجدول منذ القرار 221 — **وصنفه `prep-completion` فلا يُطلب يدويًّا**
+  ["تحت التنظيف والتطهير", "في فترة الراحة"],
   ["في فترة الراحة", "جاهز للإسكان"],
   // من أي حالة إلى الخارجتين (§3.3)
   ...HOUSE_STATUS.flatMap((from) =>
@@ -39,13 +41,24 @@ function isAllowed(from: HouseStatus, to: HouseStatus): boolean {
 }
 
 describe("جدول انتقالات حالة العنبر", () => {
-  it("الانتقالات الأربعة المسموحة تُصنَّف بأصنافها", () => {
+  it("الانتقالات الخمسة المسموحة تُصنَّف بأصنافها", () => {
     expect(classifyHouseTransition("تحت الإخلاء", "تحت التنظيف والتطهير")?.kind).toBe(
       "prep-advance"
+    );
+    expect(classifyHouseTransition("تحت التنظيف والتطهير", "في فترة الراحة")?.kind).toBe(
+      "prep-complete"
     );
     expect(classifyHouseTransition("في فترة الراحة", "جاهز للإسكان")?.kind).toBe("rest-confirm");
     expect(classifyHouseTransition("مشغول", "تحت الصيانة")?.kind).toBe("out-of-service");
     expect(classifyHouseTransition("تحت الصيانة", "مشغول")?.kind).toBe("return-to-service");
+  });
+
+  it("«تنظيف ← راحة» وحده تلقائيّ لا يُجريه مسار الحالة — والبقية له", () => {
+    for (const rule of HOUSE_STATUS_TRANSITIONS) {
+      expect(rule.performedBy).toBe(
+        rule.kind === "prep-complete" ? "prep-completion" : "status-route"
+      );
+    }
   });
 
   it("الخروج من الخدمة وحده يوجب سببًا", () => {
@@ -75,9 +88,8 @@ describe("جدول انتقالات حالة العنبر", () => {
 describe("جدول الانتقالات — مخالفات متعمَّدة بأسمائها", () => {
   it.each([
     ["مشغول", "تحت الإخلاء", "أثرُ تصفية الدفعة — المالك وحده"],
-    ["تحت التنظيف والتطهير", "في فترة الراحة", "انتقالٌ تلقائي عند اكتمال الخطوات"],
     ["جاهز للإسكان", "مشغول", "أثرُ إسكان الدفعة"],
-  ] as const)("«%s ← %s» يملكه غيرُ هذا المسار (%s)", (from, to, _why) => {
+  ] as const)("«%s ← %s» يملكه غيرُ الآلة كلّها (%s)", (from, to, _why) => {
     expect(classifyHouseTransition(from, to)).toBeNull();
     expect(TRANSITIONS_OWNED_ELSEWHERE[transitionKey(from, to)]).toBeDefined();
   });
@@ -90,6 +102,7 @@ describe("جدول الانتقالات — مخالفات متعمَّدة بأ
     ["تحت الإخلاء", "جاهز للإسكان"],
     ["تحت الإخلاء", "مشغول"],
     ["تحت التنظيف والتطهير", "جاهز للإسكان"],
+    // «تنظيف ← راحة» لم يعد هنا: في الجدول بصنفه التلقائي منذ القرار 221
     ["تحت التنظيف والتطهير", "مشغول"],
     ["تحت التنظيف والتطهير", "تحت الإخلاء"],
     ["في فترة الراحة", "مشغول"],

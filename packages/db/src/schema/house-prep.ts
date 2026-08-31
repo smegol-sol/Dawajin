@@ -63,6 +63,12 @@ export const housePrepCycles = pgTable(
   },
   (table) => [
     uniqueIndex("house_prep_cycles_id_tenant_uq").on(table.id, table.tenantId),
+    // **دورة مفتوحة واحدة لكل عنبر — قيدٌ في القاعدة لا فحصٌ في الكود** (القرار
+    // 221، بنمط «افتتاحيٌّ واحد» في 198): دورتان مفتوحتان تجعلان «أيّها تبدأ
+    // راحتها؟» سؤالًا بلا جواب، وفحص «هل توجد؟» قبل الإدراج يترك سباقًا.
+    uniqueIndex("house_prep_cycles_open_per_house_uq")
+      .on(table.houseId)
+      .where(sql`${table.completedAt} IS NULL`),
     foreignKey({
       columns: [table.houseId, table.tenantId],
       foreignColumns: [houses.id, houses.tenantId],

@@ -162,6 +162,13 @@
       "when": 1788133453610,
       "tag": "0022_system_products_guard",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1788206545535,
+      "tag": "0023_prep_open_cycle_guard",
+      "breakpoints": true
     }
   ]
 }
