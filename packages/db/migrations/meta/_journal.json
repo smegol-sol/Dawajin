@@ -190,6 +190,20 @@
       "when": 1788211493888,
       "tag": "0026_balance_snapshot_freeze_guard",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1788211494888,
+      "tag": "0027_house_warehouse_backfill",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1788211495888,
+      "tag": "0028_warehouse_deactivation_guard",
+      "breakpoints": true
     }
   ]
 }

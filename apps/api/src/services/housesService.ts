@@ -1,5 +1,6 @@
 import {
   batches,
+  ensureHouseWarehouse,
   entityAuditLog,
   farms,
   houseStatusHistory,
@@ -188,6 +189,15 @@ export async function createHouse(db: Database, input: CreateHouseInput): Promis
       })
       .returning(HOUSE_COLUMNS);
     if (!created) throw new HttpError(500, "internal_error", "تعذّر إنشاء العنبر");
+
+    // **ومخزنه يُنشأ معه في نفس المعاملة** (القرار 224، على حكم #161 «أولًا»:
+    // «يُنشأ معه تلقائيًا») — **فلا يوجد عنبر بلا مخزنه لحظةً واحدة**،
+    // **وبلا مخزن العنبر لا طرف ثانيَ للتحويل أصلًا** (#159). نمط 213.
+    await ensureHouseWarehouse(tx, {
+      tenantId,
+      houseId: created.id,
+      houseName: created.name,
+    });
 
     // **صفُّ ميلادٍ بـ`from_status = NULL`** (القرار 222): الميلاد ليس انتقالًا،
     // **لكن ثابت 220 «لا انتقال بلا صفّ» غرضُه أن يُجيب السجلُّ سؤالَ «كيف صار
