@@ -38,6 +38,10 @@ export interface PrepFixture {
   farmerToken: string;
   farmerId: number;
   vetToken: string;
+  vetId: number;
+  /** مربٍّ مُسنَدٌ لعنبرٍ آخر في نفس المزرعة — «لا يُسند مربّي عنبرٍ آخر» */
+  otherFarmerId: number;
+  otherHouseId: number;
   ownerBToken: string;
   houseInTenantBId: number;
 }
@@ -66,15 +70,22 @@ export async function initPrepFixture(label: string): Promise<PrepFixture> {
     secret: env.JWT_SECRET,
   });
   const vet = await seedUser(db, { tenantId: tenantAId, role: "vet", secret: env.JWT_SECRET });
+  const otherFarmer = await seedUser(db, {
+    tenantId: tenantAId,
+    role: "farmer",
+    secret: env.JWT_SECRET,
+  });
   const ownerB = await seedUser(db, { tenantId: tenantBId, role: "owner", secret: env.JWT_SECRET });
 
   const siteAId = await siteVia(app, owner.token, `موقع ${label} ${S}`);
   const farmAId = await farmVia(app, owner.token, siteAId, `مزرعة ${label} ${S}`);
   const subjectId = await houseVia(app, owner.token, farmAId, `عنبر ${label} ${S}`);
+  const otherHouseId = await houseVia(app, owner.token, farmAId, `عنبر آخر ${label} ${S}`);
   // المشرف بمزرعته والمربّي بالعنبر — الفرض المركزي يرفض غير المُسند قبل الخدمة
   await db.insert(userAssignments).values([
     { tenantId: tenantAId, userId: supervisor.id, farmId: farmAId, startDate: today() },
     { tenantId: tenantAId, userId: farmer.id, houseId: subjectId, startDate: today() },
+    { tenantId: tenantAId, userId: otherFarmer.id, houseId: otherHouseId, startDate: today() },
   ]);
 
   const siteBId = await siteVia(app, ownerB.token, `موقع ${label} ب ${S}`);
@@ -93,6 +104,9 @@ export async function initPrepFixture(label: string): Promise<PrepFixture> {
     farmerToken: farmer.token,
     farmerId: farmer.id,
     vetToken: vet.token,
+    vetId: vet.id,
+    otherFarmerId: otherFarmer.id,
+    otherHouseId,
     ownerBToken: ownerB.token,
     houseInTenantBId,
   };
@@ -155,6 +169,19 @@ export function completeVia(f: PrepFixture, stepId: number, token: string): requ
     .patch(`/api/prep-steps/${String(stepId)}/complete`)
     .set("Authorization", `Bearer ${token}`)
     .send({});
+}
+
+/** الإسناد عبر مساره — **لا كتابةَ `assigned_to` في القاعدة** (القرار 237). */
+export function assignVia(
+  f: PrepFixture,
+  stepId: number,
+  token: string,
+  body: Record<string, unknown>
+): request.Test {
+  return request(f.app)
+    .patch(`/api/prep-steps/${String(stepId)}/assign`)
+    .set("Authorization", `Bearer ${token}`)
+    .send(body);
 }
 
 export function getCycleVia(f: PrepFixture, houseId: number, token: string): request.Test {

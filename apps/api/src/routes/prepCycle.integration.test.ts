@@ -1,4 +1,4 @@
-import { housePrepCycles, housePrepSteps, tenants } from "@dawajin/db";
+import { housePrepCycles, tenants } from "@dawajin/db";
 import { DEFAULT_PREP_PROTOCOL } from "@dawajin/shared";
 import { eq, sql } from "drizzle-orm";
 import request from "supertest";
@@ -6,6 +6,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { openPrepCycle } from "../services/prepCycleService";
 import {
+  assignVia,
   completeVia,
   getCycleVia,
   historyCount,
@@ -169,10 +170,13 @@ describe("الصلاحية — §12.2 صفّ «خطوة تجهيز»", () => {
     const unassigned = await completeVia(f, first.id, f.farmerToken);
     expect(unassigned.status).toBe(403);
 
-    await f.db
-      .update(housePrepSteps)
-      .set({ assignedTo: f.farmerId })
-      .where(eq(housePrepSteps.id, second.id));
+    // **الإسناد بمساره لا بكتابةٍ في القاعدة** (القرار 237): الكتابة المباشرة
+    // كانت تُخضِّر مسارًا **لا يمكن أن يقع في الإنتاج** — لا كاتب لـ`assigned_to`
+    // كان موجودًا، فقيمتها `NULL` دائمًا والمربّي مرفوضٌ دائمًا.
+    const assignRes = await assignVia(f, second.id, f.supervisorToken, {
+      assignedTo: f.farmerId,
+    });
+    expect(assignRes.status).toBe(200);
     const assigned = await completeVia(f, second.id, f.farmerToken);
     expect(assigned.status).toBe(200);
   });
@@ -246,5 +250,90 @@ describe("الإكمال — مخالفات متعمَّدة بأسمائها", 
     expect((res.body as { code: string }).code).toBe("transition_not_manual");
     expect(await historyCount(f, f.subjectId)).toBe(0);
     expect(await statusOf(f, f.subjectId)).toBe("تحت التنظيف والتطهير");
+  });
+});
+
+describe("إسناد الخطوة — المشرف يُسنِد إلى مربّي العنبر (القرار 237)", () => {
+  it("**المشرف يُسنِد فيُكمل المربّي** — وهو المسار الذي لم يكن موجودًا", async () => {
+    const { steps } = await openCycleForSubject(f);
+    const [first] = steps;
+    if (!first) throw new Error("لا خطوات في التجهيزة");
+
+    expect((await completeVia(f, first.id, f.farmerToken)).status).toBe(403);
+    const res = await assignVia(f, first.id, f.supervisorToken, { assignedTo: f.farmerId });
+    expect(res.status).toBe(200);
+    expect((res.body as { assignedTo: number }).assignedTo).toBe(f.farmerId);
+    expect((await completeVia(f, first.id, f.farmerToken)).status).toBe(200);
+  });
+
+  it("والمدة المستهدفة تُكتب حين تُذكر — «بمدة مستهدفة» نصًّا", async () => {
+    const { steps } = await openCycleForSubject(f);
+    const [first] = steps;
+    if (!first) throw new Error("لا خطوات في التجهيزة");
+    const res = await assignVia(f, first.id, f.supervisorToken, {
+      assignedTo: f.farmerId,
+      targetHours: 6,
+    });
+    expect(res.status).toBe(200);
+    expect((res.body as { targetHours: number | null }).targetHours).toBe(6);
+  });
+
+  it("والمالك يُسنِد كذلك — المشرف اختياريّ (235 و236)", async () => {
+    const { steps } = await openCycleForSubject(f);
+    const [first] = steps;
+    if (!first) throw new Error("لا خطوات في التجهيزة");
+    expect((await assignVia(f, first.id, f.ownerToken, { assignedTo: f.farmerId })).status).toBe(
+      200
+    );
+  });
+});
+
+describe("إسناد الخطوة — المخالفات المتعمَّدة", () => {
+  it("مخالفة: المربّي لا يُسنِد لنفسه ← 403", async () => {
+    const { steps } = await openCycleForSubject(f);
+    const [first] = steps;
+    if (!first) throw new Error("لا خطوات في التجهيزة");
+    expect((await assignVia(f, first.id, f.farmerToken, { assignedTo: f.farmerId })).status).toBe(
+      403
+    );
+  });
+
+  it("**مخالفة: مربّي عنبرٍ آخر ← 422 `assignee_not_assigned_to_house`**", async () => {
+    const { steps } = await openCycleForSubject(f);
+    const [first] = steps;
+    if (!first) throw new Error("لا خطوات في التجهيزة");
+    const res = await assignVia(f, first.id, f.supervisorToken, { assignedTo: f.otherFarmerId });
+    expect(res.status).toBe(422);
+    expect((res.body as { code: string }).code).toBe("assignee_not_assigned_to_house");
+    // **ولا يُكمل** — الرفض ليس رسالةً فقط
+    expect((await completeVia(f, first.id, f.farmerToken)).status).toBe(403);
+  });
+
+  it("مخالفة: المُسنَد إليه ليس مربّيًا ← 422 `assignee_not_farmer`", async () => {
+    const { steps } = await openCycleForSubject(f);
+    const [first] = steps;
+    if (!first) throw new Error("لا خطوات في التجهيزة");
+    const res = await assignVia(f, first.id, f.supervisorToken, { assignedTo: f.vetId });
+    expect(res.status).toBe(422);
+    expect((res.body as { code: string }).code).toBe("assignee_not_farmer");
+  });
+
+  it("مخالفة: خطوةٌ مكتملة لا تُسنَد ← 422 `step_already_completed`", async () => {
+    const { steps } = await openCycleForSubject(f);
+    const [first] = steps;
+    if (!first) throw new Error("لا خطوات في التجهيزة");
+    expect((await completeVia(f, first.id, f.supervisorToken)).status).toBe(200);
+    const res = await assignVia(f, first.id, f.supervisorToken, { assignedTo: f.farmerId });
+    expect(res.status).toBe(422);
+    expect((res.body as { code: string }).code).toBe("step_already_completed");
+  });
+
+  it("وخطوةٌ في مستأجرٍ آخر ← 404 من الفرض المركزي", async () => {
+    const { steps } = await openCycleForSubject(f);
+    const [first] = steps;
+    if (!first) throw new Error("لا خطوات في التجهيزة");
+    expect((await assignVia(f, first.id, f.ownerBToken, { assignedTo: f.farmerId })).status).toBe(
+      404
+    );
   });
 });

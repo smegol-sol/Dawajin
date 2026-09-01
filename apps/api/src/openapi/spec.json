@@ -1219,6 +1219,96 @@
         }
       }
     },
+    "/api/prep-steps/{stepId}/assign": {
+      "patch": {
+        "summary": "إسناد خطوة تجهيز إلى مربٍّ — المشرف هو المُسنِد (القرار 153)",
+        "description": "«المشرف يسند التنظيف والتعقيم إلى مربٍّ أو عامل بمدة مستهدفة» (القرار 153). و«العامل» ليس دورًا في النظام بعد (بند القرار 157)، فالإسناد إلى مربٍّ حصرًا — قيدٌ مؤقّت لا حكم نهائيّ. والمُسنَد إليه يجب أن يكون مُسنَدًا لعنبر الخطوة سارياً اليوم، فلا يُسنَد مربّي عنبرٍ آخر. والمالك مع المشرف (القراران 235 و236).",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "stepId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["assignedTo"],
+                "properties": {
+                  "assignedTo": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "معرّف المربّي المُسنَد إليه"
+                  },
+                  "targetHours": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 720,
+                    "description": "المدة المستهدفة بالساعات — اختيارية، والخطوة تُنجَز داخل اليوم"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "الخطوة بعد الإسناد",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["stepId", "assignedTo", "targetHours"],
+                  "properties": {
+                    "stepId": {
+                      "type": "integer"
+                    },
+                    "assignedTo": {
+                      "type": "integer"
+                    },
+                    "targetHours": {
+                      "type": "integer",
+                      "nullable": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "description": "دورة مكتملة (`prep_cycle_completed`) · خطوة مكتملة (`step_already_completed`) · المُسنَد إليه غير موجود (`assignee_not_found`) · ليس مربّيًا (`assignee_not_farmer`) · غير مُسنَدٍ لعنبر الخطوة (`assignee_not_assigned_to_house`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/inventory/warehouse-receipt": {
       "post": {
         "summary": "استلام من مورّد — حركة موجبة في الدفتر (القرار 227)",
