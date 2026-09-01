@@ -27,6 +27,7 @@ import { platformAuthRouter } from "./routes/platformAuth";
 import { prepCycleRouter } from "./routes/prepCycle";
 import { settingsRouter } from "./routes/settings";
 import { sitesRouter } from "./routes/sites";
+import { usersRouter } from "./routes/users";
 
 /**
  * يبني تطبيق Express كاملًا: الفرض المركزي الثلاثي (المبدأ #1 و#7)، كل
@@ -119,6 +120,11 @@ export function createApp(db: Database, env: Env, logger: Logger): Express {
   // لإعادة بناء بادئة من regexp داخلي (scripts/lib/introspectRoutes.ts) —
   // لا اعتماد على اسم متغيّر ولا مطابقة نصية تفوّت مسارًا بالخطأ.
 
+  // **رد الإنشاء يحمل كلمة مرور مؤقتة** (القرار 245) — فلا يُخزَّن في وسيط
+  // ولا في ذاكرة متصفح. نفس علّة `/api/auth` و`/platform` أعلاه، ولا سياسة
+  // تخزين عامة للـAPI.
+  app.use("/api/users", noStore);
+
   const api = express.Router();
   api.use(
     requireAuth(env.JWT_SECRET),
@@ -139,6 +145,7 @@ export function createApp(db: Database, env: Env, logger: Logger): Express {
     api.use(pattern, enforceEntityAccess(db));
   }
   api.use(authProtectedRouter(db, env));
+  api.use(usersRouter(db, env));
   api.use(settingsRouter(db));
   api.use(sitesRouter(db));
   api.use(farmsRouter(db));

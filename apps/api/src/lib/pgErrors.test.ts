@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { translatePgError } from "./pgErrors";
+import { DUPLICATE_PHONE, translatePgError } from "./pgErrors";
 
 /**
  * ترجمة 23505 — **مسار الفهرس الفريد**، وهو الحارس الأخير خلف الفحص المسبق
@@ -29,9 +29,18 @@ describe("ترجمة انتهاك الفهرس الفريد", () => {
   });
 
   it("قيد بلا رمز مخصَّص يبقى على duplicate — لا يتغيّر سلوك القيود القائمة", () => {
-    const error = translatePgError(pgUniqueViolation("users_tenant_phone_uq"));
+    const error = translatePgError(pgUniqueViolation("daily_logs_batch_date_uq"));
     expect(error?.code).toBe("duplicate");
-    expect(error?.message).toContain("رقم الجوال");
+    expect(error?.message).toContain("سجل محفوظ");
+  });
+
+  // **وكان المثال أعلاه `users_tenant_phone_uq` حتى القرار 245** — ثم صار له
+  // فحصٌ مسبق في `usersService`، **فانتقل إلى الرمز المخصَّص مع نظيرَيه**.
+  it("users_tenant_phone_uq ← duplicate_phone بنفس رسالة الفحص المسبق (245)", () => {
+    const error = translatePgError(pgUniqueViolation("users_tenant_phone_uq"));
+    expect(error?.status).toBe(409);
+    expect(error?.code).toBe(DUPLICATE_PHONE.code);
+    expect(error?.message).toBe(DUPLICATE_PHONE.message);
   });
 
   it("قيد غير معروف ← رسالة عامة لا انهيار", () => {
