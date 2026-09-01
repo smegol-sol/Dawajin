@@ -6,6 +6,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { openPrepCycle } from "../services/prepCycleService";
 import {
+  approveVia,
   assignVia,
   completeVia,
   getCycleVia,
@@ -335,5 +336,63 @@ describe("إسناد الخطوة — المخالفات المتعمَّدة", 
     expect((await assignVia(f, first.id, f.ownerBToken, { assignedTo: f.farmerId })).status).toBe(
       404
     );
+  });
+});
+
+describe("اعتماد الخطوة — «المنفّذ يعلّم والمشرف يعتمد» (القرار 239)", () => {
+  it("المشرف يُكمل والمالك يعتمد ← 200، والاعتماد مسجَّل", async () => {
+    const { steps } = await openCycleForSubject(f);
+    const [first] = steps;
+    if (!first) throw new Error("لا خطوات في التجهيزة");
+    expect((await completeVia(f, first.id, f.supervisorToken)).status).toBe(200);
+    const res = await approveVia(f, first.id, f.ownerToken);
+    expect(res.status).toBe(200);
+    expect((res.body as { approvedAt: string }).approvedAt).toBeTruthy();
+  });
+
+  it("مخالفة: لا يُعتمد ما لم يُنجَز ← 422 `step_not_completed`", async () => {
+    const { steps } = await openCycleForSubject(f);
+    const [first] = steps;
+    if (!first) throw new Error("لا خطوات في التجهيزة");
+    const res = await approveVia(f, first.id, f.ownerToken);
+    expect(res.status).toBe(422);
+    expect((res.body as { code: string }).code).toBe("step_not_completed");
+  });
+
+  it("**مخالفة: المنفّذ يعتمد نفسه ← 422 `approver_is_completer`**", async () => {
+    const { steps } = await openCycleForSubject(f);
+    const [first] = steps;
+    if (!first) throw new Error("لا خطوات في التجهيزة");
+    await completeVia(f, first.id, f.supervisorToken);
+    const res = await approveVia(f, first.id, f.supervisorToken);
+    expect(res.status).toBe(422);
+    expect((res.body as { code: string }).code).toBe("approver_is_completer");
+  });
+
+  it("مخالفة: اعتمادٌ مرتين ← 422 `step_already_approved`", async () => {
+    const { steps } = await openCycleForSubject(f);
+    const [first] = steps;
+    if (!first) throw new Error("لا خطوات في التجهيزة");
+    await completeVia(f, first.id, f.supervisorToken);
+    expect((await approveVia(f, first.id, f.ownerToken)).status).toBe(200);
+    const res = await approveVia(f, first.id, f.ownerToken);
+    expect(res.status).toBe(422);
+    expect((res.body as { code: string }).code).toBe("step_already_approved");
+  });
+
+  it("مخالفة: المربّي لا يعتمد ← 403 (§12.2: مشرف ✅ ومالك ✅ لا غير)", async () => {
+    const { steps } = await openCycleForSubject(f);
+    const [first] = steps;
+    if (!first) throw new Error("لا خطوات في التجهيزة");
+    await completeVia(f, first.id, f.supervisorToken);
+    expect((await approveVia(f, first.id, f.farmerToken)).status).toBe(403);
+  });
+
+  it("والطبيب لا يعتمد ← 403", async () => {
+    const { steps } = await openCycleForSubject(f);
+    const [first] = steps;
+    if (!first) throw new Error("لا خطوات في التجهيزة");
+    await completeVia(f, first.id, f.supervisorToken);
+    expect((await approveVia(f, first.id, f.vetToken)).status).toBe(403);
   });
 });

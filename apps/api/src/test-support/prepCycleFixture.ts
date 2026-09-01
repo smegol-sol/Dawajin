@@ -34,6 +34,7 @@ export interface PrepFixture {
   farmAId: number;
   subjectId: number;
   ownerToken: string;
+  ownerId: number;
   supervisorToken: string;
   farmerToken: string;
   farmerId: number;
@@ -44,6 +45,18 @@ export interface PrepFixture {
   otherHouseId: number;
   ownerBToken: string;
   houseInTenantBId: number;
+}
+
+/** فاعلان إضافيان — **استُخرجا لحدّ أسطر الدالّة وحده.** */
+async function seedExtraActors(
+  db: Database,
+  secret: string,
+  tenantAId: number,
+  tenantBId: number
+): Promise<{ otherFarmer: { id: number }; ownerB: { id: number; token: string } }> {
+  const otherFarmer = await seedUser(db, { tenantId: tenantAId, role: "farmer", secret });
+  const ownerB = await seedUser(db, { tenantId: tenantBId, role: "owner", secret });
+  return { otherFarmer, ownerB };
 }
 
 export async function initPrepFixture(label: string): Promise<PrepFixture> {
@@ -70,12 +83,7 @@ export async function initPrepFixture(label: string): Promise<PrepFixture> {
     secret: env.JWT_SECRET,
   });
   const vet = await seedUser(db, { tenantId: tenantAId, role: "vet", secret: env.JWT_SECRET });
-  const otherFarmer = await seedUser(db, {
-    tenantId: tenantAId,
-    role: "farmer",
-    secret: env.JWT_SECRET,
-  });
-  const ownerB = await seedUser(db, { tenantId: tenantBId, role: "owner", secret: env.JWT_SECRET });
+  const { otherFarmer, ownerB } = await seedExtraActors(db, env.JWT_SECRET, tenantAId, tenantBId);
 
   const siteAId = await siteVia(app, owner.token, `موقع ${label} ${S}`);
   const farmAId = await farmVia(app, owner.token, siteAId, `مزرعة ${label} ${S}`);
@@ -100,6 +108,7 @@ export async function initPrepFixture(label: string): Promise<PrepFixture> {
     farmAId,
     subjectId,
     ownerToken: owner.token,
+    ownerId: owner.id,
     supervisorToken: supervisor.token,
     farmerToken: farmer.token,
     farmerId: farmer.id,
@@ -171,6 +180,14 @@ export function completeVia(f: PrepFixture, stepId: number, token: string): requ
     .send({});
 }
 
+/** الاعتماد عبر مساره — **ومُطلِقُ الانتقال** (القرار 239). */
+export function approveVia(f: PrepFixture, stepId: number, token: string): request.Test {
+  return request(f.app)
+    .patch(`/api/prep-steps/${String(stepId)}/approve`)
+    .set("Authorization", `Bearer ${token}`)
+    .send({});
+}
+
 /** الإسناد عبر مساره — **لا كتابةَ `assigned_to` في القاعدة** (القرار 237). */
 export function assignVia(
   f: PrepFixture,
@@ -209,6 +226,30 @@ export async function completeAllRequiredBut(
     const res = await completeVia(f, step.id, f.supervisorToken);
     if (res.status !== 200) {
       throw new Error(`تعذّر إكمال خطوة التجهيزة: ${String(res.status)}`);
+    }
+  }
+}
+
+/**
+ * يُكمل **ويعتمد** كل الإلزاميات إلا `leave` منها — **فيقف على حافة الانتقال**.
+ *
+ * **والمُكمِل غير المعتمِد حتمًا** (`approved_by <> completed_by`): المشرف
+ * يُكمل والمالك يعتمد.
+ */
+export async function approveAllRequiredBut(
+  f: PrepFixture,
+  steps: FixtureStep[],
+  leave: number
+): Promise<void> {
+  const required = steps.filter((s) => s.isRequired);
+  for (const step of required.slice(0, required.length - leave)) {
+    const done = await completeVia(f, step.id, f.supervisorToken);
+    if (done.status !== 200) {
+      throw new Error(`تعذّر إكمال خطوة التجهيزة: ${String(done.status)}`);
+    }
+    const ok = await approveVia(f, step.id, f.ownerToken);
+    if (ok.status !== 200) {
+      throw new Error(`تعذّر اعتماد خطوة التجهيزة: ${String(ok.status)}`);
     }
   }
 }

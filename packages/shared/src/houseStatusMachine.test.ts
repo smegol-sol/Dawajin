@@ -21,7 +21,7 @@ import {
 /** الانتقالات المسموحة كاملة — تُكتب بأسمائها لا تُشتق من الجدول المفحوص. */
 const ALLOWED: readonly (readonly [HouseStatus, HouseStatus])[] = [
   ["تحت الإخلاء", "تحت التنظيف والتطهير"],
-  // في الجدول منذ القرار 221 — **وصنفه `prep-completion` فلا يُطلب يدويًّا**
+  // في الجدول منذ القرار 221 — **وصنفه `prep-approval` فلا يُطلب يدويًّا** (القرار 239)
   ["تحت التنظيف والتطهير", "في فترة الراحة"],
   ["في فترة الراحة", "جاهز للإسكان"],
   // من أي حالة إلى الخارجتين (§3.3)
@@ -56,7 +56,7 @@ describe("جدول انتقالات حالة العنبر", () => {
   it("«تنظيف ← راحة» وحده تلقائيّ لا يُجريه مسار الحالة — والبقية له", () => {
     for (const rule of HOUSE_STATUS_TRANSITIONS) {
       expect(rule.performedBy).toBe(
-        rule.kind === "prep-complete" ? "prep-completion" : "status-route"
+        rule.kind === "prep-complete" ? "prep-approval" : "status-route"
       );
     }
   });

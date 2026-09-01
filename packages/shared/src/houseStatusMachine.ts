@@ -8,8 +8,10 @@ import { HOUSE_STATUS, type HouseStatus } from "./enums";
  * «تنظيف ← راحة» بالقرار 221 حين بُني مالكه** — ولا يُكتب انتقال خارج الآلة).
  * «الحالات السبع» في §3.3 **موزَّعة على مسارات**، **واثنان من انتقالاتها أثرٌ
  * جانبيّ لعمليات الدفعة** لا يُفتحان هنا — انظر `TRANSITIONS_OWNED_ELSEWHERE`.
- * **و`performedBy` يقسم الخمسة**: أربعةٌ لمسار الحالة، **وواحد تلقائيّ لإكمال
- * الخطوات لا يُطلب يدويًّا**.
+ * **و`performedBy` يقسم الخمسة**: أربعةٌ لمسار الحالة، **وواحد تلقائيّ لاعتماد
+ * الخطوات لا يُطلب يدويًّا** — **ونُقل مُطلِقه من الإكمال إلى الاعتماد بالقرار
+ * 239**: «المنفّذ يعلّم والمشرف يعتمد»، **فالانتقال بالاعتماد وإلا صار توقيع
+ * المشرف زينةً يمضي القطار من دونها**.
  *
  * **والقسمة حارسُ صلاحية لا تنظيم:** «مشغول ← تحت الإخلاء» أثرُ تصفية الدفعة،
  * **والتصفية للمالك وحده** (§12.2: مشرف ❌) — **فلو قَبِلها مسارُ الحالة لصفّى
@@ -51,11 +53,11 @@ export type HouseTransitionKind =
 
 /**
  * **مَن يُجري الانتقال** — والقسمة حارسُ صلاحية لا تنظيم (القرار 220):
- * انتقالٌ صنفُه `prep-completion` **لا يقبله مسار الحالة يدويًّا**، وإلا صار
+ * انتقالٌ صنفُه `prep-approval` **لا يقبله مسار الحالة يدويًّا**، وإلا صار
  * بابًا خلفيًّا يتخطّى «الخطوات تفتح العنبر» (القرار #153) — **يُطلب من
- * `PATCH /prep-steps/:stepId/complete` وحده**.
+ * `PATCH /prep-steps/:stepId/approve` وحده** (القرار 239).
  */
-export type TransitionPerformer = "status-route" | "prep-completion";
+export type TransitionPerformer = "status-route" | "prep-approval";
 
 export interface HouseTransitionRule {
   readonly kind: HouseTransitionKind;
@@ -86,11 +88,11 @@ export const HOUSE_STATUS_TRANSITIONS: readonly HouseTransitionRule[] = [
     // **نُقل من `TRANSITIONS_OWNED_ELSEWHERE` إلى الجدول بالقرار 221** حين
     // بُني مالكه — **ولا يُكتب انتقال خارج الآلة**.
     kind: "prep-complete",
-    performedBy: "prep-completion",
+    performedBy: "prep-approval",
     from: ["تحت التنظيف والتطهير"],
     to: ["في فترة الراحة"],
     source:
-      "§14.6 — «عند اكتمال الإلزامية: انتقال تلقائي لـ‹في فترة الراحة›» (PATCH /prep-steps/:stepId/complete)",
+      "§14.6 «عند اكتمال الإلزامية: انتقال تلقائي لـ‹في فترة الراحة›» — **والاكتمال باعتمادها لا بإكمالها** (§12.2 صفّ «اعتماد خطوة تجهيز»، والقرار 239): PATCH /prep-steps/:stepId/approve",
     reasonRequired: false,
   },
   {
