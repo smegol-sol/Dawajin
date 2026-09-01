@@ -5,11 +5,7 @@ import { Card } from "@/components/ui/Card";
 import { StatTile } from "@/components/ui/StatTile";
 import { StatusDistributionBar } from "@/components/ui/StatusDistributionBar";
 import { color, font, radius, spacing, statusFill } from "@/constants/theme";
-import {
-  houseStatusIcon,
-  houseStatusShortLabel,
-  houseStatusTone,
-} from "@/lib/houseStatusTone";
+import { houseStatusIcon, houseStatusShortLabel, houseStatusTone } from "@/lib/houseStatusTone";
 import type { FarmCard, HouseCard, SiteCard } from "@/lib/infrastructureApi";
 
 /**

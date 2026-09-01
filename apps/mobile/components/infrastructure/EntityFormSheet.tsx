@@ -20,6 +20,14 @@ interface EntityFormSheetProps {
   onSubmit: (name: string) => void;
   /** حقول إضافية فوق زر الحفظ — مصادر الطاقة للمزرعة مثلًا. */
   children?: ReactNode;
+  /**
+   * **سببُ تعطيل الحفظ حين ينقص حقلٌ إضافيّ** — نصٌّ يظهر تحت الزر المعطَّل.
+   *
+   * **تطبيقُ «لا زر يفشل عند الضغط» على ما ليس الاسم** (§11، وقاعدة الزر
+   * المعطّل في §8.2: **السبب يظهر قبل الضغط لا بعده**). **والاسم يحرسه
+   * `localError` أعلاه، وهذا يحرس ما تضيفه المستويات.**
+   */
+  blockSubmit?: string | null | undefined;
 }
 
 /**
@@ -38,6 +46,7 @@ export function EntityFormSheet({
   onClose,
   onSubmit,
   children,
+  blockSubmit,
 }: EntityFormSheetProps) {
   const [name, setName] = useState(initialValue);
   const [touched, setTouched] = useState(false);
@@ -63,8 +72,14 @@ export function EntityFormSheet({
         testID="entity-form-name"
       />
       {children}
-      {saving ? (
-        <Button label="حفظ" variant="primary" formSize onPress={noop} disabledReason="جارٍ الحفظ" />
+      {saving || blockSubmit != null ? (
+        <Button
+          label="حفظ"
+          variant="primary"
+          formSize
+          onPress={noop}
+          disabledReason={saving ? "جارٍ الحفظ" : (blockSubmit ?? "")}
+        />
       ) : (
         <Button
           label="حفظ"
