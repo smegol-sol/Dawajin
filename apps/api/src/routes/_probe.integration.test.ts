@@ -431,6 +431,28 @@ describe("٣) اشتقاق houseId من batchId (resolveHouseId، القرار #
     expect((res.body as { ok: boolean }).ok).toBe(true);
   });
 
+  /**
+   * **اتجاه المنع — وكان غائبًا** (القرار 247): الصفّ أدناه يُثبت **السماح**
+   * وحده، **فلم يكن في المستودع برهانٌ واحد على أن عنبرًا لا يبلغه إسنادُ
+   * صاحب الطلب يُرَدّ من الجسم**. **وهو الحارس الذي تتّكئ عليه دفعة الإسناد
+   * كلّها** — مسحُ الجسم هو ما يقصر المشرف على مزارعه حين تُبنى دفعته.
+   *
+   * **وصنفُه صنف القرار 242:** حارسٌ يعمل بلا شاهدٍ على نصف عمله.
+   */
+  it("**houseId في body لعنبرٍ لا يبلغه إسنادُ صاحب الطلب ← 403**", async () => {
+    const unreachableHouseId = await createHouseInTenantA(
+      "مزرعة A غير مُسندة",
+      "عنبر لا يبلغه إسناده"
+    );
+    const res = await request(app)
+      .post("/_probe/access-by-body")
+      .set("Authorization", `Bearer ${farmerInTenantAToken}`)
+      .send({ houseId: unreachableHouseId });
+
+    expect(res.status).toBe(403);
+    expect(res.body).toEqual({ code: "forbidden", message: "غير مخوَّل بالوصول لهذا العنبر" });
+  });
+
   it("houseId كعدد JS خام في body (لا نصًا من رابط) يُقبل ويُحسَم بنجاح ← 200", async () => {
     // لا :houseId في الرابط هنا — القيمة الوحيدة تأتي من body كعدد JSON خام،
     // خلاف params/query اللذين يبقيان نصوصًا دائمًا في Express (يفحص فرع
