@@ -4,6 +4,7 @@ import {
   housePrepCycles,
   housePrepSteps,
   houses,
+  inventoryTransfers,
   sites,
   userAssignments,
   warehouses,
@@ -249,6 +250,49 @@ interface WarehouseRef {
  * معلومة يُرفض ولا يُمرَّر صامتًا** — نفس ما فرضه القرار 193 على قيمة نوع لا
  * نعرفها: **الحارس لا يتّكئ على حارس لم يُبنَ بعد**.
  */
+/**
+ * **مخزنٌ مشتقٌّ من أمر تحويل** — `params.transferId` (القرار 229).
+ *
+ * **والعلّة أن الثقب قِيس لا استُنتج:** المخزن المرسِل **ليس في `params` ولا
+ * `query` ولا `body`** بل **يُقرأ من صفّ `inventory_transfers`** — **فلا يراه
+ * ماسحُ الحقول**، ومربٍّ نفّذ خروجًا من مخزن مزرعةٍ لا يبلغها إسناده **فنزل
+ * رصيدُه من ٥٠ إلى ٣٠ بردٍّ 200**.
+ *
+ * **وهذا شكلُ `batchId` و`stepId` بعينه** (القرار 221): **معرّفٌ مشتقّ يُحلّ
+ * داخل الحارس لا خارجه** (المبدأ الأول).
+ *
+ * **والمرسِلُ وحده يُفحص هنا — حكمٌ يُكتب لا سكوتٌ عنه** (القرار 184):
+ * **عملية الخروج تمسّ رصيد المرسِل وحده** — تخصم منه ولا تكتب شيئًا في
+ * الوجهة (#159 «ثالثًا»: «ولا تدخل رصيد المستلم إلا بتأكيده»). **ووجهةُ
+ * الأمر فُحصت لحظة إصداره** حين وصلت في الجسم، **وتُفحص ثانيةً يوم يُبنى
+ * التأكيد** لأنه هو ما يمسّها.
+ *
+ * @returns معرّف المخزن المرسِل، أو `undefined` إن لم يحمل الطلب تحويلًا
+ * @throws HttpError 404 — تحويلٌ خارج المستأجر يبدو غير موجود (المبدأ السادس)
+ */
+async function resolveTransferWarehouseId(
+  db: Database,
+  req: Request,
+  user: AuthenticatedUser
+): Promise<number | undefined> {
+  const raw = firstDefinedPrimitive(req.params.transferId);
+  if (!raw) return undefined;
+  if (user.tenantId == null) {
+    throw new HttpError(401, "unauthorized", "الحساب غير مرتبط بمستأجر");
+  }
+
+  const [transfer] = await db
+    .select({ fromWarehouseId: inventoryTransfers.fromWarehouseId })
+    .from(inventoryTransfers)
+    .where(
+      and(eq(inventoryTransfers.id, Number(raw)), eq(inventoryTransfers.tenantId, user.tenantId))
+    )
+    .limit(1);
+  // **الوجود قبل التعيين** — غير الموجود 404 قبل غير المُسند 403 (المبدأ السادس)
+  if (!transfer) throw new HttpError(404, "not_found", "أمر التحويل غير موجود");
+  return transfer.fromWarehouseId;
+}
+
 function resolveWarehouseRefs(req: Request): WarehouseRef[] {
   const body = req.body as Record<string, unknown> | undefined;
   const refs: WarehouseRef[] = [];
@@ -398,6 +442,14 @@ export function enforceEntityAccess(db: Database) {
       // لمرّ كل دور غير مقيَّد بالإسناد **بلا فحص إطلاقًا**.
       const warehouseRefs = resolveWarehouseRefs(req);
       await assertWarehouseRefs(db, user, warehouseRefs);
+
+      // **والمخزن المشتقّ من أمر التحويل يُفحص بنفس نقطة الفرض** (القرار 229)
+      // — `assertWarehouseAccess` لا `resolveHouseId`: **المرسِل قد يكون مخزن
+      // موقعٍ أو مركزيًّا بلا عنبر**، **وحكمُ المخزن نقطةُ فرضه واحدة**.
+      const transferWarehouseId = await resolveTransferWarehouseId(db, req, user);
+      if (transferWarehouseId !== undefined) {
+        await assertWarehouseAccess(db, user, transferWarehouseId);
+      }
 
       // **من ليس في قائمة معلومة لا يمرّ** (القرار 194، إتمامًا للقرار 184):
       // كان الشرط «غير مقيَّد بالإسناد ← يمرّ»، **وغيرُ المقيَّد يشمل كل دور

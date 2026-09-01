@@ -32,7 +32,6 @@ import {
   storageConditionsEnum,
   emptyBagConditionEnum,
 } from "./enums";
-import { farmerRequests } from "./farmer-requests";
 import { farms, houses, sites, batches } from "./farms";
 import { tenants } from "./tenants";
 import { users } from "./users";
@@ -512,78 +511,5 @@ export const wastage = pgTable(
       foreignColumns: [warehouses.id, warehouses.tenantId],
       name: "wastage_warehouse_id_tenant_fk",
     }),
-  ]
-);
-
-export const inventoryTransfers = pgTable(
-  "inventory_transfers",
-  {
-    id: serial("id").primaryKey(),
-    uuid: uuid("uuid").notNull().defaultRandom(),
-    tenantId: integer("tenant_id")
-      .notNull()
-      .references(() => tenants.id),
-    /** طرفا التحويل مخزنان بمعرّفيهما (القرار 199). */
-    fromWarehouseId: integer("from_warehouse_id").notNull(),
-    toWarehouseId: integer("to_warehouse_id").notNull(),
-    productId: integer("product_id").notNull(),
-    quantity: numeric("quantity", { precision: 12, scale: 3 }).notNull(),
-    unit: stockUnitEnum("unit").notNull(),
-    reason: text("reason"),
-    /**
-     * **الطلب الذي صدر هذا التحويل تلبيةً له** (القرار 211) — «**للمشرف إصدار
-     * أمر صرف مباشرة منه، ويُربط الطلب بالأمر تلقائيًا**» (#160 «خامسًا»).
-     *
-     * **والمرجع على التحويل لا على الطلب — وهو ما يجعل الشكل يتبع الحكم:**
-     * الأمر يصدر **من** الطلب فيعرف مصدره. **وطلبٌ واحد قد يحمله أكثر من
-     * تحويل** (نصف الكمية اليوم ونصفها غدًا) **بلا جدول وسيط**؛ ولو كان
-     * المرجع على الطلب لأغلق ذلك بعمود واحد. **فالشكل لا يقرّر التلبية
-     * الجزئية ولا يمنعها** — **وقرارها للمالك** (§7-ب البند 61).
-     *
-     * **وفارغ في كل تحويل لم يُطلب** — والتحويل بين عنبرين (#159) أشيعها.
-     */
-    requestId: integer("request_id"),
-    createdBy: integer("created_by").notNull(),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    confirmedBy: integer("confirmed_by"),
-    confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
-  },
-  (table) => [
-    foreignKey({
-      columns: [table.confirmedBy, table.tenantId],
-      foreignColumns: [users.id, users.tenantId],
-      name: "inventory_transfers_confirmed_by_tenant_fk",
-    }),
-    foreignKey({
-      columns: [table.requestId, table.tenantId],
-      foreignColumns: [farmerRequests.id, farmerRequests.tenantId],
-      name: "inventory_transfers_request_id_tenant_fk",
-    }),
-    foreignKey({
-      columns: [table.createdBy, table.tenantId],
-      foreignColumns: [users.id, users.tenantId],
-      name: "inventory_transfers_created_by_tenant_fk",
-    }),
-    foreignKey({
-      columns: [table.productId, table.tenantId],
-      foreignColumns: [products.id, products.tenantId],
-      name: "inventory_transfers_product_id_tenant_fk",
-    }),
-    foreignKey({
-      columns: [table.fromWarehouseId, table.tenantId],
-      foreignColumns: [warehouses.id, warehouses.tenantId],
-      name: "inventory_transfers_from_warehouse_id_tenant_fk",
-    }),
-    foreignKey({
-      columns: [table.toWarehouseId, table.tenantId],
-      foreignColumns: [warehouses.id, warehouses.tenantId],
-      name: "inventory_transfers_to_warehouse_id_tenant_fk",
-    }),
-    // **لا تحويل من مخزن إلى نفسه** — حركةٌ بلا أثر على أي رصيد، **وتُنتج
-    // سطرين متعادلين في الدفتر يوهمان بنشاط لم يقع**.
-    check(
-      "inventory_transfers_distinct_warehouses_ck",
-      sql`${table.fromWarehouseId} <> ${table.toWarehouseId}`
-    ),
   ]
 );

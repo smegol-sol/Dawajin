@@ -1,4 +1,4 @@
-import { farms, houses, userAssignments } from "@dawajin/db";
+import { farms, houses, userAssignments, warehouses } from "@dawajin/db";
 import { sql, type SQL } from "drizzle-orm";
 import type { Request } from "express";
 
@@ -187,4 +187,42 @@ export function visibleHouseScope(viewer: Viewer): SQL {
   if (hasFullVisibility(viewer.role)) return allowAll();
   if (isAssignmentScoped(viewer.role)) return assignedHousesFilter(viewer.id);
   return denyAll();
+}
+
+/**
+ * **المخازن المرئية — مرآةُ `assertWarehouseAccess` لا نسخةٌ مستقلة عنه**
+ * (القرار 229).
+ *
+ * **وهي أول سردٍ فوق المخازن في المستودع** (`GET /api/inventory/in-transit`)،
+ * **فالحكم يظهر مرتين لأن الطبقتين لا تتحدثان لغة واحدة**: الحارس يفحص صفًّا
+ * بعينه بـ`throw`، والسرد يفلتر مجموعةً بـ`SQL` — **ولا يُعبَّر عن أحدهما
+ * بالآخر**. **فالمصدر واحد هنا، والحارس يُقاس عليه باختبارٍ يقارن حكمَيهما**
+ * (نفس علاج التكرار في القرار 224).
+ *
+ * **والفرعان متباينان بالبناء لا موحَّدان بـ`OR` فضفاض** (تحذير #131):
+ * `house_id` هو الفاصل — **مخزن عنبر يُحلّ بإسناد عنبره** (#161 «ثانيًا»،
+ * والقرار 199)، **وما سواه يلزمه إسنادٌ صريح للمخزن** (القرار 225: «ولا
+ * يُشتق من إسناد المزارع»). **فلا شرطٌ يوسّع الآخر صامتًا.**
+ *
+ * @returns شرط على `warehouses` — `true` لصاحب الرؤية الكاملة، و`false` لدور مجهول
+ */
+export function visibleWarehouseCondition(viewer: Viewer): SQL {
+  if (hasFullVisibility(viewer.role)) return allowAll();
+  if (!isAssignmentScoped(viewer.role)) return denyAll();
+
+  return sql`(
+    (${warehouses.houseId} IS NOT NULL AND EXISTS (
+      SELECT 1 FROM ${userAssignments} ua
+      JOIN ${houses} wh_house ON wh_house.id = ${warehouses.houseId}
+      WHERE ua.user_id = ${viewer.id}
+        AND (ua.house_id = wh_house.id OR ua.farm_id = wh_house.farm_id)
+        AND ${assignmentActiveToday("ua")}
+    ))
+    OR
+    (${warehouses.houseId} IS NULL AND EXISTS (
+      SELECT 1 FROM ${userAssignments} ua
+      WHERE ua.user_id = ${viewer.id} AND ua.warehouse_id = ${warehouses.id}
+        AND ${assignmentActiveToday("ua")}
+    ))
+  )`;
 }

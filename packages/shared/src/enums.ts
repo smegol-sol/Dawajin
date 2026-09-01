@@ -251,3 +251,15 @@ export type DisputeStatus = (typeof DISPUTE_STATUS)[number];
 /** ظروف تخزين المنتج (decisions.md #53). */
 export const STORAGE_CONDITIONS = ["عادي", "مبرّد 2-8°م", "مجمّد"] as const;
 export type StorageConditions = (typeof STORAGE_CONDITIONS)[number];
+
+/**
+ * حالات أمر التحويل — **ثلاث لا اثنتان** (#159 «ثالثًا»: «صادرة · في الطريق ·
+ * مستلمة»).
+ *
+ * **والحالة الوسطى هي الحكم كلّه:** «**الكمية لا تكون في مكانين ولا في لا
+ * مكان**» — **عند الخروج تُخصم من المرسِل وتدخل «في الطريق»، ولا تدخل رصيد
+ * المستلم إلا بتأكيده**. **وبلا الوسطى، أيُّ تأخيرٍ في التأكيد يعني كميةً
+ * اختفت أو حُسبت مرتين.**
+ */
+export const TRANSFER_STATUS = ["صادر", "في الطريق", "مستلم"] as const;
+export type TransferStatus = (typeof TRANSFER_STATUS)[number];

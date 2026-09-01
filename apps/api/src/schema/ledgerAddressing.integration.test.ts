@@ -135,8 +135,8 @@ describe(`التحويل — طرفان مختلفان (${S})`, () => {
     await expect(
       db.execute(
         sql`INSERT INTO inventory_transfers
-              (tenant_id, from_warehouse_id, to_warehouse_id, product_id, quantity, unit, created_by)
-            VALUES (${tenantA}, ${centralA}, ${centralA}, ${productA}, 5, 'كيس', ${userA})`
+              (tenant_id, from_warehouse_id, to_warehouse_id, product_id, quantity, unit, created_by, status)
+            VALUES (${tenantA}, ${centralA}, ${centralA}, ${productA}, 5, 'كيس', ${userA}, 'صادر')`
       )
     ).rejects.toThrow();
   });
@@ -144,8 +144,8 @@ describe(`التحويل — طرفان مختلفان (${S})`, () => {
   it("تحويل بين مخزنين مختلفين ← يُقبل", async () => {
     await db.execute(
       sql`INSERT INTO inventory_transfers
-            (tenant_id, from_warehouse_id, to_warehouse_id, product_id, quantity, unit, created_by)
-          VALUES (${tenantA}, ${centralA}, ${houseWarehouseA}, ${productA}, 5, 'كيس', ${userA})`
+            (tenant_id, from_warehouse_id, to_warehouse_id, product_id, quantity, unit, created_by, status)
+          VALUES (${tenantA}, ${centralA}, ${houseWarehouseA}, ${productA}, 5, 'كيس', ${userA}, 'صادر')`
     );
 
     const result = await db.execute(

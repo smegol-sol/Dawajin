@@ -127,9 +127,9 @@ describe(`العزل بالمفتاح المركَّب (${S})`, () => {
     await expect(
       db.execute(
         sql`INSERT INTO inventory_transfers
-              (tenant_id, from_warehouse_id, to_warehouse_id, product_id, quantity, unit, created_by, request_id)
+              (tenant_id, from_warehouse_id, to_warehouse_id, product_id, quantity, unit, created_by, request_id, status)
             VALUES (${A.tenantId}, ${A.siteWarehouseId}, ${A.houseWarehouseId}, ${A.productId},
-                    5, 'كيس', ${A.userId}, ${requestB})`
+                    5, 'كيس', ${A.userId}, ${requestB}, 'صادر')`
       )
     ).rejects.toThrow();
   });
@@ -229,9 +229,9 @@ describe(`الربط بالتحويل — والشكل لا يمنع التلب�
     for (const qty of [10, 10]) {
       await db.execute(
         sql`INSERT INTO inventory_transfers
-              (tenant_id, from_warehouse_id, to_warehouse_id, product_id, quantity, unit, created_by, request_id)
+              (tenant_id, from_warehouse_id, to_warehouse_id, product_id, quantity, unit, created_by, request_id, status)
             VALUES (${A.tenantId}, ${A.siteWarehouseId}, ${A.houseWarehouseId}, ${A.productId},
-                    ${qty}, 'كيس', ${A.userId}, ${id})`
+                    ${qty}, 'كيس', ${A.userId}, ${id}, 'صادر')`
       );
     }
     const result = await db.execute(
@@ -243,9 +243,9 @@ describe(`الربط بالتحويل — والشكل لا يمنع التلب�
   it("تحويلٌ بلا طلب ← يُقبل، فالمرجع فارغ في كل تحويل لم يُطلب", async () => {
     const id = await insertId(
       sql`INSERT INTO inventory_transfers
-            (tenant_id, from_warehouse_id, to_warehouse_id, product_id, quantity, unit, created_by)
+            (tenant_id, from_warehouse_id, to_warehouse_id, product_id, quantity, unit, created_by, status)
           VALUES (${A.tenantId}, ${A.siteWarehouseId}, ${A.houseWarehouseId}, ${A.productId},
-                  5, 'كيس', ${A.userId}) RETURNING id`
+                  5, 'كيس', ${A.userId}, 'صادر') RETURNING id`
     );
     expect(id).toBeGreaterThan(0);
   });

@@ -129,4 +129,23 @@ describe("enforceEntityAccess — عنونة المخزن (القراران 193 
     expect(error).toBeInstanceOf(HttpError);
     expect(error.status).toBe(403);
   });
+
+  /**
+   * **ومسارُ التحويل كأخواته** (القرار 229): المحلِّل يقصّر الدائرة قبل أي
+   * استعلام — **والقاعدة الوهمية تفشل فورًا لو استُدعيت**.
+   */
+  it("401 عندما tenantId يساوي null على مسار **التحويل**", async () => {
+    const middleware = enforceEntityAccess(throwingDb() as never);
+    const next = vi.fn();
+
+    await middleware(
+      fakeRequest({ id: 1, tenantId: null, role: "farmer" }, { transferId: "1" }),
+      {} as Response,
+      next
+    );
+
+    const error = next.mock.calls[0]?.[0] as HttpError;
+    expect(error).toBeInstanceOf(HttpError);
+    expect(error.status).toBe(401);
+  });
 });
