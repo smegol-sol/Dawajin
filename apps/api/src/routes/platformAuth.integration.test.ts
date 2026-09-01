@@ -272,3 +272,69 @@ describe(`الاسترداد — الطبقة الأولى (${S})`, () => {
     expect(res.status).toBe(403);
   });
 });
+
+describe(`حرّاسٌ سليمان بلا شاهد — أُغلقا باختبار لا بكود (${S}، القرار 243)`, () => {
+  it("**كلمة حالية خاطئة عند تغيير الكلمة ← 401** — الحاجز الذي كان بلا شاهد", async () => {
+    const fresh = await seedPlatformAdmin({ password: ADMIN_PASSWORD });
+    const token = await tokenFor(fresh.phone, ADMIN_PASSWORD, fresh.secret);
+
+    const res = await request(app)
+      .post("/platform/auth/change-password")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ currentPassword: "not-the-current-one-12", newPassword: "new-platform-pass-12" });
+    expect(res.status).toBe(401);
+
+    // **والكلمة لم تتغيّر فعلًا** — الرفض ليس رسالةً فقط
+    const stillOld = await tokenFor(fresh.phone, ADMIN_PASSWORD, fresh.secret);
+    expect(stillOld).toBeTruthy();
+  });
+
+  it("والكلمة الصحيحة تغيّر فعلًا ← 204، والقديمة تسقط", async () => {
+    const fresh = await seedPlatformAdmin({ password: ADMIN_PASSWORD });
+    const token = await tokenFor(fresh.phone, ADMIN_PASSWORD, fresh.secret);
+    const next = "changed-platform-pass-12";
+
+    const res = await request(app)
+      .post("/platform/auth/change-password")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ currentPassword: ADMIN_PASSWORD, newPassword: next });
+    expect(res.status).toBe(204);
+
+    expect(await tokenFor(fresh.phone, next, fresh.secret)).toBeTruthy();
+    const old = await loginAdmin(
+      freshApp(),
+      fresh.phone,
+      ADMIN_PASSWORD,
+      currentCode(fresh.secret)
+    );
+    expect(old.status).toBe(401);
+  });
+
+  it("**مدير منصةٍ معطَّل ← 403 `account_disabled` لا 200 صامتًا**", async () => {
+    const fresh = await seedPlatformAdmin({ password: ADMIN_PASSWORD });
+    await db.update(platformAdmins).set({ isActive: false }).where(eq(platformAdmins.id, fresh.id));
+
+    const res = await loginAdmin(
+      freshApp(),
+      fresh.phone,
+      ADMIN_PASSWORD,
+      currentCode(fresh.secret)
+    );
+    expect(res.status).toBe(403);
+    expect((res.body as { code: string }).code).toBe("account_disabled");
+    // **ولا رمز جلسة في الرد** — التعطيل يُعلَن ولا يمرّ صامتًا بجسمٍ فارغ
+    expect((res.body as { token?: string }).token).toBeUndefined();
+  });
+
+  it("والمدير الفعّال يدخل ← 200 برمز جلسة", async () => {
+    const fresh = await seedPlatformAdmin({ password: ADMIN_PASSWORD });
+    const res = await loginAdmin(
+      freshApp(),
+      fresh.phone,
+      ADMIN_PASSWORD,
+      currentCode(fresh.secret)
+    );
+    expect(res.status).toBe(200);
+    expect((res.body as { token?: string }).token).toBeTruthy();
+  });
+});
