@@ -131,7 +131,9 @@ describe("بذر بيانات العرض — نطاق الرؤية والعطا�
 
   it("يرفض التشغيل خارج بيئتَي التطوير والاختبار بلا كتابة صفّ", async () => {
     const production = { ...env, NODE_ENV: "production" as const };
-    const rejected = "مستأجر مرفوض";
+    // **لاحقةُ جولةٍ فريدة** (القرار 252): اسمٌ حرفيّ يجعل التأكيد يقرأ تاريخ
+    // القاعدة — فصفُّ جولةٍ سابقة يبقى إلى الأبد.
+    const rejected = `مستأجر مرفوض ${Date.now().toString()}`;
     await expect(
       seedDemo({ db, env: production, logger, password: PASSWORD, tenantName: rejected })
     ).rejects.toThrow(/production/);
