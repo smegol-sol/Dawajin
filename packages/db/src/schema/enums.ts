@@ -30,11 +30,13 @@ import {
   EXTERNAL_ISSUE_REASON,
   FARMER_REQUEST_STATUS,
   EMPTY_BAG_CONDITION,
+  TRANSFER_STATUS,
 } from "@dawajin/shared";
 import { pgEnum } from "drizzle-orm/pg-core";
 
 // كل قيمة enum مصدرها packages/shared — لا تُعرَّف القوائم هنا (backend-technical-spec.md §6).
 export const userRoleEnum = pgEnum("user_role", USER_ROLE);
+export const transferStatusEnum = pgEnum("transfer_status", TRANSFER_STATUS);
 export const batchStatusEnum = pgEnum("batch_status", BATCH_STATUS);
 export const breedEnum = pgEnum("breed", BREED);
 export const houseStatusEnum = pgEnum("house_status", HOUSE_STATUS);

@@ -1280,6 +1280,196 @@
           }
         }
       }
+    },
+    "/api/inventory/transfers": {
+      "post": {
+        "summary": "إصدار أمر تحويل — المشرف وحده (#159 «ثانيًا»، القرار 228)",
+        "description": "المزرعتان مُسندتان لنفس المشرف لحظة الإصدار، والشرط يُفحص عندها فقط. والأمر لا يمسّ الدفتر — حالته «صادر».",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransferOrderRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "الأمر وحالته",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "transferId": {
+                      "type": "integer"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": ["صادر"]
+                    }
+                  },
+                  "required": ["transferId", "status"]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "description": "دورٌ لا يُصدر (`forbidden`) أو مزرعةٌ غير مُسندة (`farm_not_assigned`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "description": "طرفان متطابقان (`same_warehouse`) · كميةٌ غير موجبة · وحدةٌ لا تطابق (`unit_mismatch`) · صنفٌ معطَّل",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/inventory/transfers/{transferId}/issue": {
+      "post": {
+        "summary": "تنفيذ الخروج — تُخصم من المرسِل وتدخل «في الطريق» (#159 «ثالثًا»)",
+        "description": "قفلُ صفّ المخزن ثم قراءة الحالة والكفاية تحته (القرار 223 — والقفل هنا يحمل وزنًا: الخروج يقرأ ثم يكتب). ولا تدخل رصيد المستلم إلا بتأكيده — دفعةٌ ثانية.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "transferId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "الخروج والرصيد بعده",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "transferId": {
+                      "type": "integer"
+                    },
+                    "movementId": {
+                      "type": "integer"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": ["في الطريق"]
+                    },
+                    "balanceAfter": {
+                      "type": "number"
+                    }
+                  },
+                  "required": ["transferId", "movementId", "status", "balanceAfter"]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "description": "حالةٌ لا تسمح (`transfer_not_issuable`) · رصيدٌ غير كافٍ (`insufficient_balance`) · مخزنٌ معطَّل (`warehouse_inactive`) · كلُّ المخزون منتهٍ (`all_stock_expired`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/inventory/in-transit": {
+      "get": {
+        "summary": "ما في الطريق — مقروءٌ لا مستنتَج (#159 «ثالثًا»)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "أوامر خرجت ولم تُؤكَّد",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "transfers": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "transferId": {
+                            "type": "integer"
+                          },
+                          "productId": {
+                            "type": "integer"
+                          },
+                          "quantity": {
+                            "type": "number"
+                          },
+                          "fromWarehouseId": {
+                            "type": "integer"
+                          }
+                        },
+                        "required": ["transferId", "productId", "quantity", "fromWarehouseId"]
+                      }
+                    }
+                  },
+                  "required": ["transfers"]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2097,6 +2287,37 @@
           }
         },
         "required": ["movementId", "warehouseId", "productId", "quantity", "balanceAfter"]
+      },
+      "TransferOrderRequest": {
+        "type": "object",
+        "required": ["fromWarehouseId", "toWarehouseId", "productId", "quantity", "unit"],
+        "properties": {
+          "fromWarehouseId": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "toWarehouseId": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "productId": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "quantity": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "unit": {
+            "type": "string",
+            "enum": ["عبوة", "زجاجة", "كيس", "لتر", "كجم", "قطعة"]
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          }
+        }
       }
     },
     "responses": {
