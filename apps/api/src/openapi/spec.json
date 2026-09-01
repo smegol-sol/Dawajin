@@ -1168,8 +1168,8 @@
     },
     "/api/prep-steps/{stepId}/complete": {
       "patch": {
-        "summary": "إكمال خطوة تجهيز — وانتقال تلقائي إلى «في فترة الراحة» عند اكتمال الإلزامية (§14.6)",
-        "description": "المربّي يُكمل خطوتَه المُسنَدة وحدها، والمشرف والمالك بلا هذا الشرط (§12.2). قفل العنبر ثم الدورة، وإعادة قراءة الخطوة تحتهما. وحركة الاستهلاك مؤجَّلة إلى دفعة المخزون فلا مُنتَج ولا كمية هنا (القرار 221).",
+        "summary": "إكمال خطوة تجهيز — والانتقال إلى «في فترة الراحة» مُطلِقُه الاعتماد لا الإكمال (القرار 239)",
+        "description": "المربّي يُكمل خطوتَه المُسنَدة وحدها، والمشرف والمالك بلا هذا الشرط (§12.2). قفل العنبر ثم الدورة، وإعادة قراءة الخطوة تحتهما. **ولا انتقال هنا** — «المنفّذ يعلّم والمشرف يعتمد»، والانتقال بالاعتماد (PATCH /prep-steps/:stepId/approve). وحركة الاستهلاك مؤجَّلة إلى دفعة المخزون فلا مُنتَج ولا كمية هنا (القرار 221).",
         "security": [
           {
             "bearerAuth": []
@@ -1188,7 +1188,7 @@
         ],
         "responses": {
           "200": {
-            "description": "الإكمال — وهل وقع الانتقال التلقائي به",
+            "description": "الإكمال وكم إلزاميةً بقيت",
             "content": {
               "application/json": {
                 "schema": {
@@ -1207,7 +1207,7 @@
             "$ref": "#/components/responses/NotFound"
           },
           "422": {
-            "description": "دورة مكتملة (`prep_cycle_completed`) · خطوة مكتملة (`step_already_completed`) · اكتملت الإلزامية والعنبر ليس في «تحت التنظيف والتطهير» (`house_not_in_cleaning`)",
+            "description": "دورة مكتملة (`prep_cycle_completed`) · خطوة مكتملة (`step_already_completed`)",
             "content": {
               "application/json": {
                 "schema": {
@@ -1298,6 +1298,84 @@
           },
           "422": {
             "description": "دورة مكتملة (`prep_cycle_completed`) · خطوة مكتملة (`step_already_completed`) · المُسنَد إليه غير موجود (`assignee_not_found`) · ليس مربّيًا (`assignee_not_farmer`) · غير مُسنَدٍ لعنبر الخطوة (`assignee_not_assigned_to_house`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/prep-steps/{stepId}/approve": {
+      "patch": {
+        "summary": "اعتماد خطوة تجهيز — ومُطلِقُ الانتقال إلى «في فترة الراحة» (القرار 239)",
+        "description": "«المنفّذ يعلّم والمشرف يعتمد» (§12.2 صفّ «اعتماد خطوة تجهيز»: مشرف ✅ ومالك ✅). ولا يُعتمد ما لم يُنجَز، ولا يعتمد المنفّذ عملَه — والقيد `approved_by <> completed_by` قائم في القاعدة ويبقى. وعند اعتماد آخر إلزامية يقع الانتقال التلقائي، والعدّ تحت قفل الدورة لا قبله.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "stepId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "الاعتماد — وهل وقع الانتقال التلقائي به",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "stepId",
+                    "cycleId",
+                    "approvedAt",
+                    "transitionedToRest",
+                    "requiredUnapproved"
+                  ],
+                  "properties": {
+                    "stepId": {
+                      "type": "integer"
+                    },
+                    "cycleId": {
+                      "type": "integer"
+                    },
+                    "approvedAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "transitionedToRest": {
+                      "type": "boolean"
+                    },
+                    "requiredUnapproved": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "description": "دورة مكتملة (`prep_cycle_completed`) · خطوة غير مُنجَزة (`step_not_completed`) · معتمدة من قبل (`step_already_approved`) · المنفّذ يعتمد نفسه (`approver_is_completer`) · اعتُمدت الإلزامية والعنبر ليس في «تحت التنظيف والتطهير» (`house_not_in_cleaning`)",
             "content": {
               "application/json": {
                 "schema": {

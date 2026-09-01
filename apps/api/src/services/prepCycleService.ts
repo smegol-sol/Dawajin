@@ -219,8 +219,6 @@ export interface PrepStepCompletion {
   stepId: number;
   cycleId: number;
   completedAt: Date;
-  /** هل وقع الانتقال التلقائي إلى «في فترة الراحة» بهذا الإكمال؟ */
-  transitionedToRest: boolean;
   requiredRemaining: number;
 }
 
@@ -246,9 +244,9 @@ export async function lockHouse(
 /**
  * الانتقال التلقائي «تحت التنظيف والتطهير ← في فترة الراحة» (§14.6) —
  * **يُكتب من الآلة لا خارجها**: الزوج يُصنَّف من الجدول، وصنفه
- * `prep-completion`، **وهذه الدالة مُجريه الوحيد**.
+ * `prep-approval`، **وهذه الدالة مُجريه الوحيد** (القرار 239).
  */
-async function transitionToRest(
+export async function transitionToRest(
   tx: Tx,
   args: { tenantId: number; houseId: number; cycleId: number; actorId: number; from: HouseStatus }
 ): Promise<void> {
@@ -256,14 +254,14 @@ async function transitionToRest(
   const toStatus: HouseStatus = "في فترة الراحة";
 
   const rule = classifyHouseTransition(from, toStatus);
-  if (rule?.performedBy !== "prep-completion") {
-    // اكتملت الإلزامية والعنبر ليس في «تحت التنظيف والتطهير» — الانتقال لا
-    // يملك مصدرًا من هذه الحالة، **والسكوت هنا يعلّق العنبر**: تكتمل الخطوات
-    // ولا مُطلِق يبقى. فيُرفض الإكمال الأخير حتى يُنقل العنبر إلى موضعه.
+  if (rule?.performedBy !== "prep-approval") {
+    // اعتُمدت الإلزامية والعنبر ليس في «تحت التنظيف والتطهير» — الانتقال لا
+    // يملك مصدرًا من هذه الحالة، **والسكوت هنا يعلّق العنبر**: تُعتمد الخطوات
+    // ولا مُطلِق يبقى. فيُرفض الاعتماد الأخير حتى يُنقل العنبر إلى موضعه.
     throw new HttpError(
       422,
       "house_not_in_cleaning",
-      `اكتملت الخطوات الإلزامية والعنبر في «${from}» لا «تحت التنظيف والتطهير» — انقله أولًا (PATCH /houses/:houseId/status) ثم أكمِل الخطوة الأخيرة`,
+      `اعتُمدت الخطوات الإلزامية والعنبر في «${from}» لا «تحت التنظيف والتطهير» — انقله أولًا (PATCH /houses/:houseId/status) ثم اعتمِد الخطوة الأخيرة`,
       { fromStatus: from, cycleId }
     );
   }
@@ -398,7 +396,8 @@ export async function completePrepStep(
     // عنوان الخطوة (دورتها وعنبرها) — قراءة توجيه لا قرار: القرارات كلها تحت القفل
     const address = await readStepAddress(tx, tenantId, stepId);
 
-    const house = await lockHouse(tx, tenantId, address.houseId);
+    // **القفل يبقى لترتيبه** — العنبر ثم الدورة — وإن لم تعد حالتُه تُقرأ هنا
+    await lockHouse(tx, tenantId, address.houseId);
     const cycle = await lockOpenCycle(tx, tenantId, address.cycleId);
     await assertStepCompletable(tx, input);
 
@@ -411,6 +410,9 @@ export async function completePrepStep(
       throw new HttpError(500, "internal_error", "تعذّر إكمال الخطوة");
     }
 
+    // **ولا انتقال هنا** — مُطلِقه الاعتماد لا الإكمال (القرار 239):
+    // «المنفّذ يعلّم والمشرف يعتمد»، **وانتقالٌ بالإكمال يجعل توقيع المشرف
+    // زينةً يمضي القطار من دونها**. والعدّ يبقى ليعرف المنفّذ كم بقي عليه.
     const [{ requiredRemaining } = { requiredRemaining: 0 }] = await tx
       .select({ requiredRemaining: sql<number>`count(*)::int` })
       .from(housePrepSteps)
@@ -423,24 +425,10 @@ export async function completePrepStep(
         )
       );
 
-    // **الانتقال مرة واحدة**: `restStartedAt` المضبوط يعني أنه وقع من قبل —
-    // إكمال خطوة اختيارية بعده تسجيلُ عملٍ لا مُطلِقٌ ثانٍ.
-    const shouldTransition = requiredRemaining === 0 && cycle.restStartedAt === null;
-    if (shouldTransition) {
-      await transitionToRest(tx, {
-        tenantId,
-        houseId: address.houseId,
-        cycleId: cycle.id,
-        actorId,
-        from: house.status,
-      });
-    }
-
     return {
       stepId,
       cycleId: cycle.id,
       completedAt: completed.completedAt,
-      transitionedToRest: shouldTransition,
       requiredRemaining,
     };
   });

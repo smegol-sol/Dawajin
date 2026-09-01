@@ -5,6 +5,7 @@ import { z } from "zod";
 import { requireTenantUser } from "../lib/authContext";
 import { requireRole } from "../middleware/requireRole";
 import { completePrepStep, getPrepCycle } from "../services/prepCycleService";
+import { approvePrepStep } from "../services/prepStepApprovalService";
 import { assignPrepStep } from "../services/prepStepAssignmentService";
 
 /**
@@ -40,19 +41,11 @@ const idSchema = z.coerce.number().int().positive();
  * يبني موجّه دورة التجهيز.
  * @returns Router جاهز للتركيب داخل سلسلة requireAuth المحمية في app.ts
  */
-export function prepCycleRouter(db: Database): Router {
-  const router = Router();
-
-  router.get("/api/houses/:houseId/prep-cycle", async (req, res, next) => {
-    try {
-      const user = requireTenantUser(req);
-      const houseId = idSchema.parse(req.params.houseId);
-      res.json(await getPrepCycle(db, user.tenantId, houseId));
-    } catch (error) {
-      next(error);
-    }
-  });
-
+/**
+ * مسارات الخطوة — **مفصولةٌ لحدّ أسطر الدالّة وحده**، لا لأنها موجّه آخر:
+ * تُركَّب على نفس الموجّه فتبقى في نفس السلسلة المحمية.
+ */
+function registerStepRoutes(router: Router, db: Database): void {
   router.patch(
     "/api/prep-steps/:stepId/complete",
     requireRole("farmer", "supervisor", "owner"),
@@ -97,6 +90,38 @@ export function prepCycleRouter(db: Database): Router {
       }
     }
   );
+
+  // **المشرف يعتمد** (§12.2 صفّ «اعتماد خطوة تجهيز»: مشرف ✅ ومالك ✅) —
+  // **وهذا مُطلِق الانتقال إلى «في فترة الراحة»** لا الإكمال (القرار 239).
+  router.patch(
+    "/api/prep-steps/:stepId/approve",
+    requireRole("supervisor", "owner"),
+    async (req, res, next) => {
+      try {
+        const user = requireTenantUser(req);
+        const stepId = idSchema.parse(req.params.stepId);
+        res.json(await approvePrepStep(db, { tenantId: user.tenantId, actorId: user.id, stepId }));
+      } catch (error) {
+        next(error);
+      }
+    }
+  );
+}
+
+export function prepCycleRouter(db: Database): Router {
+  const router = Router();
+
+  router.get("/api/houses/:houseId/prep-cycle", async (req, res, next) => {
+    try {
+      const user = requireTenantUser(req);
+      const houseId = idSchema.parse(req.params.houseId);
+      res.json(await getPrepCycle(db, user.tenantId, houseId));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  registerStepRoutes(router, db);
 
   return router;
 }
