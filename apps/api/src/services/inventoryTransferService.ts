@@ -11,7 +11,12 @@ import {
 import { HttpError, type StockUnit, type UserRole } from "@dawajin/shared";
 import { and, eq, isNotNull, sql } from "drizzle-orm";
 
-import { assignmentActiveToday, visibleWarehouseCondition, type Role } from "../lib/entityScope";
+import {
+  assignmentActiveToday,
+  hasFullVisibility,
+  visibleWarehouseCondition,
+  type Role,
+} from "../lib/entityScope";
 import { computeBalance } from "../lib/inventoryBalance";
 
 /**
@@ -123,16 +128,18 @@ async function assertBothFarmsAssigned(
 }
 
 /**
- * يُصدر أمر تحويل — **والمشرف وحده يبدأه** (#159 «ثانيًا»).
+ * يُصدر أمر تحويل — **المشرف والمالك** (القرار 232).
  *
  * **و«أمين المخزن أمين حفظ لا آمر صرف»** (#161 «ثالث عشر» ٢) — **مفروضٌ هنا
  * لا موصوفًا**: `storekeeper` **لا يُصدر أمرًا** وإن كان يستلم وينفّذ ويجرد.
  *
- * **وتعارضٌ يُسمّى ولا يُطوى:** §12.2 صفّ «تحويل» يخوّل **المالك** كذلك،
- * **و#159 يجعل المشرف وحده من يبدأ** — **وهو التعارض الثاني في #159 «سابعًا»
- * المسجَّل منذ يومه**. **والمتّبع هنا حكمُ #159**: أخصُّ الحكمين وأحدثهما،
- * **والصفّ العامّ كُتب قبل أن يُفصَّل التحويل**. **يُسجَّل ولا يُوحَّد من
- * تلقاء نفسه** — توحيدُهما قرار مالك.
+ * **والتعارض الثاني في #159 «سابعًا» حُسم بضمّ المالك** (القرار 232): §12.2
+ * صفّ «تحويل» كان يخوّله و#159 «ثانيًا» يجعل المشرف وحده يبدأ — **وحُسم
+ * بالضمّ لا بترجيح أحدهما**، **لأن المالك لا يُقيَّد بالإسناد في أي مسار آخر
+ * فاستثناؤه هنا وحده شذوذ**.
+ *
+ * **وشرط الإسناد يبقى على المشرف بحرفه ولا يسري على المالك** — **لا استثناءً
+ * له بل لأنه لا إسناد له أصلًا**، ورؤيتُه الكاملة هي حكمه.
  *
  * @throws HttpError 403 دورٌ لا يُصدر · مزرعةٌ غير مُسندة · 404 مخزن/صنف ·
  *   422 كميةٌ غير موجبة · وحدةٌ لا تطابق · طرفان متطابقان
@@ -143,11 +150,15 @@ export async function createTransferOrder(
 ): Promise<{ transferId: number; status: "صادر" }> {
   const { tenantId, actorId, actorRole, fromWarehouseId, toWarehouseId } = input;
 
-  if (actorRole !== "supervisor") {
+  // **القائمة الموجبة لا المقارنة النصّية** (184 و194): دورٌ يُضاف غدًا إلى
+  // `FULL_VISIBILITY_ROLES` يرث الحكم، **و`actorRole === "owner"` كان يتركه
+  // خلفه صامتًا**.
+  const actorIsUnscoped = hasFullVisibility(actorRole);
+  if (actorRole !== "supervisor" && !actorIsUnscoped) {
     throw new HttpError(
       403,
       "forbidden",
-      "المشرف وحده يُصدر أمر التحويل — #159 «ثانيًا»، وأمين المخزن أمين حفظ لا آمر صرف",
+      "المشرف والمالك وحدهما يُصدران أمر التحويل — القرار 232، وأمين المخزن أمين حفظ لا آمر صرف",
       { role: actorRole }
     );
   }
@@ -158,12 +169,17 @@ export async function createTransferOrder(
   return db.transaction(async (tx) => {
     const from = await farmOfWarehouse(tx, tenantId, fromWarehouseId);
     const to = await farmOfWarehouse(tx, tenantId, toWarehouseId);
-    await assertBothFarmsAssigned(tx, {
-      tenantId,
-      actorId,
-      fromFarmId: from.farmId,
-      toFarmId: to.farmId,
-    });
+    // **الشرط لا يُحذف بل يُقصَر على من يسري عليه** (القرار 232): **من لا
+    // إسناد له لا يُقاس عليه شرطُ إسناد** — وبلا هذا القصر يسقط المالك في
+    // 403 `farm_not_assigned` من بابٍ آخر ولو فُتح حارسا الدور.
+    if (!actorIsUnscoped) {
+      await assertBothFarmsAssigned(tx, {
+        tenantId,
+        actorId,
+        fromFarmId: from.farmId,
+        toFarmId: to.farmId,
+      });
+    }
     await assertProductTransferable(tx, {
       tenantId,
       productId: input.productId,

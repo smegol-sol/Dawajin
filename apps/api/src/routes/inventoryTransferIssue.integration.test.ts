@@ -19,7 +19,7 @@ import { loadEnv } from "../lib/env";
 import { computeBalance, computeTotalMovements } from "../lib/inventoryBalance";
 import { assertIsTestDatabase } from "../lib/testGuard";
 import { inTransitTotal } from "../services/inventoryTransferService";
-import { farmVia, houseVia, siteVia, today } from "../test-support/hierarchy";
+import { farmVia, houseVia, seedTenant, siteVia, today } from "../test-support/hierarchy";
 import { seedActors } from "../test-support/transferFixture";
 
 /**
@@ -38,8 +38,10 @@ let tenantId: number;
 let fromWarehouseId: number;
 let toWarehouseId: number;
 let outsideWarehouseId: number;
+let foreignWarehouseId: number;
 let feedId: number;
 let ownerToken: string;
+let ownerId: number;
 let supervisorToken: string;
 let supervisorId: number;
 let otherSupervisorToken: string;
@@ -68,6 +70,17 @@ async function orderId(quantity = 20): Promise<number> {
   const res = await order(supervisorToken, defaultOrder(quantity));
   if (res.status !== 201) throw new Error(`تعذّر إصدار الأمر: ${String(res.status)}`);
   return (res.body as { transferId: number }).transferId;
+}
+
+/** مخزنٌ في مستأجرٍ آخر — **لإثبات أن العزل غير متأثر** (المبدأ السابع). */
+async function seedForeignWarehouse(): Promise<number> {
+  const foreignTenantId = await seedTenant(db, `مستأجر آخر ${S}`);
+  const [foreign] = await db
+    .insert(warehouses)
+    .values({ tenantId: foreignTenantId, name: `مركزي غريب ${S}`, level: "مركزي" })
+    .returning({ id: warehouses.id });
+  if (!foreign) throw new Error("تعذّر تجهيز مخزن المستأجر الآخر");
+  return foreign.id;
 }
 
 async function balanceOf(warehouseId: number): Promise<number> {
@@ -103,6 +116,7 @@ beforeAll(async () => {
   ({
     tenantId,
     ownerToken,
+    ownerId,
     supervisorToken,
     supervisorId,
     otherSupervisorToken,
@@ -141,7 +155,15 @@ beforeAll(async () => {
     // محجوبٌ عن المربّي فيُقاس أنه لا يراه ولا ينفّذه (القرار 229).
     { tenantId, userId: otherSupervisorId, farmId: farmOutside, startDate: today() },
     { tenantId, userId: farmerId, houseId: houseA, startDate: today() },
+    // **وإسنادُ عنبر «ب» للمشرف الثاني** — **لا إسنادُ مزرعته**: مخزنُ العنبر
+    // **يُحلّ بإسناد العنبر نفسه** في الفرض المركزي (#161 «ثانيًا»، ولا
+    // يُقرأ `warehouse_id` له أصلًا)، **فيمرّ الطبقةَ الأولى ويقف عند حارس
+    // الإسناد في الخدمة** — **وبلا هذا الصفّ يسقط الطلب في الأولى فلا يُقاس
+    // الثاني إطلاقًا**.
+    { tenantId, userId: otherSupervisorId, houseId: houseB, startDate: today() },
   ]);
+
+  foreignWarehouseId = await seedForeignWarehouse();
 
   const [feed] = await db
     .insert(products)
@@ -213,13 +235,48 @@ describe("**أمين حفظ لا آمر صرف** — #161 «ثالث عشر» ٢
   });
 
   /**
-   * **تعارضٌ مسجَّل يُثبَت ولا يُطوى** (#159 «سابعًا» ٢): §12.2 صفّ «تحويل»
-   * يخوّل المالك، **و#159 يجعل المشرف وحده من يبدأ** — **والمتّبع #159**،
-   * وتوحيدُهما قرار مالك.
+   * **التعارض حُسم بضمّ المالك** (القرار 232، وكان #159 «سابعًا» ٢): **المالك
+   * لا يُقيَّد بالإسناد في أي مسار آخر، فاستثناؤه هنا وحده شذوذ**.
    */
-  it("والمالك لا يُصدر ← 403، والمتّبع #159 لا الصفّ العامّ", async () => {
+  it("والمالك يُصدر ← 201 — القرار 232", async () => {
     const res = await order(ownerToken, defaultOrder());
+    expect(res.status).toBe(201);
+  });
+
+  /**
+   * **وهذا ما يُثبت أن الشرط لا يسري عليه، لا أن الحارس فُتح فحسب:** المالك
+   * **بلا صفّ إسنادٍ واحد في المستأجر كلّه** — **فلو بقي `assertBothFarmsAssigned`
+   * يُستدعى عليه لسقط في 403 `farm_not_assigned` من بابٍ آخر**.
+   */
+  it("والمالك يُصدر بين مزرعتين لا إسناد له في أيٍّ منهما ← 201", async () => {
+    const [row] = await db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(userAssignments)
+      .where(eq(userAssignments.userId, ownerId));
+    expect(row?.n).toBe(0);
+
+    const res = await order(ownerToken, defaultOrder());
+    expect(res.status).toBe(201);
+  });
+
+  /**
+   * **وإسقاطُ الشرط عن المالك لم يُسقطه عن المشرف** — **والمشرف الثاني هنا
+   * يبلغ المخزنين** (إسنادُ مخزنٍ صريح، 225) **فيمرّ الفرضَ المركزي**، **ولا
+   * يبلغ مزرعة «ب»** — **فالرافض هو حارسُ الخدمة وحده، والرمز يسمّيه**.
+   */
+  it("والمشرف المُسنَد لواحدة فقط يبقى 403 `farm_not_assigned`", async () => {
+    const res = await order(otherSupervisorToken, defaultOrder());
     expect(res.status).toBe(403);
+    expect((res.body as { code: string }).code).toBe("farm_not_assigned");
+  });
+
+  /** **والعزل غير متأثر** — المبدأ السابع، ووجودٌ قبل إسناد (404 قبل 403). */
+  it("والمالك على مخزنٍ خارج مستأجره ← 404", async () => {
+    const res = await order(ownerToken, {
+      ...defaultOrder(),
+      toWarehouseId: foreignWarehouseId,
+    });
+    expect(res.status).toBe(404);
   });
 });
 
