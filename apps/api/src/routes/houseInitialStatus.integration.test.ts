@@ -49,6 +49,9 @@ async function statusOf(id: number): Promise<HouseStatus> {
   return row.status;
 }
 
+/** مستأجرُ الجولة — **مرفوعٌ إلى نطاق الوحدة** ليُفلتر به كلُّ عدٍّ (القرار 252). */
+let tenantId: number;
+
 beforeAll(async () => {
   const env = loadEnv();
   const testUrl = process.env.TEST_DATABASE_URL;
@@ -59,7 +62,7 @@ beforeAll(async () => {
   await assertIsTestDatabase(db);
   app = createApp(db, env, pino({ level: "silent" }));
 
-  const tenantId = await seedTenant(db, `ميلاد ${S}`);
+  tenantId = await seedTenant(db, `ميلاد ${S}`);
   ({ token: ownerToken, id: ownerId } = await seedUser(db, {
     tenantId,
     role: "owner",
@@ -68,6 +71,22 @@ beforeAll(async () => {
   const siteId = await siteVia(app, ownerToken, `موقع ميلاد ${S}`);
   farmId = await farmVia(app, ownerToken, siteId, `مزرعة ميلاد ${S}`);
 });
+
+/**
+ * عددُ صفوف السجلّ **في مستأجر الجولة** — والفلتر شرطُ القاعدة لا تجميل
+ * (القرار 252).
+ *
+ * **وكان العدّ على الجدول كلّه**، **فينجو بالمصادفة لا بالتصميم**: مقارنةُ
+ * فارقٍ داخل الجولة تُلغي رصيدَ الجولات السابقة من الطرفين — **وتنكسر لحظة
+ * تصير الاختبارات متوازية**.
+ */
+async function countHistoryRows(): Promise<number | undefined> {
+  const rows = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(houseStatusHistory)
+    .where(eq(houseStatusHistory.tenantId, tenantId));
+  return rows[0]?.count;
+}
 
 afterAll(async () => {
   await pool.end();
@@ -224,10 +243,9 @@ describe("صفّ الميلاد في house_status_history", () => {
   });
 
   it("ميلادٌ مرفوض ← لا صفّ ولا عنبر: المعاملة واحدة", async () => {
-    const before = await db.select({ count: sql<number>`count(*)::int` }).from(houseStatusHistory);
+    const before = await countHistoryRows();
     await createRaw({ name: `مرفوض ${S}`, status: "مشغول" });
-    const after = await db.select({ count: sql<number>`count(*)::int` }).from(houseStatusHistory);
-    expect(after[0]?.count).toBe(before[0]?.count);
+    expect(await countHistoryRows()).toBe(before);
   });
 
   it("الميلاد ثم انتقالٌ: صفّان متسلسلان يُقرأ منهما الأصل", async () => {

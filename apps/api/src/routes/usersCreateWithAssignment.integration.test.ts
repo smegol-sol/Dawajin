@@ -93,6 +93,20 @@ function createUserReq(token: string, body: Record<string, unknown>) {
  * حارسًا فأنشأ ما كان يُرفض) **تُحسب في هذه**. **فالتأكيد كان يقيس تاريخ
  * القاعدة لا ذرّية هذه العملية.**
  */
+/**
+ * إسنادات **مستأجر هذه الجولة** — والفلتر شرطُ القاعدة لا تجميل (القرار 252).
+ *
+ * **وكان العدّ على الجدول كلّه بلا `where`**، **ونجا بالمصادفة لا بالتصميم**:
+ * مقارنةُ فارقٍ داخل الجولة تُلغي رصيدَ الجولات السابقة من الطرفين. **وينكسر
+ * لحظة تصير الاختبارات متوازية.**
+ */
+async function tenantAssignments(): Promise<{ id: number }[]> {
+  return db
+    .select({ id: userAssignments.id })
+    .from(userAssignments)
+    .where(eq(userAssignments.tenantId, tenantId));
+}
+
 async function countUsersWithPhone(phone: string): Promise<number> {
   const rows = await db
     .select({ id: users.id })
@@ -187,7 +201,7 @@ describe("الذرّية — أو لا يقع شيء", () => {
       houseId: reachHouseId,
     });
     expect(first.status).toBe(201);
-    const before = await db.select({ id: userAssignments.id }).from(userAssignments);
+    const before = await tenantAssignments();
 
     const second = await createUserReq(ownerToken, {
       fullName: "مكرَّر",
@@ -198,7 +212,7 @@ describe("الذرّية — أو لا يقع شيء", () => {
     expect(second.status).toBe(409);
     expect((second.body as ErrorBody).code).toBe("duplicate_phone");
 
-    const after = await db.select({ id: userAssignments.id }).from(userAssignments);
+    const after = await tenantAssignments();
     expect(after).toHaveLength(before.length);
   });
 });
