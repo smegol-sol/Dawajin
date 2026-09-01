@@ -19,7 +19,8 @@ import { loadEnv } from "../lib/env";
 import { computeBalance, computeTotalMovements } from "../lib/inventoryBalance";
 import { assertIsTestDatabase } from "../lib/testGuard";
 import { inTransitTotal } from "../services/inventoryTransferService";
-import { farmVia, houseVia, seedTenant, seedUser, siteVia, today } from "../test-support/hierarchy";
+import { farmVia, houseVia, siteVia, today } from "../test-support/hierarchy";
+import { seedActors } from "../test-support/transferFixture";
 
 /**
  * التحويل — الأمر والخروج (القرار 228، على حكم #159).
@@ -88,55 +89,6 @@ async function stock(warehouseId: number, quantity: number, expiry?: string): Pr
   });
 }
 
-interface SeededActors {
-  tenantId: number;
-  ownerToken: string;
-  supervisorToken: string;
-  supervisorId: number;
-  otherSupervisorToken: string;
-  otherSupervisorId: number;
-  farmerToken: string;
-  farmerId: number;
-  storekeeperToken: string;
-}
-
-/** المستأجر وخمسة فاعلين — مشرفان لإثبات شرط #159 «ثانيًا». */
-async function seedActors(db: Database, secret: string): Promise<SeededActors> {
-  const tenantId = await seedTenant(db, `تحويل ${S}`);
-  const { token: ownerToken } = await seedUser(db, { tenantId, role: "owner", secret });
-  const { token: supervisorToken, id: supervisorId } = await seedUser(db, {
-    tenantId,
-    role: "supervisor",
-    secret,
-  });
-  const { token: otherSupervisorToken, id: otherSupervisorId } = await seedUser(db, {
-    tenantId,
-    role: "supervisor",
-    secret,
-  });
-  const { token: farmerToken, id: farmerId } = await seedUser(db, {
-    tenantId,
-    role: "farmer",
-    secret,
-  });
-  const { token: storekeeperToken } = await seedUser(db, {
-    tenantId,
-    role: "storekeeper",
-    secret,
-  });
-  return {
-    tenantId,
-    ownerToken,
-    supervisorToken,
-    supervisorId,
-    otherSupervisorToken,
-    otherSupervisorId,
-    farmerToken,
-    farmerId,
-    storekeeperToken,
-  };
-}
-
 beforeAll(async () => {
   const env = loadEnv();
   const testUrl = process.env.TEST_DATABASE_URL;
@@ -147,7 +99,7 @@ beforeAll(async () => {
   await assertIsTestDatabase(db);
   app = createApp(db, env, pino({ level: "silent" }));
 
-  const actors = await seedActors(db, env.JWT_SECRET);
+  const actors = await seedActors(db, env.JWT_SECRET, `تحويل ${S}`);
   ({
     tenantId,
     ownerToken,
@@ -185,6 +137,9 @@ beforeAll(async () => {
     { tenantId, userId: supervisorId, farmId: farmA, startDate: today() },
     { tenantId, userId: supervisorId, farmId: farmB, startDate: today() },
     { tenantId, userId: otherSupervisorId, farmId: farmA, startDate: today() },
+    // **المشرف الثاني يبلغ «مزرعة خارج»** — كي يُبنى تحويلٌ مصدرُه مخزنٌ
+    // محجوبٌ عن المربّي فيُقاس أنه لا يراه ولا ينفّذه (القرار 229).
+    { tenantId, userId: otherSupervisorId, farmId: farmOutside, startDate: today() },
     { tenantId, userId: farmerId, houseId: houseA, startDate: today() },
   ]);
 
@@ -415,5 +370,73 @@ describe("التزامن — والقفل هنا يحمل وزنًا (خلافً
     } finally {
       holder.release();
     }
+  });
+});
+
+/** أمرٌ مصدرُه مخزنٌ في مزرعةٍ لا يبلغها إسنادُ المربّي. */
+async function outsideOrder(quantity = 20): Promise<number> {
+  const res = await order(otherSupervisorToken, {
+    fromWarehouseId: outsideWarehouseId,
+    toWarehouseId: fromWarehouseId,
+    productId: feedId,
+    quantity,
+    unit: "كيس",
+  });
+  if (res.status !== 201) throw new Error(`تعذّر الإصدار: ${String(res.status)}`);
+  return (res.body as { transferId: number }).transferId;
+}
+
+describe("فرضُ الإسناد على المخزن المشتقّ من التحويل (القرار 229)", () => {
+  it("**مربٍّ ينفّذ خروجًا من مخزن مزرعةٍ لا يبلغها إسناده ← 403، والرصيد لم يتحرّك**", async () => {
+    await stock(outsideWarehouseId, 50);
+    const id = await outsideOrder(20);
+    const before = await balanceOf(outsideWarehouseId);
+
+    const res = await issue(farmerToken, id);
+    expect(res.status).toBe(403);
+    // **الرقم هو الدليل** — لا الحالة وحدها
+    expect(await balanceOf(outsideWarehouseId)).toBe(before);
+    expect(before).toBe(50);
+  });
+
+  it("تحويلٌ غير موجود ← 404 قبل 403 (المبدأ السادس)", async () => {
+    const res = await issue(farmerToken, 99999999);
+    expect(res.status).toBe(404);
+  });
+
+  it("والمُسنَد ينفّذ من مخزنه ← 200", async () => {
+    await stock(fromWarehouseId, 40);
+    const res = await issue(farmerToken, await orderId(10));
+    expect(res.status).toBe(200);
+  });
+});
+
+describe("سردُ ما في الطريق — لا يكشف معرّف مخزنٍ محجوب (#129)", () => {
+  it("**المربّي لا يرى تحويلًا مصدرُه مخزنٌ لا يبلغه إسناده، ويرى ما يخصّه**", async () => {
+    await stock(outsideWarehouseId, 50);
+    await stock(fromWarehouseId, 50);
+    const outside = await outsideOrder(20);
+    expect((await issue(otherSupervisorToken, outside)).status).toBe(200);
+    await issue(farmerToken, await orderId(15));
+
+    const res = await request(app)
+      .get("/api/inventory/in-transit")
+      .set("Authorization", `Bearer ${farmerToken}`);
+    expect(res.status).toBe(200);
+    const { transfers } = res.body as { transfers: { fromWarehouseId: number }[] };
+    expect(transfers.map((t) => t.fromWarehouseId)).toEqual([fromWarehouseId]);
+  });
+
+  it("والمالك يرى الاثنين — رؤيةٌ كاملة", async () => {
+    await stock(outsideWarehouseId, 50);
+    await stock(fromWarehouseId, 50);
+    const outside = await outsideOrder(20);
+    expect((await issue(otherSupervisorToken, outside)).status).toBe(200);
+    await issue(farmerToken, await orderId(15));
+
+    const res = await request(app)
+      .get("/api/inventory/in-transit")
+      .set("Authorization", `Bearer ${ownerToken}`);
+    expect((res.body as { transfers: unknown[] }).transfers).toHaveLength(2);
   });
 });

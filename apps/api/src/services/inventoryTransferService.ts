@@ -11,7 +11,7 @@ import {
 import { HttpError, type StockUnit, type UserRole } from "@dawajin/shared";
 import { and, eq, isNotNull, sql } from "drizzle-orm";
 
-import { assignmentActiveToday } from "../lib/entityScope";
+import { assignmentActiveToday, visibleWarehouseCondition, type Role } from "../lib/entityScope";
 import { computeBalance } from "../lib/inventoryBalance";
 
 /**
@@ -421,7 +421,8 @@ export async function executeTransferIssue(
  */
 export async function listInTransit(
   db: Database,
-  tenantId: number
+  tenantId: number,
+  viewer: { id: number; role: Role }
 ): Promise<{ transferId: number; productId: number; quantity: number; fromWarehouseId: number }[]> {
   const rows = await db
     .select({
@@ -431,8 +432,22 @@ export async function listInTransit(
       fromWarehouseId: inventoryTransfers.fromWarehouseId,
     })
     .from(inventoryTransfers)
+    .innerJoin(
+      warehouses,
+      and(
+        eq(warehouses.id, inventoryTransfers.fromWarehouseId),
+        eq(warehouses.tenantId, inventoryTransfers.tenantId)
+      )
+    )
     .where(
-      and(eq(inventoryTransfers.tenantId, tenantId), eq(inventoryTransfers.status, "في الطريق"))
+      and(
+        eq(inventoryTransfers.tenantId, tenantId),
+        eq(inventoryTransfers.status, "في الطريق"),
+        // **وما لا يخصّ المستخدم غائبٌ من الرد — لا اسمًا ولا معرّفًا**
+        // (القرار #129): **السرد كان يكشف `fromWarehouseId` لمخزنٍ محجوب**،
+        // **والفلترة هنا بشرطٍ واحد مشترك مع الحارس** (القرار 229).
+        visibleWarehouseCondition(viewer)
+      )
     );
   return rows.map((row) => ({ ...row, quantity: Number(row.quantity) }));
 }

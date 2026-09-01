@@ -82,7 +82,9 @@ export function inventoryTransferRouter(db: Database): Router {
   router.get("/api/inventory/in-transit", async (req, res, next) => {
     try {
       const user = requireTenantUser(req);
-      res.json({ transfers: await listInTransit(db, user.tenantId) });
+      res.json({
+        transfers: await listInTransit(db, user.tenantId, { id: user.id, role: user.role }),
+      });
     } catch (error) {
       next(error);
     }
