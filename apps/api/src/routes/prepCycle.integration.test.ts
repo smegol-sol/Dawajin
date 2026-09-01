@@ -310,6 +310,15 @@ describe("إسناد الخطوة — المخالفات المتعمَّدة", 
     expect((await completeVia(f, first.id, f.farmerToken)).status).toBe(403);
   });
 
+  it("**مخالفة: مُسنَدٌ إليه لا وجود له ← 422 `assignee_not_found`**", async () => {
+    const { steps } = await openCycleForSubject(f);
+    const [first] = steps;
+    if (!first) throw new Error("لا خطوات في التجهيزة");
+    const res = await assignVia(f, first.id, f.supervisorToken, { assignedTo: 99999999 });
+    expect(res.status).toBe(422);
+    expect((res.body as { code: string }).code).toBe("assignee_not_found");
+  });
+
   it("مخالفة: المُسنَد إليه ليس مربّيًا ← 422 `assignee_not_farmer`", async () => {
     const { steps } = await openCycleForSubject(f);
     const [first] = steps;
