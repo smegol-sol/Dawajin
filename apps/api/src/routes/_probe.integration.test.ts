@@ -302,7 +302,9 @@ describe("١) تطبيع الجوال + رفض التكرار بـ 409 (decision
 
     const body = res.body as ProbeErrorResponseBody;
     expect(res.status).toBe(409);
-    expect(body.code).toBe("duplicate");
+    // **`duplicate_phone` لا `duplicate` منذ القرار 245**: صار للقيد فحصٌ مسبق
+    // في `usersService`، **فتخصَّص رمزه ليتطابق المساران** (#119).
+    expect(body.code).toBe("duplicate_phone");
     expect(body.message).toContain("رقم الجوال");
   });
 

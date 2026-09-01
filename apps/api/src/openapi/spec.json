@@ -1638,6 +1638,176 @@
           }
         }
       }
+    },
+    "/api/users": {
+      "get": {
+        "summary": "سرد مستخدمي المستأجر (owner فقط)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "مستخدمو المستأجر مرتَّبين بالاسم",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      },
+      "post": {
+        "summary": "إنشاء مستخدم بكلمة مؤقتة مولَّدة (owner فقط)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateUserRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "المستخدم بعد الإنشاء ومعه كلمته المؤقتة — **يولد `mustChangePassword: true`**",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatedUserResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          }
+        }
+      }
+    },
+    "/api/users/{userId}/deactivate": {
+      "post": {
+        "summary": "تعطيل حساب (owner فقط)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "المستخدم بعد التعطيل — **خاملة إن كان على الحالة نفسها فلا أثر يُكتب**",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "تعطيل الذات (`cannot_deactivate_self`) — `requireLiveSession` يقرأ `is_active` تحت كل طلب فيقفل الباب على صاحب المفتاح"
+          }
+        }
+      }
+    },
+    "/api/users/{userId}/activate": {
+      "post": {
+        "summary": "إعادة تفعيل حساب (owner فقط)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "المستخدم بعد التفعيل — **خاملة إن كان على الحالة نفسها فلا أثر يُكتب**",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2484,6 +2654,85 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 500
+          }
+        }
+      },
+      "User": {
+        "type": "object",
+        "required": ["id", "fullName", "role", "phone", "isActive", "mustChangePassword"],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "معرّف داخلي — يُرسَل ولا يُعرَض (§12)"
+          },
+          "fullName": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "role": {
+            "type": "string",
+            "enum": ["farmer", "supervisor", "vet", "owner", "storekeeper"]
+          },
+          "phone": {
+            "type": "string",
+            "maxLength": 30,
+            "description": "كما أدخله المالك — والمخزَّن للمقارنة صيغة E.164 ولا تُعاد"
+          },
+          "isActive": {
+            "type": "boolean"
+          },
+          "mustChangePassword": {
+            "type": "boolean"
+          },
+          "lastActiveAt": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          }
+        }
+      },
+      "UserListResponse": {
+        "type": "object",
+        "required": ["users"],
+        "properties": {
+          "users": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/User"
+            }
+          }
+        }
+      },
+      "CreateUserRequest": {
+        "type": "object",
+        "required": ["fullName", "role", "phone"],
+        "description": "**لا حقل كلمة مرور** — تُولَّد في الخادم حصرًا (القرار #100)",
+        "properties": {
+          "fullName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "role": {
+            "type": "string",
+            "enum": ["farmer", "supervisor", "vet", "owner", "storekeeper"]
+          },
+          "phone": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 30
+          }
+        }
+      },
+      "CreatedUserResponse": {
+        "type": "object",
+        "required": ["user", "temporaryPassword"],
+        "properties": {
+          "user": {
+            "$ref": "#/components/schemas/User"
+          },
+          "temporaryPassword": {
+            "type": "string",
+            "description": "**تُعاد مرة واحدة ولا تُخزَّن بنصّها** — تصل صاحبها بوسيط بشري"
           }
         }
       }

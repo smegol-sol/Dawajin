@@ -100,7 +100,6 @@ interface ConstraintResponse {
 const DEFAULT_DUPLICATE_CODE = "duplicate";
 
 const CONSTRAINT_MESSAGES: Record<string, string> = {
-  users_tenant_phone_uq: "رقم الجوال مستخدم بالفعل لمستخدم آخر في هذا الحساب",
   users_platform_phone_unique: "رقم الجوال مستخدم بالفعل",
   daily_logs_batch_date_uq: "يوجد سجل محفوظ لهذا اليوم بالفعل",
   // **قيدا استبعاد التداخل، لا فهرسان فريدان** (القرار #158 حكم ٢، والقرار
@@ -117,8 +116,18 @@ const CONSTRAINT_MESSAGES: Record<string, string> = {
   breed_standards_global_breed_day_uq: "يوجد معيار عالمي لهذه السلالة واليوم بالفعل",
 };
 
+/**
+ * **تكرار رقم الجوال داخل المستأجر** — مُصدَّرٌ لأن `usersService` يرميه بنفسه
+ * قبل أن يصل الفهرس (القرار 245). **والمصدر واحد فلا يفترق المساران.**
+ */
+export const DUPLICATE_PHONE = {
+  code: "duplicate_phone",
+  message: "رقم الجوال مستخدم بالفعل لمستخدم آخر في هذا الحساب",
+} as const;
+
 /** القيود التي يقابلها فحص مسبق في طبقة الخدمة — الرمز والرسالة يتطابقان. */
 const CONSTRAINT_OVERRIDES: Record<string, ConstraintResponse> = {
+  users_tenant_phone_uq: DUPLICATE_PHONE,
   sites_tenant_name_uq: { code: "duplicate_name", message: "يوجد موقع بهذا الاسم" },
   farms_site_name_uq: {
     code: "duplicate_name",
