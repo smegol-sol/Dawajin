@@ -3,6 +3,11 @@ import { HttpError, normalizePhoneE164, type UserRole } from "@dawajin/shared";
 import bcrypt from "bcryptjs";
 import { and, asc, eq } from "drizzle-orm";
 
+import {
+  insertAssignmentWithin,
+  type AssignmentCard,
+  type AssignmentLevel,
+} from "./userAssignmentsService";
 import { writeAuditLog } from "../lib/auditLog";
 import type { Env } from "../lib/env";
 import { DUPLICATE_PHONE } from "../lib/pgErrors";
@@ -64,12 +69,17 @@ export interface CreateUserInput {
   fullName: string;
   role: UserRole;
   phone: string;
+  /** إسنادٌ يُنشأ **في نفس المعاملة** — اختياريّ (القرار 250). */
+  level?: AssignmentLevel | undefined;
+  startDate?: string | undefined;
 }
 
 /** **الكلمة تُعاد مرة واحدة ولا تُخزَّن بنصّها** — تصل صاحبها بوسيط بشري. */
 export interface CreatedUser {
   user: UserCard;
   temporaryPassword: string;
+  /** يحضر حين طُلب الإسناد وحده — **وغيابُه يعني أنه لم يُطلب لا أنه أخفق**. */
+  assignment?: AssignmentCard;
 }
 
 /**
@@ -99,7 +109,7 @@ export async function createUser(
   assertGeneratedTemporaryPassword(temporaryPassword);
   const passwordHash = await bcrypt.hash(temporaryPassword, env.BCRYPT_ROUNDS);
 
-  const user = await db.transaction(async (tx) => {
+  const outcome = await db.transaction(async (tx) => {
     await assertPhoneFree(tx, input.tenantId, phoneE164);
 
     const [created] = await tx
@@ -125,10 +135,23 @@ export async function createUser(
       action: "create",
       after: created,
     });
-    return created;
+
+    // **الإسناد في نفس المعاملة — أو لا يقع شيء** (القرار 250): رفضُ الإسناد
+    // **يُسقط المستخدم معه**، فلا يبقى حسابٌ بلا إسنادٍ طُلب له، ولا إسنادٌ
+    // يتيم. **والحكم لا يُكتب هنا** بل يُستدعى من بيته الوحيد.
+    if (input.level === undefined) return { user: created };
+    const assignment = await insertAssignmentWithin(tx, {
+      tenantId: input.tenantId,
+      actorId: input.actorId,
+      userId: created.id,
+      role: created.role,
+      level: input.level,
+      startDate: input.startDate,
+    });
+    return { user: created, assignment };
   });
 
-  return { user, temporaryPassword };
+  return { ...outcome, temporaryPassword };
 }
 
 export interface SetUserActiveInput {

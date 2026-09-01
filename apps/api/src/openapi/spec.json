@@ -1667,7 +1667,7 @@
         }
       },
       "post": {
-        "summary": "إنشاء مستخدم بكلمة مؤقتة مولَّدة (owner فقط)",
+        "summary": "إنشاء مستخدم بكلمة مؤقتة مولَّدة، وإسنادٌ اختياريّ في نفس المعاملة (owner فقط)",
         "security": [
           {
             "bearerAuth": []
@@ -1685,7 +1685,7 @@
         },
         "responses": {
           "201": {
-            "description": "المستخدم بعد الإنشاء ومعه كلمته المؤقتة — **يولد `mustChangePassword: true`**",
+            "description": "المستخدم بعد الإنشاء ومعه كلمته المؤقتة — **يولد `mustChangePassword: true`**، ومعه إسنادُه إن طُلب",
             "content": {
               "application/json": {
                 "schema": {
@@ -1705,6 +1705,19 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "description": "مستوًى لا يقبله الدور (`assignment_level_not_allowed_for_role`) · مخزنٌ ليس مخزن موقع (`warehouse_not_site_level`) · بدايةٌ ليست اليوم (`assignment_start_not_today`) — **وفي كلٍّ منها لا يُنشأ المستخدم أصلًا**",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
           }
         }
       }
@@ -2880,7 +2893,8 @@
       "CreateUserRequest": {
         "type": "object",
         "required": ["fullName", "role", "phone"],
-        "description": "**لا حقل كلمة مرور** — تُولَّد في الخادم حصرًا (القرار #100)",
+        "additionalProperties": false,
+        "description": "**لا حقل كلمة مرور** — تُولَّد في الخادم حصرًا (القرار #100). **وحقول المستوى مسطَّحة لا متداخلة** — مسحُ الجسم في الفرض المركزي يقرأ المستوى الأعلى وحده، فتعشيشُها يُخفيها عنه (القرار 250)؛ ومفتاحٌ مجهول يُردّ 400.",
         "properties": {
           "fullName": {
             "type": "string",
@@ -2895,6 +2909,24 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 30
+          },
+          "houseId": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "إسنادٌ اختياريّ في نفس المعاملة — **مستوًى واحد على الأكثر**"
+          },
+          "farmId": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "warehouseId": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "startDate": {
+            "type": "string",
+            "format": "date",
+            "description": "اختياريّ — **وإن ذُكر فبتاريخ اليوم حصرًا**"
           }
         }
       },
@@ -2908,6 +2940,14 @@
           "temporaryPassword": {
             "type": "string",
             "description": "**تُعاد مرة واحدة ولا تُخزَّن بنصّها** — تصل صاحبها بوسيط بشري"
+          },
+          "assignment": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Assignment"
+              }
+            ],
+            "description": "يحضر **حين طُلب الإسناد وحده** — وغيابُه يعني أنه لم يُطلب لا أنه أخفق"
           }
         }
       },
