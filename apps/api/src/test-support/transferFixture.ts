@@ -10,6 +10,7 @@ import { seedTenant, seedUser } from "./hierarchy";
 export interface SeededActors {
   tenantId: number;
   ownerToken: string;
+  ownerId: number;
   supervisorToken: string;
   supervisorId: number;
   otherSupervisorToken: string;
@@ -26,7 +27,11 @@ export async function seedActors(
   label: string
 ): Promise<SeededActors> {
   const tenantId = await seedTenant(db, label);
-  const { token: ownerToken } = await seedUser(db, { tenantId, role: "owner", secret });
+  const { token: ownerToken, id: ownerId } = await seedUser(db, {
+    tenantId,
+    role: "owner",
+    secret,
+  });
   const { token: supervisorToken, id: supervisorId } = await seedUser(db, {
     tenantId,
     role: "supervisor",
@@ -50,6 +55,7 @@ export async function seedActors(
   return {
     tenantId,
     ownerToken,
+    ownerId,
     supervisorToken,
     supervisorId,
     otherSupervisorToken,

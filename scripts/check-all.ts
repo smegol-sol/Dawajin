@@ -21,6 +21,7 @@ import { checkEnumUsage } from "./checks/enum-usage";
 import { checkEslint } from "./checks/eslint";
 import { checkLayoutRtl } from "./checks/layout-rtl";
 import { checkLogoSingleSource } from "./checks/logo-single-source";
+import { checkRoleGuardOwner } from "./checks/role-guard-owner";
 import { checkMigrationChain } from "./checks/migration-chain";
 import { checkNavCoverage } from "./checks/nav-coverage";
 import { checkOpenApiCoverage } from "./checks/openapi-coverage";
@@ -43,6 +44,7 @@ const checks: { name: string; run: CheckFn }[] = [
   { name: "المفتاح المركَّب", run: checkCompositeFk },
   { name: "سلسلة الترحيلات", run: checkMigrationChain },
   { name: "الشعار مصدر واحد", run: checkLogoSingleSource },
+  { name: "حارس الدور يذكر المالك", run: checkRoleGuardOwner },
   { name: "typecheck", run: checkTypecheck },
   { name: "ESLint", run: checkEslint },
   { name: "Prettier", run: checkPrettier },

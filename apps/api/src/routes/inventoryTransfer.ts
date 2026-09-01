@@ -37,24 +37,28 @@ const orderSchema = z.object({
 export function inventoryTransferRouter(db: Database): Router {
   const router = Router();
 
-  // **المشرف وحده يُصدر** (#159 «ثانيًا») — والحارس هنا شكلٌ، والحكم في الخدمة
-  // لأنه يقرأ الإسناد لحظة الإصدار.
-  router.post("/api/inventory/transfers", requireRole("supervisor"), async (req, res, next) => {
-    try {
-      const user = requireTenantUser(req);
-      const input = orderSchema.parse(req.body);
-      res.status(201).json(
-        await createTransferOrder(db, {
-          tenantId: user.tenantId,
-          actorId: user.id,
-          actorRole: user.role,
-          ...input,
-        })
-      );
-    } catch (error) {
-      next(error);
+  // **المالك والمشرف يُصدران** (القرار 232) — **والحارس هنا شكلٌ، والحكم في
+  // الخدمة** لأنه يقرأ الإسناد لحظة الإصدار.
+  router.post(
+    "/api/inventory/transfers",
+    requireRole("supervisor", "owner"),
+    async (req, res, next) => {
+      try {
+        const user = requireTenantUser(req);
+        const input = orderSchema.parse(req.body);
+        res.status(201).json(
+          await createTransferOrder(db, {
+            tenantId: user.tenantId,
+            actorId: user.id,
+            actorRole: user.role,
+            ...input,
+          })
+        );
+      } catch (error) {
+        next(error);
+      }
     }
-  });
+  );
 
   // **مربّي العنبر المرسِل ينفّذ ويسجّل الخروج** (#159 «ثانيًا»)، **والمشرف
   // معه** لأنه صاحب مخزن الموقع. **والمالك برؤيته الكاملة.**
