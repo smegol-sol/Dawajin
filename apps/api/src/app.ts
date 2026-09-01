@@ -21,6 +21,7 @@ import { authPublicRouter } from "./routes/authPublic";
 import { farmsRouter } from "./routes/farms";
 import { healthRouter } from "./routes/health";
 import { housesRouter } from "./routes/houses";
+import { inventoryRouter } from "./routes/inventory";
 import { platformAuthRouter } from "./routes/platformAuth";
 import { prepCycleRouter } from "./routes/prepCycle";
 import { settingsRouter } from "./routes/settings";
@@ -140,6 +141,7 @@ export function createApp(db: Database, env: Env, logger: Logger): Express {
   api.use(farmsRouter(db));
   api.use(housesRouter(db));
   api.use(prepCycleRouter(db));
+  api.use(inventoryRouter(db));
   app.use(api);
 
   app.use(errorHandler(logger));
