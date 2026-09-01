@@ -27,6 +27,7 @@ import { platformAuthRouter } from "./routes/platformAuth";
 import { prepCycleRouter } from "./routes/prepCycle";
 import { settingsRouter } from "./routes/settings";
 import { sitesRouter } from "./routes/sites";
+import { userAssignmentsRouter } from "./routes/userAssignments";
 import { usersRouter } from "./routes/users";
 
 /**
@@ -146,6 +147,7 @@ export function createApp(db: Database, env: Env, logger: Logger): Express {
   }
   api.use(authProtectedRouter(db, env));
   api.use(usersRouter(db, env));
+  api.use(userAssignmentsRouter(db));
   api.use(settingsRouter(db));
   api.use(sitesRouter(db));
   api.use(farmsRouter(db));

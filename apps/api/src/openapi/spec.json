@@ -1808,6 +1808,181 @@
           }
         }
       }
+    },
+    "/api/users/{userId}/assignments": {
+      "get": {
+        "summary": "سرد إسنادات مستخدم — السارية والمنتهية (owner فقط)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "إسنادات المستخدم، الأحدث أولًا",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssignmentListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "post": {
+        "summary": "إنشاء إسناد يبدأ اليوم وبلا نهاية (owner فقط)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAssignmentRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "الإسناد بعد الإنشاء",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Assignment"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "مستوًى لا يقبله الدور (`assignment_level_not_allowed_for_role`) · مخزنٌ ليس مخزن موقع (`warehouse_not_site_level`) · بدايةٌ ليست اليوم (`assignment_start_not_today`)"
+          }
+        }
+      }
+    },
+    "/api/users/{userId}/assignments/{assignmentId}/end": {
+      "post": {
+        "summary": "إنهاء مدّة الإسناد — **فعلٌ مسمًّى لا حذف** (owner فقط)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "assignmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "الإسناد بعد ضبط نهايته اليوم — **الصفّ باقٍ**",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Assignment"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "مدّةٌ منتهية سلفًا (`assignment_already_ended`)"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2733,6 +2908,72 @@
           "temporaryPassword": {
             "type": "string",
             "description": "**تُعاد مرة واحدة ولا تُخزَّن بنصّها** — تصل صاحبها بوسيط بشري"
+          }
+        }
+      },
+      "Assignment": {
+        "type": "object",
+        "required": ["id", "userId", "houseId", "farmId", "warehouseId", "startDate", "endDate"],
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "userId": {
+            "type": "integer"
+          },
+          "houseId": {
+            "type": ["integer", "null"]
+          },
+          "farmId": {
+            "type": ["integer", "null"]
+          },
+          "warehouseId": {
+            "type": ["integer", "null"]
+          },
+          "startDate": {
+            "type": "string",
+            "format": "date",
+            "description": "**اليوم دائمًا** — بساعة القاعدة لا الخادم"
+          },
+          "endDate": {
+            "type": ["string", "null"],
+            "format": "date",
+            "description": "فارغة = سريان بلا أجل؛ ومضبوطة = **آخر يوم مسؤولية شاملًا**"
+          }
+        }
+      },
+      "AssignmentListResponse": {
+        "type": "object",
+        "required": ["assignments"],
+        "properties": {
+          "assignments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Assignment"
+            }
+          }
+        }
+      },
+      "CreateAssignmentRequest": {
+        "type": "object",
+        "description": "**مستوًى واحدٌ بالضبط**: عنبر (مربّي) · مزرعة (مشرف·طبيب) · مخزن موقع (مشرف — القرار 247)",
+        "properties": {
+          "houseId": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "farmId": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "warehouseId": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "startDate": {
+            "type": "string",
+            "format": "date",
+            "description": "اختياريّ — **وإن ذُكر فبتاريخ اليوم حصرًا**"
           }
         }
       }
