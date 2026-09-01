@@ -243,7 +243,7 @@ workspace/
 
 **خادم:**
 - `POST /shipments` (بفئته: علف+مستلزمات) + `PATCH /shipments/:id/dispute` (فتح فقط، الحسم للمالك)
-- `POST /inventory/warehouse-receipt` · `POST /inventory/transfer` · `POST /inventory/stocktake` · `POST /inventory/wastage` (بفئته)
+- ~~`POST /inventory/warehouse-receipt`~~ **✅ بُني بالقرار 227** (الفئة على الدور من §12.2، والوحدة تُطابَق بالصنف، ومخزنٌ معطَّل لا يُستلم فيه — **وحدودٌ ثلاثة معلنة: لا مورّد على الحركة · و`storekeeper` يرفضه الفرض المركزي · وفئتان للمالك وحده**) · `POST /inventory/transfer` · `POST /inventory/stocktake` · `POST /inventory/wastage` (بفئته)
 - `PATCH /houses/:id/status` بآلة الحالات السبع كاملة (قفل → إعادة قراءة الحالة والحرّاس تحت القفل → مسار انتقال صالح → `min_rest_days` → إغلاق الدورة، أو 422 بسبب واضح)
 - `GET /houses/:houseId/prep-cycle` + `PATCH /prep-steps/:stepId/complete` (انتقال تلقائي لـ"في فترة الراحة" عند اكتمال كل الخطوات الإلزامية)
 - `POST /daily-logs/:id/review` (تأكيد = سجل تصحيح + حركة معاكسة بالفرق · رفض = سبب إلزامي)

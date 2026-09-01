@@ -1218,6 +1218,68 @@
           }
         }
       }
+    },
+    "/api/inventory/warehouse-receipt": {
+      "post": {
+        "summary": "استلام من مورّد — حركة موجبة في الدفتر (القرار 227)",
+        "description": "§13.2 «استلام (+) مخزن». قفلُ صفّ المخزن قبل الكتابة (شرط القرار 223، وهذا أول مسار يرثه)، والرصيد المُعاد مقروءٌ بـcomputeBalance تحت نفس المعاملة. والفئة تُفرض على الدور من §12.2. ولا تحمل الحركة مورّدها — لا عمود supplier_id في inventory_movements، وهو حدٌّ معلن في القرار 227.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WarehouseReceiptRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "الحركة والرصيد بعدها",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WarehouseReceiptResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "description": "دورٌ خارج §12.2، أو فئةٌ لا يستلمها هذا الدور، أو مخزنٌ لا يبلغه إسناده",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "description": "كميةٌ غير موجبة (`quantity_not_positive`) · وحدةٌ لا تطابق الصنف (`unit_mismatch`) · مخزنٌ معطَّل (`warehouse_inactive`) · صنفٌ معطَّل (`product_inactive`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1970,6 +2032,71 @@
           }
         },
         "required": ["stepId", "cycleId", "completedAt", "transitionedToRest", "requiredRemaining"]
+      },
+      "WarehouseReceiptRequest": {
+        "type": "object",
+        "required": ["warehouseId", "productId", "quantity", "unit"],
+        "properties": {
+          "warehouseId": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "يمسحه enforceEntityAccess من الجسم — الفرض المركزي لا فحصٌ في الموجّه"
+          },
+          "productId": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "quantity": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "description": "موجبة دائمًا — §13.2 «استلام (+)»"
+          },
+          "unit": {
+            "type": "string",
+            "enum": ["عبوة", "زجاجة", "كيس", "لتر", "كجم", "قطعة"],
+            "description": "يجب أن تطابق stock_unit للصنف، وإلا 422 unit_mismatch"
+          },
+          "notes": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "receivedExpiryDate": {
+            "type": "string",
+            "format": "date",
+            "description": "يُلتقط لحظة الاستلام أو لا يُلتقط أبدًا (القرار 198) — اختياريّ، ولا وثيقة توجبه"
+          },
+          "receivedWithdrawalDays": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "receivedStorageConditions": {
+            "type": "string",
+            "enum": ["عادي", "مبرّد 2-8°م", "مجمّد"]
+          }
+        }
+      },
+      "WarehouseReceiptResult": {
+        "type": "object",
+        "properties": {
+          "movementId": {
+            "type": "integer"
+          },
+          "warehouseId": {
+            "type": "integer"
+          },
+          "productId": {
+            "type": "integer"
+          },
+          "quantity": {
+            "type": "number"
+          },
+          "balanceAfter": {
+            "type": "number",
+            "description": "مقروءٌ بـcomputeBalance تحت نفس المعاملة والقفل"
+          }
+        },
+        "required": ["movementId", "warehouseId", "productId", "quantity", "balanceAfter"]
       }
     },
     "responses": {
