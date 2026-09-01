@@ -2,11 +2,7 @@ import { render } from "@testing-library/react-native";
 
 import { HouseTile } from "@/components/infrastructure/SiteCards";
 import { statusFill } from "@/constants/theme";
-import {
-  houseStatusIcon,
-  houseStatusShortLabel,
-  houseStatusTone,
-} from "@/lib/houseStatusTone";
+import { houseStatusIcon, houseStatusShortLabel, houseStatusTone } from "@/lib/houseStatusTone";
 import type { HouseCard } from "@/lib/infrastructureApi";
 
 /**
@@ -84,14 +80,18 @@ describe("مربّع العنبر — لون وأيقونة ونص معًا", ()
   });
 
   it("«النوع غير محدَّد» يُكتب ولا يُحذف — غيابه معلومة", () => {
-    const view = render(<HouseTile house={{
+    const view = render(
+      <HouseTile
+        house={{
           id: 2,
           farmId: 9,
           name: "عنبر 2",
           type: null,
           status: "مشغول",
           waterTankCapacityL: null,
-        }} />);
+        }}
+      />
+    );
     expect(view.getByText("النوع غير محدَّد")).toBeTruthy();
   });
 

@@ -1,3 +1,5 @@
+import type { HouseCreatableStatus } from "@dawajin/shared";
+
 import { apiClient } from "./api";
 import { toApiFailure } from "./apiError";
 import type { LoginFailure } from "./authErrors";
@@ -108,17 +110,24 @@ export async function updateFarm(
 }
 
 /**
- * **الحالة الابتدائية إلزاميّة على العقد** (القرار 222): الخادم يرفض الإنشاء
- * بلا حالة، **ولا افتراضي في القاعدة يسدّ مسدّها**.
+ * **الحالة الابتدائية إلزاميّة على العقد** (القرار 222) — **ويختارها
+ * المستخدم** (القرار 226، §7-ب البند 40): **لا قيمة تُرسَل نيابةً عنه**.
  *
- * **وشاشة البنية التحتية لا تسأل عنها بعد** — فتُرسَل «جاهز للإسكان» صراحةً
- * **ريثما تُبنى خانةُ الاختيار**، **وهذا حدٌّ معلن لا سكوت**: العنبر الذي
- * يُنشأ من الشاشة اليوم يُدَّعى له جاهزية، **وهو ما رفضه 186 في القاعدة
- * وينتظر إصلاحه في الواجهة** (§7-ب البند 40، شقّ الشاشة).
+ * **والسبب يُرسَل حين يُختار الميلاد خارج الخدمة ولا يُرسَل فارغًا** — الخادم
+ * يوجبه على «تحت الصيانة» و«معطّل» وحدهما (القرار 222).
  */
-export async function createHouse(token: string, farmId: number, name: string): Promise<void> {
+export async function createHouse(
+  token: string,
+  farmId: number,
+  input: { name: string; status: HouseCreatableStatus; reason?: string }
+): Promise<void> {
+  const reason = input.reason?.trim();
   await apiClient
-    .post(`/farms/${String(farmId)}/houses`, { name, status: "جاهز للإسكان" }, auth(token))
+    .post(
+      `/farms/${String(farmId)}/houses`,
+      { name: input.name, status: input.status, ...(reason ? { reason } : {}) },
+      auth(token)
+    )
     .catch(fail);
 }
 

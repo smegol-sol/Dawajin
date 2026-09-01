@@ -5,8 +5,8 @@ import { infrastructureErrorMessage } from "@/lib/infrastructureErrors";
  * رسالة كل فشل — **قرار منتج لا تفصيل تقني**: الفرق بين «لم يعد لك» و«لم يعد
  * موجودًا» يقرؤه المستخدم في الميدان ويتصرف عليه.
  */
-function failure(status: number | null): InfrastructureRequestError {
-  return new InfrastructureRequestError({ status, code: null });
+function failure(status: number | null, code: string | null = null): InfrastructureRequestError {
+  return new InfrastructureRequestError({ status, code });
 }
 
 describe("رسائل فشل تحميل البنية التحتية", () => {
@@ -36,5 +36,29 @@ describe("رسائل فشل تحميل البنية التحتية", () => {
     expect(infrastructureErrorMessage(new Error("شيء آخر"))).toBe(
       "تعذّر تحميل البيانات — أعد المحاولة"
     );
+  });
+});
+
+/**
+ * **422 حكمٌ رفضه الخادم لا عطبٌ في التحميل** (القرار 226) — **والرسالة العامة
+ * كانت تكذب مرتين**: العملية حفظٌ لا تحميل، والسبب معلوم لا مجهول.
+ */
+describe("422 — رفضُ حكمٍ يصل المستخدم مفهومًا لا خامًا", () => {
+  it("`reason_required` ← يطلب السبب بلفظه لا برمزه", () => {
+    expect(infrastructureErrorMessage(failure(422, "reason_required"))).toBe(
+      "اكتب سبب خروج العنبر من الخدمة"
+    );
+  });
+
+  it("`invalid_initial_status` ← يقول إن الحالة غير صالحة للإنشاء", () => {
+    expect(infrastructureErrorMessage(failure(422, "invalid_initial_status"))).toContain(
+      "لا يُنشأ عنبر في هذه الحالة"
+    );
+  });
+
+  it("رمزٌ 422 غير معروف ← يُقال رفضًا لا عطبَ تحميل", () => {
+    const message = infrastructureErrorMessage(failure(422, "something_new"));
+    expect(message).toContain("رُفض");
+    expect(message).not.toContain("تحميل");
   });
 });

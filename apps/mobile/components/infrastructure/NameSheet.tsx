@@ -24,6 +24,7 @@ export function NameSheet({
   initialValue,
   extraError,
   children,
+  blockSubmit,
 }: {
   form: NameSheetForm;
   createTitle: string;
@@ -33,6 +34,8 @@ export function NameSheet({
   /** خطأ إضافي يخصّ حقلًا آخر في الورقة — مصادر الطاقة مثلًا. */
   extraError?: string | null;
   children?: ReactNode;
+  /** سببُ تعطيل الحفظ حين ينقص حقلٌ إضافيّ — يمرّ كما هو إلى الورقة. */
+  blockSubmit?: string | null | undefined;
 }) {
   return (
     <EntityFormSheet
@@ -44,6 +47,7 @@ export function NameSheet({
       errorMessage={form.errorMessage ?? extraError ?? null}
       onClose={form.close}
       onSubmit={form.submit}
+      blockSubmit={blockSubmit}
     >
       {children}
     </EntityFormSheet>

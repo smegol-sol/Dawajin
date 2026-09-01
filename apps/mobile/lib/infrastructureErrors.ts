@@ -10,6 +10,13 @@ import { InfrastructureRequestError } from "./infrastructureApi";
  * **و404 ليس نفسه:** الكيان اختفى فعلًا (حُذف أو لم يوجد قط). فصلهما مقصود —
  * ودمجهما كان سيخفي فرق «لم يعد لك» عن «لم يعد موجودًا».
  */
+/** رسائل 422 المعروفة — وما لا يُعرف يُقال صراحةً أنه رفضٌ لا عطب. */
+function validationMessage(code: string | null): string {
+  if (code === "reason_required") return "اكتب سبب خروج العنبر من الخدمة";
+  if (code === "invalid_initial_status") return "لا يُنشأ عنبر في هذه الحالة — اختر غيرها";
+  return "رُفض الطلب — راجع ما أدخلته";
+}
+
 export function infrastructureErrorMessage(error: unknown): string {
   if (!(error instanceof InfrastructureRequestError)) {
     return "تعذّر تحميل البيانات — أعد المحاولة";
@@ -20,5 +27,13 @@ export function infrastructureErrorMessage(error: unknown): string {
   if (status === 403) return "لم يعد هذا ضمن ما أُسند إليك — عد للقائمة السابقة";
   if (status === 404) return "لم يعد موجودًا — ربما حُذف";
   if (status === 401) return "انتهت الجلسة — سجّل الدخول من جديد";
+
+  // **422 حكمٌ رفضه الخادم لا عطبٌ في التحميل** (القرار 226): الرسالة العامة
+  // تقول «تعذّر تحميل البيانات» **عن حفظٍ رُفض لسببٍ معلوم** — فيقرأ المستخدم
+  // عطبًا حيث لا عطب. **والنصّ يُكتب هنا بالرمز لا يُنقل من الخادم خامًا**:
+  // الرمز عقدٌ ثابت، **وصياغةُ ما يقرؤه المستخدم تخصّ الشاشة** (والرسالة
+  // الخام لا تصل أصلًا — `toApiFailure` يحمل الحالة والرمز وحدهما).
+  if (status === 422) return validationMessage(error.failure.code);
+
   return "تعذّر تحميل البيانات — أعد المحاولة";
 }
