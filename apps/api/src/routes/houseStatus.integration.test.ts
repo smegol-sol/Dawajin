@@ -19,6 +19,7 @@ import { createApp } from "../app";
 import { loadEnv } from "../lib/env";
 import { assertIsTestDatabase } from "../lib/testGuard";
 import { farmVia, houseVia, seedTenant, seedUser, siteVia, today } from "../test-support/hierarchy";
+import { openCycleRow } from "../test-support/prepCycleFixture";
 
 /**
  * `PATCH /api/houses/:houseId/status` — آلة الحالة (القرار 220).
@@ -81,18 +82,17 @@ function patchStatus(
 }
 
 /** دورة تجهيز مفتوحة براحة بدأت قبل `startedDaysAgo` ومدة `targetDays`. */
-async function openCycle(id: number, startedDaysAgo: number, targetDays: number): Promise<number> {
-  const [row] = await db
-    .insert(housePrepCycles)
-    .values({
-      tenantId: tenantAId,
-      houseId: id,
-      restTargetDays: targetDays,
-      restStartedAt: sql`now() - make_interval(days => CAST(${startedDaysAgo} AS integer))`,
-    })
-    .returning({ id: housePrepCycles.id });
-  if (!row) throw new Error("تعذّر إنشاء دورة التجهيز في التجهيزة");
-  return row.id;
+async function openCycle(
+  id: number,
+  startedDaysAgo: number | null,
+  targetDays: number
+): Promise<number> {
+  return openCycleRow(db, {
+    tenantId: tenantAId,
+    houseId: id,
+    restTargetDays: targetDays,
+    startedDaysAgo,
+  });
 }
 
 async function clearCycles(id: number): Promise<void> {
@@ -304,6 +304,17 @@ describe("حارس الراحة — المدة من الدورة لا من ال�
     expect(res.status).toBe(422);
     expect((res.body as { code: string }).code).toBe("rest_not_elapsed");
     await db.execute(sql`UPDATE tenants SET min_rest_days = 10 WHERE id = ${tenantAId}`);
+  });
+
+  it("**دورةٌ مفتوحة ولم تبدأ الراحة ← 422 `rest_not_started`**", async () => {
+    // **دورةٌ بلا `rest_started_at`** — تقع حين يُنقل العنبر إلى الراحة بمسار
+    // الحالة قبل أن يُطلقها اعتمادُ الخطوات (القرار 239). **وهي غير حالة
+    // «بلا دورة» أدناه**: تلك لا دورة لها، وهذه لها دورةٌ لم تبدأ راحتُها.
+    await setStatus(subjectId, "في فترة الراحة");
+    await openCycle(subjectId, null, 10);
+    const res = await patchStatus(subjectId, ownerToken, { status: "جاهز للإسكان" });
+    expect(res.status).toBe(422);
+    expect((res.body as { code: string }).code).toBe("rest_not_started");
   });
 
   it("عنبرٌ في الراحة بلا دورة ← 422 `no_open_prep_cycle` لا تمرير صامت", async () => {

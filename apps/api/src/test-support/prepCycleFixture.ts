@@ -253,3 +253,28 @@ export async function approveAllRequiredBut(
     }
   }
 }
+
+/**
+ * دورةٌ مباشرةً في القاعدة — **لاختبارات حارس الراحة** التي تحتاج ضبط
+ * `rest_started_at` بدقّة. **و`startedDaysAgo === null` يعني دورةً لم تبدأ
+ * راحتُها بعد** (حالة `rest_not_started`، القرار 242).
+ */
+export async function openCycleRow(
+  db: Database,
+  args: { tenantId: number; houseId: number; restTargetDays: number; startedDaysAgo: number | null }
+): Promise<number> {
+  const [row] = await db
+    .insert(housePrepCycles)
+    .values({
+      tenantId: args.tenantId,
+      houseId: args.houseId,
+      restTargetDays: args.restTargetDays,
+      restStartedAt:
+        args.startedDaysAgo === null
+          ? null
+          : sql`now() - make_interval(days => CAST(${args.startedDaysAgo} AS integer))`,
+    })
+    .returning({ id: housePrepCycles.id });
+  if (!row) throw new Error("تعذّر إنشاء دورة التجهيز في التجهيزة");
+  return row.id;
+}

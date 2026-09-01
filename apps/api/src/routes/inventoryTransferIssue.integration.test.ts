@@ -16,11 +16,16 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { createApp } from "../app";
 import { loadEnv } from "../lib/env";
-import { computeBalance, computeTotalMovements } from "../lib/inventoryBalance";
+import { computeTotalMovements } from "../lib/inventoryBalance";
 import { assertIsTestDatabase } from "../lib/testGuard";
 import { inTransitTotal } from "../services/inventoryTransferService";
 import { farmVia, houseVia, seedTenant, siteVia, today } from "../test-support/hierarchy";
-import { seedActors } from "../test-support/transferFixture";
+import {
+  balanceOfWarehouse,
+  seedActors,
+  seedForeignWarehouse,
+  stockWarehouse,
+} from "../test-support/transferFixture";
 
 /**
  * التحويل — الأمر والخروج (القرار 228، على حكم #159).
@@ -73,33 +78,12 @@ async function orderId(quantity = 20): Promise<number> {
 }
 
 /** مخزنٌ في مستأجرٍ آخر — **لإثبات أن العزل غير متأثر** (المبدأ السابع). */
-async function seedForeignWarehouse(): Promise<number> {
-  const foreignTenantId = await seedTenant(db, `مستأجر آخر ${S}`);
-  const [foreign] = await db
-    .insert(warehouses)
-    .values({ tenantId: foreignTenantId, name: `مركزي غريب ${S}`, level: "مركزي" })
-    .returning({ id: warehouses.id });
-  if (!foreign) throw new Error("تعذّر تجهيز مخزن المستأجر الآخر");
-  return foreign.id;
+async function balanceOfLocal(warehouseId: number): Promise<number> {
+  return balanceOfWarehouse(db, { tenantId, productId: feedId, warehouseId });
 }
 
-async function balanceOf(warehouseId: number): Promise<number> {
-  return computeBalance(db, { tenantId, productId: feedId, warehouseId });
-}
-
-/** استلامٌ مباشر في الدفتر — مسار الاستلام مُختبَرٌ في 227، والمقصود هنا الرصيد. */
 async function stock(warehouseId: number, quantity: number, expiry?: string): Promise<void> {
-  await db.insert(inventoryMovements).values({
-    tenantId,
-    warehouseId,
-    productId: feedId,
-    movementType: "استلام",
-    quantity: quantity.toFixed(3),
-    unit: "كيس",
-    sourceType: "test",
-    sourceUuid: sql`gen_random_uuid()`,
-    ...(expiry === undefined ? {} : { receivedExpiryDate: expiry }),
-  });
+  await stockWarehouse(db, { tenantId, warehouseId, productId: feedId, quantity, expiry });
 }
 
 beforeAll(async () => {
@@ -163,7 +147,7 @@ beforeAll(async () => {
     { tenantId, userId: otherSupervisorId, houseId: houseB, startDate: today() },
   ]);
 
-  foreignWarehouseId = await seedForeignWarehouse();
+  foreignWarehouseId = await seedForeignWarehouse(db, await seedTenant(db, `مستأجر آخر ${S}`), S);
 
   const [feed] = await db
     .insert(products)
@@ -193,7 +177,7 @@ describe("إصدار الأمر — #159 «ثانيًا»", () => {
   it("**والإصدار لا يمسّ الدفتر** — الأمر ليس حركة", async () => {
     await stock(fromWarehouseId, 100);
     await orderId();
-    expect(await balanceOf(fromWarehouseId)).toBe(100);
+    expect(await balanceOfLocal(fromWarehouseId)).toBe(100);
   });
 
   /**
@@ -287,8 +271,8 @@ describe("الخروج — الكمية تُخصم من المرسِل ولا ت
     const res = await issue(farmerToken, id);
     expect(res.status).toBe(200);
     expect((res.body as { status: string }).status).toBe("في الطريق");
-    expect(await balanceOf(fromWarehouseId)).toBe(70);
-    expect(await balanceOf(toWarehouseId)).toBe(0);
+    expect(await balanceOfLocal(fromWarehouseId)).toBe(70);
+    expect(await balanceOfLocal(toWarehouseId)).toBe(0);
   });
 
   it("**وما في الطريق مقروءٌ لا مستنتَج** — شرط #159 «ثالثًا»", async () => {
@@ -327,7 +311,7 @@ describe("الخروج — الكمية تُخصم من المرسِل ولا ت
     const second = await issue(farmerToken, id);
     expect(second.status).toBe(422);
     expect((second.body as { code: string }).code).toBe("transfer_not_issuable");
-    expect(await balanceOf(fromWarehouseId)).toBe(90);
+    expect(await balanceOfLocal(fromWarehouseId)).toBe(90);
   });
 });
 
@@ -337,7 +321,7 @@ describe("الخروج — المخالفات المتعمَّدة", () => {
     const res = await issue(farmerToken, await orderId(20));
     expect(res.status).toBe(422);
     expect((res.body as { code: string }).code).toBe("insufficient_balance");
-    expect(await balanceOf(fromWarehouseId)).toBe(5);
+    expect(await balanceOfLocal(fromWarehouseId)).toBe(5);
   });
 
   it("مخالفة: مخزنٌ مرسِلٌ معطَّل ← 422 `warehouse_inactive`", async () => {
@@ -377,7 +361,9 @@ describe("الثوابت بعد الخروج", () => {
     await stock(fromWarehouseId, 100);
     await issue(farmerToken, await orderId(30));
     const total = await computeTotalMovements(db, { tenantId, productId: feedId });
-    expect((await balanceOf(fromWarehouseId)) + (await balanceOf(toWarehouseId))).toBe(total);
+    expect((await balanceOfLocal(fromWarehouseId)) + (await balanceOfLocal(toWarehouseId))).toBe(
+      total
+    );
     expect(total).toBe(70);
   });
 
@@ -401,7 +387,7 @@ describe("التزامن — والقفل هنا يحمل وزنًا (خلافً
     expect((results.find((r) => r.status === 422)?.body as { code: string }).code).toBe(
       "insufficient_balance"
     );
-    const balance = await balanceOf(fromWarehouseId);
+    const balance = await balanceOfLocal(fromWarehouseId);
     expect(balance).toBe(10);
     expect(balance).toBeGreaterThanOrEqual(0);
   });
@@ -447,12 +433,12 @@ describe("فرضُ الإسناد على المخزن المشتقّ من الت
   it("**مربٍّ ينفّذ خروجًا من مخزن مزرعةٍ لا يبلغها إسناده ← 403، والرصيد لم يتحرّك**", async () => {
     await stock(outsideWarehouseId, 50);
     const id = await outsideOrder(20);
-    const before = await balanceOf(outsideWarehouseId);
+    const before = await balanceOfLocal(outsideWarehouseId);
 
     const res = await issue(farmerToken, id);
     expect(res.status).toBe(403);
     // **الرقم هو الدليل** — لا الحالة وحدها
-    expect(await balanceOf(outsideWarehouseId)).toBe(before);
+    expect(await balanceOfLocal(outsideWarehouseId)).toBe(before);
     expect(before).toBe(50);
   });
 
