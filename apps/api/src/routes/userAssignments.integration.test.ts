@@ -34,7 +34,13 @@ interface ErrorBody {
 }
 
 const ROLE_GUARD_MESSAGE = "غير مخوَّل بهذا الإجراء";
-const ROLE_GUARD_REACHING: UserRole[] = ["farmer", "supervisor", "vet"];
+/** أدوارٌ تُجهَّز فاعلةً وهدفًا — الثلاثة معًا. */
+const PROBE_ROLES: UserRole[] = ["farmer", "supervisor", "vet"];
+/**
+ * **من يبلغ حارسَ الدور فيُردّ به** — **والمشرف خرج منها بالقرار 251**: صار
+ * يملك الإسناد، **فرفضُه لم يعد يقيس حارس الدور بل يقيس عدمَه**.
+ */
+const ROLE_GUARD_REACHING: UserRole[] = ["farmer", "vet"];
 
 let db: Database;
 let pool: Pool;
@@ -51,6 +57,13 @@ let siteWarehouseId: number;
 let centralWarehouseId: number;
 let foreignUserId: number;
 let probeBody: { farmer: { houseId: number }; others: { farmId: number } };
+/** **هدفٌ مرئيّ للفاعلين الثلاثة** — بلا رؤيته يردّهم محلِّلُ `userId` قبل حارس الدور. */
+let probeTargetId: number;
+let supervisorProbeId: number;
+/** عنبرٌ ثانٍ في مزرعة البلوغ — لبرهان السماح بلا تداخل مع إسناد الهدف القائم. */
+let reachHouse2Id: number;
+/** طبيبٌ مُسنَدٌ لمزرعة بلوغ المشرف — **هدفٌ يراه المشرف ولا يملك إدارته**. */
+let reachVetId: number;
 /**
  * **فاعلون يبلغون كيانَ الجسم فعلًا** — منفصلون عن أهداف الإسناد عمدًا.
  *
@@ -78,7 +91,7 @@ beforeAll(async () => {
   const owner = await seedUser(db, { tenantId, role: "owner", secret: env.JWT_SECRET });
   ownerToken = owner.token;
   ownerId = owner.id;
-  for (const role of ROLE_GUARD_REACHING) {
+  for (const role of PROBE_ROLES) {
     const seeded = await seedUser(db, { tenantId, role, secret: env.JWT_SECRET });
     tokensByRole.set(role, seeded.token);
     if (role === "farmer") farmerId = seeded.id;
@@ -109,13 +122,20 @@ beforeAll(async () => {
   ).id;
 });
 
+/** معرّفُ المشرف الفاعل — يرمي بدل أن يمرّر صفرًا صامتًا. */
+function mustGetSupervisorProbeId(): number {
+  if (!supervisorProbeId) throw new Error("لم يُبذر المشرف الفاعل");
+  return supervisorProbeId;
+}
+
 /** يجهّز الفاعلين الثلاثة بإسنادٍ يبلغ به كلٌّ كيانَ جسمه — انظر تعليق `probeTokens`. */
 async function seedProbeActors(secret: string, siteId: number): Promise<void> {
   const reachFarmId = await farmVia(app, ownerToken, siteId, "مزرعة بلوغ الفاعلين");
   const reachHouseId = await houseVia(app, ownerToken, reachFarmId, "عنبر بلوغ الفاعلين");
-  for (const role of ROLE_GUARD_REACHING) {
+  for (const role of PROBE_ROLES) {
     const probe = await seedUser(db, { tenantId, role, secret });
     probeTokens.set(role, probe.token);
+    if (role === "supervisor") supervisorProbeId = probe.id;
     await db.insert(userAssignments).values({
       tenantId,
       userId: probe.id,
@@ -124,6 +144,16 @@ async function seedProbeActors(secret: string, siteId: number): Promise<void> {
     });
   }
   probeBody = { farmer: { houseId: reachHouseId }, others: { farmId: reachFarmId } };
+
+  reachHouse2Id = await houseVia(app, ownerToken, reachFarmId, "عنبر بلوغ ثانٍ");
+  const target = await seedUser(db, { tenantId, role: "farmer", secret });
+  probeTargetId = target.id;
+  const reachVet = await seedUser(db, { tenantId, role: "vet", secret });
+  reachVetId = reachVet.id;
+  await db.insert(userAssignments).values([
+    { tenantId, userId: target.id, houseId: reachHouseId, startDate: today() },
+    { tenantId, userId: reachVet.id, farmId: reachFarmId, startDate: today() },
+  ]);
 }
 
 afterAll(async () => {
@@ -137,7 +167,7 @@ function assign(token: string, userId: number, body: Record<string, unknown>) {
     .send(body);
 }
 
-describe("مصفوفة الصلاحيات — الإسناد للمالك وحده في هذه الدفعة", () => {
+describe("مصفوفة الصلاحيات — الإسناد للمالك والمشرف بحدوده (251)", () => {
   it("بلا توكن ← 401 على السرد والإنشاء والإنهاء", async () => {
     const responses = await Promise.all([
       request(app).get(`/api/users/${String(farmerId)}/assignments`),
@@ -152,19 +182,66 @@ describe("مصفوفة الصلاحيات — الإسناد للمالك وحد
   for (const role of ROLE_GUARD_REACHING) {
     it(`دور ${role} ← 403 **من حارس الدور نفسه** ولا صفّ يُكتب`, async () => {
       const token = probeTokens.get(role) ?? "";
-      // **كيانٌ يبلغه الفاعل** — فيمرّ الفرض المركزي ويكون الرادّ حارسَ الدور
+      // **كيانٌ يبلغه الفاعل وهدفٌ يراه** — فيمرّ الفرضُ المركزي بشقّيه
+      // (مسحُ الجسم ومحلِّلُ `userId`) **ويكون الرادّ حارسَ الدور وحده**.
       const body = role === "farmer" ? probeBody.farmer : probeBody.others;
-      const res = await assign(token, farmerId, body);
+      const before = await db
+        .select({ id: userAssignments.id })
+        .from(userAssignments)
+        .where(eq(userAssignments.userId, probeTargetId));
+
+      const res = await assign(token, probeTargetId, body);
       expect(res.status).toBe(403);
       expect((res.body as ErrorBody).message).toBe(ROLE_GUARD_MESSAGE);
 
-      const rows = await db
+      const after = await db
         .select({ id: userAssignments.id })
         .from(userAssignments)
-        .where(eq(userAssignments.userId, farmerId));
-      expect(rows).toHaveLength(0);
+        .where(eq(userAssignments.userId, probeTargetId));
+      expect(after).toHaveLength(before.length);
     });
   }
+
+  /**
+   * **وحدُّ «المرّبين فقط» يُقاس بهدفٍ يراه المشرف** — طبيبٌ في مزرعته:
+   * **يمرّ محلِّلُ `userId` ويمرّ حارسُ الدور**، فيكون الرادُّ الحدَّ نفسه.
+   */
+  it("**مشرفٌ يُسنِد طبيبًا يراه ← 403 من حدّ «المرّبين فقط»**", async () => {
+    const res = await assign(probeTokens.get("supervisor") ?? "", reachVetId, {
+      farmId: probeBody.others.farmId,
+    });
+    expect(res.status).toBe(403);
+    expect((res.body as ErrorBody).message).toContain("هذا الصنف");
+  });
+
+  /**
+   * **ومخزن الموقع للمالك وحده** (القرار 247) — **والمشرف مُسنَدٌ له هنا
+   * عمدًا**: بلا إسناده يردّه `assertWarehouseAccess` **قبل** هذا الحدّ،
+   * فيخضرّ الصفّ بلا علاقة بما يقيس (الشكل الخامس، القرار 248).
+   */
+  it("**مشرفٌ يُسنِد مخزنَ موقعه لمربٍّ ← 403 — الإسناد للمالك وحده**", async () => {
+    await db.insert(userAssignments).values({
+      tenantId,
+      userId: mustGetSupervisorProbeId(),
+      warehouseId: siteWarehouseId,
+      startDate: today(),
+    });
+
+    const res = await assign(probeTokens.get("supervisor") ?? "", probeTargetId, {
+      warehouseId: siteWarehouseId,
+    });
+    expect(res.status).toBe(403);
+    expect((res.body as ErrorBody).message).toContain("للمالك وحده");
+  });
+
+  /** **والمشرف يُسنِد مربّيه — حكمُ القرار 251**، وهو ما لم يكن قبله. */
+  it("**مشرفٌ يُسنِد مربّيًا في مزرعته ← 201**", async () => {
+    const res = await assign(probeTokens.get("supervisor") ?? "", probeTargetId, {
+      houseId: reachHouse2Id,
+    });
+    expect(res.status).toBe(201);
+    expect((res.body as AssignmentBody).houseId).toBe(reachHouse2Id);
+  });
 });
 
 describe("المستوى يطابق الدور — قائمة موجبة لا شرط سالب", () => {

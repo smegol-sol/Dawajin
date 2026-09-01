@@ -9,9 +9,11 @@ import {
   type AssignmentLevel,
 } from "./userAssignmentsService";
 import { writeAuditLog } from "../lib/auditLog";
+import { visibleUserCondition, type Viewer } from "../lib/entityScope";
 import type { Env } from "../lib/env";
 import { DUPLICATE_PHONE } from "../lib/pgErrors";
 import { assertGeneratedTemporaryPassword, generateTemporaryPassword } from "../lib/tempPassword";
+import { assertMayAssignLevel, assertMayManageUser } from "../lib/userManagementScope";
 
 /**
  * طبقة services لإدارة مستخدمي المستأجر — **أول كاتبٍ لجدول `users` في
@@ -49,23 +51,33 @@ const userCardColumns = {
 };
 
 /**
- * يسرد مستخدمي المستأجر مرتَّبين بالاسم.
+ * يسرد مستخدمي المستأجر **المرئيين لهذا الرائي** مرتَّبين بالاسم.
  *
- * **بلا فلترة إسناد لأن المسار للمالك وحده** — ورؤيته كاملة داخل مستأجره
- * (`CLAUDE.md`، جدول القرار #131). **وأي توسيع لهذا المسار إلى دورٍ مُسنَد
- * يوجب فلترًا هنا ونمطَ مسار معه** (قاعدة السرد، القرار #129).
+ * **والمالك يرى الكل، والمشرف مربّي مزارعه المُسندة وحدهم** (القراران 246
+ * و251) — **ومن لا إسناد له لا يراه إلا صاحب الرؤية الكاملة**.
  */
-export async function listUsers(db: Database, tenantId: number): Promise<UserCard[]> {
-  return db
-    .select(userCardColumns)
-    .from(users)
-    .where(eq(users.tenantId, tenantId))
-    .orderBy(asc(users.fullName), asc(users.id));
+export async function listUsers(
+  db: Database,
+  tenantId: number,
+  viewer: Viewer
+): Promise<UserCard[]> {
+  return (
+    db
+      .select(userCardColumns)
+      .from(users)
+      // **الفلترة بنفس شرط الفرض** (القرار 251): بيتٌ واحد يقرؤه الحارس والسرد،
+      // **فلا يفترق ما يصله المشرف عمّا يراه**. وبلا فلتر يرى كلَّ مستخدمي
+      // المستأجر — **نقيضُ 246 وقاعدةِ السرد (#129)**.
+      .where(and(eq(users.tenantId, tenantId), visibleUserCondition(viewer)))
+      .orderBy(asc(users.fullName), asc(users.id))
+  );
 }
 
 export interface CreateUserInput {
   tenantId: number;
   actorId: number;
+  /** دور الفاعل — **يقرّر أيَّ صنفٍ يملك إنشاءه** (القرار 251). */
+  actorRole: UserRole;
   fullName: string;
   role: UserRole;
   phone: string;
@@ -104,6 +116,9 @@ export async function createUser(
   env: Env,
   input: CreateUserInput
 ): Promise<CreatedUser> {
+  assertMayManageUser(input.actorRole, input.role);
+  if (input.level !== undefined) assertMayAssignLevel(input.actorRole, input.level);
+
   const phoneE164 = normalizePhoneE164(input.phone, env.DEFAULT_COUNTRY_CODE);
   const temporaryPassword = generateTemporaryPassword();
   assertGeneratedTemporaryPassword(temporaryPassword);
@@ -157,6 +172,7 @@ export async function createUser(
 export interface SetUserActiveInput {
   tenantId: number;
   actorId: number;
+  actorRole: UserRole;
   userId: number;
   isActive: boolean;
 }
@@ -178,7 +194,7 @@ export interface SetUserActiveInput {
  * @throws HttpError 404 إن لم يوجد داخل المستأجر · 422 عند تعطيل الذات
  */
 export async function setUserActive(db: Database, input: SetUserActiveInput): Promise<UserCard> {
-  const { tenantId, actorId, userId, isActive } = input;
+  const { tenantId, actorId, actorRole, userId, isActive } = input;
 
   if (!isActive && userId === actorId) {
     throw new HttpError(422, "cannot_deactivate_self", "لا يعطّل المالك حسابه من هنا");
@@ -193,6 +209,9 @@ export async function setUserActive(db: Database, input: SetUserActiveInput): Pr
       .limit(1);
     // الوجود ثم التعيين (المبدأ السادس): مستخدم مستأجر آخر **غير موجود** لا ممنوع
     if (!before) throw new HttpError(404, "not_found", "المستخدم غير موجود");
+    // **صنف الهدف يُفحص تحت المعاملة** — بعد أن قرّر الفرضُ المركزي أن الفاعل
+    // يبلغ هذا المستخدم أصلًا (القرار 251).
+    assertMayManageUser(actorRole, before.role);
     if (before.isActive === isActive) return before;
 
     const [after] = await tx

@@ -60,6 +60,9 @@ export const ENTITY_ID_PATH_PATTERNS = [
   // نمط واحد يغطي `/api/sites/:siteId` و`/api/sites/:siteId/farms` معًا —
   // `api.use(pattern)` يطابق البادئة لا المسار الكامل (القرار #131).
   "/api/sites/:siteId",
+  // المستخدم المستهدَف — `assertUserAccess` يحلّه بـ`visibleUserCondition`
+  // (القرار 251). **ونمطٌ بلا محلِّل فرضٌ صوريّ** (القرار 229)، فأُضيفا معًا.
+  "/api/users/:userId",
 ] as const;
 
 export function createApp(db: Database, env: Env, logger: Logger): Express {

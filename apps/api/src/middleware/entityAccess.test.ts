@@ -42,6 +42,22 @@ describe("enforceEntityAccess — فروع دفاعية", () => {
     expect(error.status).toBe(401);
   });
 
+  /** **المدخل الخامس — `userId`** (القرار 251): نفس الفرع الدفاعيّ في موضعه الجديد. */
+  it("401 عندما tenantId يساوي null على مسار **المستخدم المستهدَف**", async () => {
+    const middleware = enforceEntityAccess(throwingDb() as never);
+    const next = vi.fn();
+
+    await middleware(
+      fakeRequest({ id: 1, tenantId: null, role: "supervisor" }, { userId: "1" }),
+      {} as Response,
+      next
+    );
+
+    const error = next.mock.calls[0]?.[0] as HttpError;
+    expect(error).toBeInstanceOf(HttpError);
+    expect(error.status).toBe(401);
+  });
+
   it("401 عندما tenantId يساوي null على مسار **الموقع** (المدخل الثالث)", async () => {
     const middleware = enforceEntityAccess(throwingDb() as never);
     const next = vi.fn();

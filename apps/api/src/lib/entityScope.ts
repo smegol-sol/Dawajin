@@ -1,4 +1,4 @@
-import { farms, houses, userAssignments, warehouses } from "@dawajin/db";
+import { farms, houses, userAssignments, users, warehouses } from "@dawajin/db";
 import { sql, type SQL } from "drizzle-orm";
 import type { Request } from "express";
 
@@ -187,6 +187,58 @@ export function visibleHouseScope(viewer: Viewer): SQL {
   if (hasFullVisibility(viewer.role)) return allowAll();
   if (isAssignmentScoped(viewer.role)) return assignedHousesFilter(viewer.id);
   return denyAll();
+}
+
+/**
+ * **المستخدمون المرئيون — تركيبُ القواعد القائمة لا قاعدةٌ خامسة** (القرار 251).
+ *
+ * **والحكم من القرار 246:** المشرف يرى **مربّي مزارعه المُسندة وحدهم**، لا كل
+ * مربّي المستأجر — **ومشرفُ مزرعةٍ واحدة لا يرى موظفي بقية مزارع المالك**.
+ *
+ * **والمستخدم مرئيّ بما هو مُسندٌ إليه لا بذاته:** يُرى إن كان له **إسنادٌ
+ * سارٍ اليوم** إلى كيانٍ يبلغه الرائي. **فمن لا إسناد له لا يراه إلا صاحب
+ * الرؤية الكاملة** — وهو حال المالك نفسه (لا مستوى له)، وحالُ من أُنشئ ولم
+ * يُسند بعد.
+ *
+ * **والفرعان يُركَّبان من `visibleFarmCondition` و`visibleHouseCondition` لا
+ * يُعاد كتابتهما** — **وبالاقتران الذي وثّقه #131 لا بأحدهما وحده**: شرطُ
+ * العنبر **تكملةٌ لشرط المزرعة لا بديلٌ عنه** (يُرجع `allowAll` للمشرف عمدًا)،
+ * **فاستعمالُه منفردًا يجعل المشرف يرى كل عنابر المستأجر** — وهو بعينه
+ * التوحيدُ الصامت الذي حذّر منه #131.
+ *
+ * **ومستوى المخزن خارجٌ عمدًا لا سهوًا:** إسنادُ مخزن الموقع **بيد المالك
+ * وحده** (القرار 247)، **فلا يُرى به زميلٌ ولا يُدار**.
+ *
+ * @returns شرط على `users` — `true` لصاحب الرؤية الكاملة، و`false` لدور مجهول
+ */
+export function visibleUserCondition(viewer: Viewer): SQL {
+  if (hasFullVisibility(viewer.role)) return allowAll();
+  if (!isAssignmentScoped(viewer.role)) return denyAll();
+
+  return sql`EXISTS (
+    SELECT 1 FROM ${userAssignments} target_ua
+    WHERE target_ua.user_id = ${users.id}
+      AND target_ua.tenant_id = ${users.tenantId}
+      AND ${assignmentActiveToday("target_ua")}
+      AND (
+        (target_ua.house_id IS NOT NULL AND EXISTS (
+          SELECT 1 FROM ${houses}
+          JOIN ${farms} ON ${farms.id} = ${houses.farmId}
+            AND ${farms.tenantId} = ${houses.tenantId}
+          WHERE ${houses.id} = target_ua.house_id
+            AND ${houses.tenantId} = target_ua.tenant_id
+            AND ${visibleFarmCondition(viewer)}
+            AND ${visibleHouseCondition(viewer)}
+        ))
+        OR
+        (target_ua.farm_id IS NOT NULL AND EXISTS (
+          SELECT 1 FROM ${farms}
+          WHERE ${farms.id} = target_ua.farm_id
+            AND ${farms.tenantId} = target_ua.tenant_id
+            AND ${visibleFarmCondition(viewer)}
+        ))
+      )
+  )`;
 }
 
 /**

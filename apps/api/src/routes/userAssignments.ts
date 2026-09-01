@@ -20,7 +20,8 @@ import {
  * وعرف المستودع مستقرّ على الفعل المسمّى (`/deactivate` · `/complete` ·
  * `/approve`). **و§17 من المواصفة صُحِّحت على ذلك في نفس الدفعة.**
  *
- * **وللمالك وحده اليوم** — والمشرف مؤجَّل مع إنشائه للمربّين (القرار 247).
+ * **وللمالك والمشرف** (القرار 251) — بحدوده الثلاثة: الهدف مربٍّ · والكيان في
+ * مزارعه المُسندة · ومخزن الموقع للمالك وحده.
  *
  * المنطق في services/userAssignmentsService.ts (القرار #61).
  */
@@ -63,37 +64,46 @@ function toLevel(body: z.infer<typeof createAssignmentSchema>): AssignmentLevel 
 export function userAssignmentsRouter(db: Database): Router {
   const router = Router();
 
-  router.get("/api/users/:userId/assignments", requireRole("owner"), async (req, res, next) => {
-    try {
-      const actor = requireTenantUser(req);
-      const userId = idSchema.parse(req.params.userId);
-      res.json({ assignments: await listUserAssignments(db, actor.tenantId, userId) });
-    } catch (error) {
-      next(error);
+  router.get(
+    "/api/users/:userId/assignments",
+    requireRole("owner", "supervisor"),
+    async (req, res, next) => {
+      try {
+        const actor = requireTenantUser(req);
+        const userId = idSchema.parse(req.params.userId);
+        res.json({ assignments: await listUserAssignments(db, actor.tenantId, userId) });
+      } catch (error) {
+        next(error);
+      }
     }
-  });
+  );
 
-  router.post("/api/users/:userId/assignments", requireRole("owner"), async (req, res, next) => {
-    try {
-      const actor = requireTenantUser(req);
-      const userId = idSchema.parse(req.params.userId);
-      const body = createAssignmentSchema.parse(req.body);
-      const created = await createAssignment(db, {
-        tenantId: actor.tenantId,
-        actorId: actor.id,
-        userId,
-        level: toLevel(body),
-        startDate: body.startDate,
-      });
-      res.status(201).json(created);
-    } catch (error) {
-      next(error);
+  router.post(
+    "/api/users/:userId/assignments",
+    requireRole("owner", "supervisor"),
+    async (req, res, next) => {
+      try {
+        const actor = requireTenantUser(req);
+        const userId = idSchema.parse(req.params.userId);
+        const body = createAssignmentSchema.parse(req.body);
+        const created = await createAssignment(db, {
+          tenantId: actor.tenantId,
+          actorId: actor.id,
+          actorRole: actor.role,
+          userId,
+          level: toLevel(body),
+          startDate: body.startDate,
+        });
+        res.status(201).json(created);
+      } catch (error) {
+        next(error);
+      }
     }
-  });
+  );
 
   router.post(
     "/api/users/:userId/assignments/:assignmentId/end",
-    requireRole("owner"),
+    requireRole("owner", "supervisor"),
     async (req, res, next) => {
       try {
         const actor = requireTenantUser(req);
@@ -101,6 +111,7 @@ export function userAssignmentsRouter(db: Database): Router {
           await endAssignment(db, {
             tenantId: actor.tenantId,
             actorId: actor.id,
+            actorRole: actor.role,
             userId: idSchema.parse(req.params.userId),
             assignmentId: idSchema.parse(req.params.assignmentId),
           })
