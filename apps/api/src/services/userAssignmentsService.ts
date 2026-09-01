@@ -170,43 +170,80 @@ export async function createAssignment(
   const { tenantId, actorId, userId, level } = input;
 
   return db.transaction(async (tx) => {
-    const today = await readToday(tx);
-    if (input.startDate !== undefined && input.startDate !== today) {
-      throw new HttpError(
-        422,
-        "assignment_start_not_today",
-        "الإسناد يبدأ اليوم — لا غدًا ولا بأثر رجعي",
-        { startDate: input.startDate, today }
-      );
-    }
-
     const role = await readAssigneeRole(tx, tenantId, userId);
-    assertLevelAllowedForRole(role, level);
-    await assertLevelEntityExists(tx, tenantId, level);
-
-    const [created] = await tx
-      .insert(userAssignments)
-      .values({
-        tenantId,
-        userId,
-        startDate: sql`CURRENT_DATE`,
-        ...(level.kind === "house" ? { houseId: level.id } : {}),
-        ...(level.kind === "farm" ? { farmId: level.id } : {}),
-        ...(level.kind === "warehouse" ? { warehouseId: level.id } : {}),
-      })
-      .returning(assignmentColumns);
-    if (!created) throw new HttpError(500, "internal_error", "تعذّر إنشاء الإسناد");
-
-    await writeAuditLog(tx, entityAuditLog, {
+    return insertAssignmentWithin(tx, {
       tenantId,
       actorId,
-      entityType: "user_assignment",
-      entityId: String(created.id),
-      action: "create",
-      after: created,
+      userId,
+      role,
+      level,
+      startDate: input.startDate,
     });
-    return created;
   });
+}
+
+export interface InsertAssignmentInput {
+  tenantId: number;
+  actorId: number;
+  userId: number;
+  /** دورُ المُسنَد إليه — **يُمرَّر ولا يُعاد قراءته**: المُنشئ يعرفه لتوّه. */
+  role: UserRole;
+  level: AssignmentLevel;
+  startDate?: string | undefined;
+}
+
+/**
+ * **جسدُ الإسناد داخل معاملةٍ قائمة — بيتُ الحكم الوحيد** (القرار 250).
+ *
+ * **يُستدعى من بابين**: `createAssignment` (إسنادٌ لمستخدمٍ قائم)، و`createUser`
+ * حين يُطلب الإنشاء والإسناد معًا. **والقاعدة أن الحكم لا يُكتب مرتين**:
+ * تكرارُه في خدمتين هو الشكل ٣ في جدول القرار 242 — **برهانٌ يحرس نسخةً واحدة
+ * من حكمٍ مكرَّر**، وقد وقع فعلًا في `product_inactive` و`unit_mismatch`.
+ *
+ * **ولا يفتح معاملةً ولا يغلقها** — فالذرّية مسؤولية من استدعاه، **وهذا هو ما
+ * يجعل «يُنشأ المستخدم ويُسنَد أو لا يقع شيء» ممكنًا أصلًا**.
+ */
+export async function insertAssignmentWithin(
+  tx: Tx,
+  input: InsertAssignmentInput
+): Promise<AssignmentCard> {
+  const { tenantId, actorId, userId, role, level } = input;
+
+  const today = await readToday(tx);
+  if (input.startDate !== undefined && input.startDate !== today) {
+    throw new HttpError(
+      422,
+      "assignment_start_not_today",
+      "الإسناد يبدأ اليوم — لا غدًا ولا بأثر رجعي",
+      { startDate: input.startDate, today }
+    );
+  }
+
+  assertLevelAllowedForRole(role, level);
+  await assertLevelEntityExists(tx, tenantId, level);
+
+  const [created] = await tx
+    .insert(userAssignments)
+    .values({
+      tenantId,
+      userId,
+      startDate: sql`CURRENT_DATE`,
+      ...(level.kind === "house" ? { houseId: level.id } : {}),
+      ...(level.kind === "farm" ? { farmId: level.id } : {}),
+      ...(level.kind === "warehouse" ? { warehouseId: level.id } : {}),
+    })
+    .returning(assignmentColumns);
+  if (!created) throw new HttpError(500, "internal_error", "تعذّر إنشاء الإسناد");
+
+  await writeAuditLog(tx, entityAuditLog, {
+    tenantId,
+    actorId,
+    entityType: "user_assignment",
+    entityId: String(created.id),
+    action: "create",
+    after: created,
+  });
+  return created;
 }
 
 /**
