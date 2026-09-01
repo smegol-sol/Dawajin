@@ -32,7 +32,7 @@ import { and, asc, eq, isNull, sql } from "drizzle-orm";
  * راحة وإكمال خطوة متزامنين على نفس العنبر.
  */
 
-type Tx = Parameters<Parameters<Database["transaction"]>[0]>[0];
+export type Tx = Parameters<Parameters<Database["transaction"]>[0]>[0];
 type Executor = Database | Tx;
 
 export interface OpenPrepCycleInput {
@@ -225,7 +225,7 @@ export interface PrepStepCompletion {
 }
 
 /** يقفل صفّ العنبر ويُرجع حالته — **العنبر قبل الدورة دائمًا** (ترتيب الأقفال). */
-async function lockHouse(
+export async function lockHouse(
   tx: Tx,
   tenantId: number,
   houseId: number
@@ -310,8 +310,33 @@ async function transitionToRest(
  * @throws HttpError 404 خطوة غير موجودة · 403 مربٍّ غير مُسنَد للخطوة ·
  *   422 دورة مكتملة أو خطوة مكتملة أو عنبر في غير موضع الانتقال
  */
+/**
+ * عنوان الخطوة — دورتُها وعنبرها. **قراءة توجيهٍ لا قرار:** تسبق الأقفال
+ * لتعرف ما تقفله، **والقرارات كلها تحتها** (نفس نمط `completePrepStep`).
+ */
+export async function readStepAddress(
+  tx: Tx,
+  tenantId: number,
+  stepId: number
+): Promise<{ cycleId: number; houseId: number }> {
+  const [address] = await tx
+    .select({ cycleId: housePrepSteps.cycleId, houseId: housePrepCycles.houseId })
+    .from(housePrepSteps)
+    .innerJoin(
+      housePrepCycles,
+      and(
+        eq(housePrepCycles.id, housePrepSteps.cycleId),
+        eq(housePrepCycles.tenantId, housePrepSteps.tenantId)
+      )
+    )
+    .where(and(eq(housePrepSteps.id, stepId), eq(housePrepSteps.tenantId, tenantId)))
+    .limit(1);
+  if (!address) throw new HttpError(404, "not_found", "خطوة التجهيز غير موجودة");
+  return address;
+}
+
 /** يقفل الدورة ويرفض المكتملة — **بعد قفل العنبر دائمًا** (ترتيب الأقفال). */
-async function lockOpenCycle(
+export async function lockOpenCycle(
   tx: Tx,
   tenantId: number,
   cycleId: number
@@ -371,19 +396,7 @@ export async function completePrepStep(
 
   return db.transaction(async (tx) => {
     // عنوان الخطوة (دورتها وعنبرها) — قراءة توجيه لا قرار: القرارات كلها تحت القفل
-    const [address] = await tx
-      .select({ cycleId: housePrepSteps.cycleId, houseId: housePrepCycles.houseId })
-      .from(housePrepSteps)
-      .innerJoin(
-        housePrepCycles,
-        and(
-          eq(housePrepCycles.id, housePrepSteps.cycleId),
-          eq(housePrepCycles.tenantId, housePrepSteps.tenantId)
-        )
-      )
-      .where(and(eq(housePrepSteps.id, stepId), eq(housePrepSteps.tenantId, tenantId)))
-      .limit(1);
-    if (!address) throw new HttpError(404, "not_found", "خطوة التجهيز غير موجودة");
+    const address = await readStepAddress(tx, tenantId, stepId);
 
     const house = await lockHouse(tx, tenantId, address.houseId);
     const cycle = await lockOpenCycle(tx, tenantId, address.cycleId);
