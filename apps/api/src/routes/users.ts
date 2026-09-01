@@ -14,10 +14,11 @@ import { createUser, listUsers, setUserActive } from "../services/usersService";
  * **أول مسار في النظام يُنشئ مستخدمًا** (القرار 241 سجّل غيابه، والقرار 245
  * يبنيه).
  *
- * **وللمالك وحده في هذه الدفعة.** §12.2 تعطي المشرف «إدارة المستخدمين ✅
- * مرّبين فقط» — **وهو حدٌّ معلن لا نسيان**: بناؤه يوجب معرّفًا مشتقًّا
- * (`userId`) في `enforceEntityAccess` ونمطَ مسارٍ معه، **ونمطٌ بلا محلِّل فرضٌ
- * صوريّ** (القرار 229). **ويوجب قبله جوابًا: أي المربّين يرى المشرف؟**
+ * **وللمالك والمشرف** (القرار 251): §12.2 تعطي المشرف «إدارة المستخدمين ✅
+ * مرّبين فقط»، **وحكمُ المالك أنها تشمل الإسناد** — **والقرار #158 ينصّ سلفًا
+ * أن الإسناد البديل بيد المشرف أو المالك**. **وحدودُه الثلاثة:** الهدف مربٍّ
+ * (`assertMayManageUser`) · والكيان في مزارعه المُسندة (**مسحُ الجسم ومحلِّلُ
+ * `userId` مركزيًّا**) · ومخزن الموقع للمالك وحده (`assertMayAssignLevel`).
  *
  * **ولا حقل كلمة مرور في أي جسم طلب هنا** — الكلمة تُولَّد في الخدمة وتُعاد
  * مرة واحدة (#100).
@@ -85,22 +86,23 @@ const userIdSchema = z.coerce.number().int().positive();
 export function usersRouter(db: Database, env: Env): Router {
   const router = Router();
 
-  router.get("/api/users", requireRole("owner"), async (req, res, next) => {
+  router.get("/api/users", requireRole("owner", "supervisor"), async (req, res, next) => {
     try {
       const user = requireTenantUser(req);
-      res.json({ users: await listUsers(db, user.tenantId) });
+      res.json({ users: await listUsers(db, user.tenantId, { id: user.id, role: user.role }) });
     } catch (error) {
       next(error);
     }
   });
 
-  router.post("/api/users", requireRole("owner"), async (req, res, next) => {
+  router.post("/api/users", requireRole("owner", "supervisor"), async (req, res, next) => {
     try {
       const actor = requireTenantUser(req);
       const input = createUserSchema.parse(req.body);
       const created = await createUser(db, env, {
         tenantId: actor.tenantId,
         actorId: actor.id,
+        actorRole: actor.role,
         fullName: input.fullName,
         role: input.role,
         phone: input.phone,
@@ -127,21 +129,26 @@ function registerActivationRoutes(router: Router, db: Database): void {
     ["deactivate", false],
     ["activate", true],
   ] as const) {
-    router.post(`/api/users/:userId/${suffix}`, requireRole("owner"), async (req, res, next) => {
-      try {
-        const actor = requireTenantUser(req);
-        const userId = userIdSchema.parse(req.params.userId);
-        res.json(
-          await setUserActive(db, {
-            tenantId: actor.tenantId,
-            actorId: actor.id,
-            userId,
-            isActive,
-          })
-        );
-      } catch (error) {
-        next(error);
+    router.post(
+      `/api/users/:userId/${suffix}`,
+      requireRole("owner", "supervisor"),
+      async (req, res, next) => {
+        try {
+          const actor = requireTenantUser(req);
+          const userId = userIdSchema.parse(req.params.userId);
+          res.json(
+            await setUserActive(db, {
+              tenantId: actor.tenantId,
+              actorId: actor.id,
+              actorRole: actor.role,
+              userId,
+              isActive,
+            })
+          );
+        } catch (error) {
+          next(error);
+        }
       }
-    });
+    );
   }
 }

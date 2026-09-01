@@ -1,4 +1,4 @@
-import { createDbClient, entityAuditLog, users, type Database } from "@dawajin/db";
+import { createDbClient, entityAuditLog, userAssignments, users, type Database } from "@dawajin/db";
 import { isGeneratedTemporaryPassword, type UserRole } from "@dawajin/shared";
 import bcrypt from "bcryptjs";
 import { and, eq } from "drizzle-orm";
@@ -9,7 +9,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../app";
 import { loadEnv } from "../lib/env";
 import { assertIsTestDatabase } from "../lib/testGuard";
-import { seedTenant, seedUser } from "../test-support/hierarchy";
+import { farmVia, houseVia, seedTenant, seedUser, siteVia, today } from "../test-support/hierarchy";
 
 /**
  * `GET/POST /api/users` و`POST /api/users/:userId/(de)activate` — القرار 245.
@@ -48,12 +48,17 @@ interface ListBody {
 }
 
 const OTHER_ROLES: UserRole[] = ["farmer", "supervisor", "vet", "storekeeper"];
-/** أدوارٌ **يبلغها حارس الدور فعلًا** — فرفضها يقيسه هو لا غيره. */
-const ROLE_GUARD_REACHING: UserRole[] = ["farmer", "supervisor", "vet"];
+/**
+ * **من يبلغ حارسَ الدور فيُردّ به** — **والمشرف خرج منها بالقرار 251**: صار
+ * يملك إدارة المرّبين، **فرفضُه لم يعد يقيس حارس الدور بل يقيس عدمَه**.
+ */
+const ROLE_GUARD_REACHING: UserRole[] = ["farmer", "vet"];
 /** رسالة `requireRole` — **الفارق الذي يقول أيّ حارسٍ ردَّ**. */
 const ROLE_GUARD_MESSAGE = "غير مخوَّل بهذا الإجراء";
 /** رسالة `enforceEntityAccess` لدورٍ خارج القائمتين (القرار 194). */
 const CENTRAL_GUARD_MESSAGE = "غير مخوَّل بالوصول لهذا الكيان";
+/** رسالة محلِّل `userId` (القرار 251) — **تفرّق عن رسالتَي الحارسين أعلاه**. */
+const USER_RESOLVER_MESSAGE = "غير مخوَّل بالوصول لهذا المستخدم";
 /** نفس الرقم بصيغتين — **الفرق شكليّ والمخزَّن E.164 واحد**. */
 const NEW_PHONE = "0771234501";
 const NEW_PHONE_E164_FORM = "+967771234501";
@@ -66,7 +71,11 @@ let ownerId: number;
 let ownerToken: string;
 let otherTenantOwnerToken: string;
 let otherTenantUserId: number;
+/** مربٍّ مُسنَدٌ لعنبر، وزميلُه في نفس العنبر — **ليبلغ الفاعلُ هدفَه** فيُقاس حارس الدور. */
+let assignedFarmerToken: string;
+let coFarmerId: number;
 const tokensByRole = new Map<UserRole, string>();
+const idsByRole = new Map<UserRole, number>();
 
 let createRes: request.Response;
 let created: CreatedBody;
@@ -87,7 +96,9 @@ beforeAll(async () => {
   ownerId = owner.id;
   ownerToken = owner.token;
   for (const role of OTHER_ROLES) {
-    tokensByRole.set(role, (await seedUser(db, { tenantId, role, secret: env.JWT_SECRET })).token);
+    const seeded = await seedUser(db, { tenantId, role, secret: env.JWT_SECRET });
+    tokensByRole.set(role, seeded.token);
+    idsByRole.set(role, seeded.id);
   }
 
   const otherTenantId = await seedTenant(db, "مستأجر آخر للمستخدمين");
@@ -99,6 +110,8 @@ beforeAll(async () => {
   otherTenantOwnerToken = otherOwner.token;
   otherTenantUserId = otherOwner.id;
 
+  await seedCoFarmers(env.JWT_SECRET);
+
   createRes = await request(app)
     .post("/api/users")
     .set("Authorization", `Bearer ${ownerToken}`)
@@ -106,11 +119,35 @@ beforeAll(async () => {
   created = createRes.body as CreatedBody;
 });
 
+/** معرّفُ مستخدمٍ مبذور بدوره — يرمي بدل أن يُمرّر `undefined` صامتًا. */
+function mustGetId(role: UserRole): number {
+  const id = idsByRole.get(role);
+  if (id === undefined) throw new Error(`لم يُبذر مستخدم بدور ${role}`);
+  return id;
+}
+
+/** مربّيان في عنبرٍ واحد — كلٌّ يرى الآخر بمحلِّل `userId`، فيبقى الرادُّ حارسَ الدور. */
+async function seedCoFarmers(secret: string): Promise<void> {
+  const siteId = await siteVia(app, ownerToken, "موقع الزملاء");
+  const farmId = await farmVia(app, ownerToken, siteId, "مزرعة الزملاء");
+  const houseId = await houseVia(app, ownerToken, farmId, "عنبر الزملاء");
+  const first = await seedUser(db, { tenantId, role: "farmer", secret });
+  const second = await seedUser(db, { tenantId, role: "farmer", secret });
+  assignedFarmerToken = first.token;
+  coFarmerId = second.id;
+  await db.insert(userAssignments).values([
+    { tenantId, userId: first.id, houseId, startDate: today() },
+    { tenantId, userId: second.id, houseId, startDate: today() },
+    // **والمشرف على هذه المزرعة** — فيراهما ولا يرى المالك (لا إسناد له)
+    { tenantId, userId: mustGetId("supervisor"), farmId, startDate: today() },
+  ]);
+}
+
 afterAll(async () => {
   await pool.end();
 });
 
-describe("مصفوفة الصلاحيات — إدارة المستخدمين للمالك وحده في هذه الدفعة", () => {
+describe("مصفوفة الصلاحيات — إدارة المستخدمين للمالك والمشرف بحدوده (251)", () => {
   it("بلا توكن ← 401 على المسارات الثلاثة", async () => {
     const responses = await Promise.all([
       request(app).get("/api/users"),
@@ -148,15 +185,81 @@ describe("مصفوفة الصلاحيات — إدارة المستخدمين ل
    * **والتعطيل يحتاج برهانه هو** — إسقاط حارسه لم يُسقط شيئًا حتى كُتب هذا:
    * الصفوف أعلاه تضرب السرد والإنشاء وحدهما. **ولولاه لعطّل مربٍّ مالكَه.**
    */
-  it("**مربٍّ يعطّل غيره ← 403 من حارس الدور، والهدف يبقى فعّالًا**", async () => {
+  it("**مربٍّ يعطّل زميلَ عنبره ← 403 من حارس الدور، والهدف يبقى فعّالًا**", async () => {
+    // **الهدف زميلٌ في نفس العنبر عمدًا**: هدفٌ لا يبلغه الفاعل يردّه محلِّلُ
+    // `userId` **قبل** حارس الدور (القرار 251) — **فيخضرّ الصفّ بلا علاقة بما
+    // يقيس**، وهو الشكل الخامس في جدول القرار 242.
     const res = await request(app)
-      .post(`/api/users/${String(ownerId)}/deactivate`)
-      .set("Authorization", `Bearer ${tokensByRole.get("farmer") ?? ""}`);
+      .post(`/api/users/${String(coFarmerId)}/deactivate`)
+      .set("Authorization", `Bearer ${assignedFarmerToken}`);
     expect(res.status).toBe(403);
     expect((res.body as ErrorBody).message).toBe(ROLE_GUARD_MESSAGE);
 
+    const [row] = await db.select().from(users).where(eq(users.id, coFarmerId)).limit(1);
+    expect(row?.isActive).toBe(true);
+  });
+
+  /**
+   * **وهدفٌ لا يبلغه الفاعل يُردّ بمحلِّل `userId` لا بحارس الدور** — الاتجاه
+   * الثاني من نفس الحارس، والرسالة تفرّق بينهما.
+   */
+  it("**مربٍّ يعطّل المالك ← 403 من محلِّل `userId`** — والمالك لا إسناد له فلا يُرى", async () => {
+    const res = await request(app)
+      .post(`/api/users/${String(ownerId)}/deactivate`)
+      .set("Authorization", `Bearer ${assignedFarmerToken}`);
+    expect(res.status).toBe(403);
+    expect((res.body as ErrorBody).message).toBe(USER_RESOLVER_MESSAGE);
+
     const [row] = await db.select().from(users).where(eq(users.id, ownerId)).limit(1);
     expect(row?.isActive).toBe(true);
+  });
+});
+
+describe("المشرف — يملك إدارة المرّبين وحدهم (القرار 251)", () => {
+  /** **والمشرف يملك السرد والإنشاء بحدوده** (القرار 251) — وهو ما لم يكن قبله. */
+  it("**مشرفٌ ← 200 على السرد و201 على إنشاء مربٍّ**", async () => {
+    const token = `Bearer ${tokensByRole.get("supervisor") ?? ""}`;
+    const list = await request(app).get("/api/users").set("Authorization", token);
+    const create = await request(app)
+      .post("/api/users")
+      .set("Authorization", token)
+      .send({ fullName: "مربٍّ ينشئه المشرف", role: "farmer", phone: "0770000009" });
+    expect([list.status, create.status]).toEqual([200, 201]);
+  });
+
+  /**
+   * **وسردُه مفلترٌ فعلًا — لا 200 وحدها.** بلا الفلتر يرى كلَّ مستخدمي
+   * المستأجر، **وهو نقيض القرار 246 وقاعدةِ السرد (#129)**.
+   */
+  it("**سردُ المشرف: مربّو مزرعته حاضرون، والمالك غائب**", async () => {
+    const res = await request(app)
+      .get("/api/users")
+      .set("Authorization", `Bearer ${tokensByRole.get("supervisor") ?? ""}`);
+    expect(res.status).toBe(200);
+    const ids = (res.body as ListBody).users.map((u) => u.id);
+    expect(ids).toContain(coFarmerId);
+    // **المالك لا إسناد له فلا يبلغه أحد** — وغيابُه هو الفلتر لا التهذيب
+    expect(ids).not.toContain(ownerId);
+  });
+
+  /**
+   * **الوجود قبل التعيين في المحلِّل نفسه** (المبدأ السادس): مستخدم مستأجرٍ
+   * آخر **غير موجود** لا ممنوع — **وإلا صار الردّ أداة تعداد لموظفي الآخرين**.
+   */
+  it("**مشرفٌ يستهدف مستخدم مستأجرٍ آخر ← 404 لا 403**", async () => {
+    const res = await request(app)
+      .post(`/api/users/${String(otherTenantUserId)}/deactivate`)
+      .set("Authorization", `Bearer ${tokensByRole.get("supervisor") ?? ""}`);
+    expect(res.status).toBe(404);
+  });
+
+  it("**ومشرفٌ يُنشئ مشرفًا ← 403 من حدّ «المرّبين فقط»**", async () => {
+    const res = await request(app)
+      .post("/api/users")
+      .set("Authorization", `Bearer ${tokensByRole.get("supervisor") ?? ""}`)
+      .send({ fullName: "مشرف ثانٍ", role: "supervisor", phone: "0770000010" });
+    expect(res.status).toBe(403);
+    expect((res.body as ErrorBody).message).toContain("هذا الصنف");
   });
 
   it("دور storekeeper ← 403 **من الفرض المركزي لا من حارس الدور**", async () => {

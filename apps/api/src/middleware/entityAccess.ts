@@ -7,6 +7,7 @@ import {
   inventoryTransfers,
   sites,
   userAssignments,
+  users,
   warehouses,
   type Database,
 } from "@dawajin/db";
@@ -19,6 +20,7 @@ import {
   hasFullVisibility,
   isAssignmentScoped,
   visibleFarmCondition,
+  visibleUserCondition,
 } from "../lib/entityScope";
 
 /** يلتقط أول قيمة أولية (نص/رقم) معرَّفة — يتجاهل الكائنات المتداخلة عمدًا (لا String([object]))، لا يُخمِّن شكلها. */
@@ -293,6 +295,49 @@ async function resolveTransferWarehouseId(
   return transfer.fromWarehouseId;
 }
 
+/** `userId` من الرابط وحده — **لا من الجسم**: `POST /api/users` يُنشئ ولا يستهدف. */
+function resolveTargetUserId(req: Request): number | undefined {
+  const raw = firstDefinedPrimitive(req.params.userId);
+  return raw ? Number(raw) : undefined;
+}
+
+/**
+ * **وصولُ المستخدم المستهدَف — المعرّف الخامس في الفرض المركزي** (القرار 251).
+ *
+ * **وبلا هذا كان النمطُ فرضًا صوريًّا** (القرار 229): إضافةُ `/api/users/:userId`
+ * إلى `ENTITY_ID_PATH_PATTERNS` بلا محلِّلٍ يقرأ `userId` **تُرضي الفاحص ولا
+ * تفحص شيئًا** — **وهو ما وجب تجنّبه قبل فتح المسارات للمشرف**.
+ *
+ * **والحكم من `visibleUserCondition` لا نسخةً منه** — بيتٌ واحد يقرؤه الفرضُ
+ * والسردُ معًا (المبدأ الأول)، **فلا يفترق ما يصله المشرف عمّا يراه**.
+ *
+ * **والوجود قبل التعيين** (المبدأ السادس): مستخدم مستأجرٍ آخر **غير موجود**
+ * لا ممنوع.
+ */
+async function assertUserAccess(
+  db: Database,
+  user: AuthenticatedUser,
+  targetUserId: number
+): Promise<void> {
+  if (user.tenantId == null) {
+    throw new HttpError(401, "unauthorized", "الحساب غير مرتبط بمستأجر");
+  }
+
+  const [target] = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(and(eq(users.id, targetUserId), eq(users.tenantId, user.tenantId)))
+    .limit(1);
+  if (!target) throw new HttpError(404, "not_found", "المستخدم غير موجود");
+
+  const [visible] = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(and(eq(users.id, targetUserId), visibleUserCondition(user)))
+    .limit(1);
+  if (!visible) throw new HttpError(403, "forbidden", "غير مخوَّل بالوصول لهذا المستخدم");
+}
+
 function resolveWarehouseRefs(req: Request): WarehouseRef[] {
   const body = req.body as Record<string, unknown> | undefined;
   const refs: WarehouseRef[] = [];
@@ -461,6 +506,14 @@ export function enforceEntityAccess(db: Database) {
       }
       if (!isAssignmentScoped(user.role)) {
         throw new HttpError(403, "forbidden", "غير مخوَّل بالوصول لهذا الكيان");
+      }
+
+      // **المستخدم المستهدَف قبل بقية المعرّفات** — `POST /api/users/:userId/…`
+      // يحمل الاثنين أحيانًا، **والأضيق نطاقًا يُفحص** كما يقصر `houseId`
+      // الدائرة قبل `farmId` أدناه.
+      const targetUserId = resolveTargetUserId(req);
+      if (targetUserId !== undefined) {
+        await assertUserAccess(db, user, targetUserId);
       }
 
       const houseId = await resolveHouseId(db, req);

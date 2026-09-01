@@ -4,6 +4,7 @@ import { HttpError, type UserRole } from "@dawajin/shared";
 import { and, desc, eq, sql } from "drizzle-orm";
 
 import { writeAuditLog } from "../lib/auditLog";
+import { assertMayAssignLevel, assertMayManageUser } from "../lib/userManagementScope";
 
 /**
  * طبقة services للإسناد — **أول كاتبٍ لـ`user_assignments` في الإنتاج**
@@ -138,6 +139,7 @@ async function assertLevelEntityExists(
 export interface CreateAssignmentInput {
   tenantId: number;
   actorId: number;
+  actorRole: UserRole;
   userId: number;
   level: AssignmentLevel;
   /** اختياريّ — وإن ذُكر **فبتاريخ اليوم حصرًا** (سياسة المسار، القرار 247). */
@@ -167,10 +169,12 @@ export async function createAssignment(
   db: Database,
   input: CreateAssignmentInput
 ): Promise<AssignmentCard> {
-  const { tenantId, actorId, userId, level } = input;
+  const { tenantId, actorId, actorRole, userId, level } = input;
 
   return db.transaction(async (tx) => {
     const role = await readAssigneeRole(tx, tenantId, userId);
+    assertMayManageUser(actorRole, role);
+    assertMayAssignLevel(actorRole, level);
     return insertAssignmentWithin(tx, {
       tenantId,
       actorId,
@@ -279,6 +283,7 @@ export async function listUserAssignments(
 export interface EndAssignmentInput {
   tenantId: number;
   actorId: number;
+  actorRole: UserRole;
   userId: number;
   assignmentId: number;
 }
@@ -303,9 +308,12 @@ export async function endAssignment(
   db: Database,
   input: EndAssignmentInput
 ): Promise<AssignmentCard> {
-  const { tenantId, actorId, userId, assignmentId } = input;
+  const { tenantId, actorId, actorRole, userId, assignmentId } = input;
 
   return db.transaction(async (tx) => {
+    // **صنف الهدف يُفحص هنا** — الفرض المركزي قرّر أن الفاعل يبلغ المستخدم،
+    // وهذا يقرّر أنه يملك إدارة صنفه (القرار 251).
+    assertMayManageUser(actorRole, await readAssigneeRole(tx, tenantId, userId));
     // إعادة قراءة الحارس **تحت المعاملة** لا قبلها (المبدأ الثاني)
     const [before] = await tx
       .select(assignmentColumns)

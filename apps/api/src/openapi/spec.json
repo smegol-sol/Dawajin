@@ -1641,7 +1641,7 @@
     },
     "/api/users": {
       "get": {
-        "summary": "سرد مستخدمي المستأجر (owner فقط)",
+        "summary": "سرد مستخدمي المستأجر المرئيين للرائي (owner · supervisor بحدوده)",
         "security": [
           {
             "bearerAuth": []
@@ -1662,12 +1662,22 @@
             "$ref": "#/components/responses/Unauthorized"
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "description": "حارسُ الدور · أو الفرضُ المركزي (كيانٌ أو مستخدمٌ لا يبلغه الفاعل) · أو حدُّ «المرّبين فقط» · أو إسنادُ مخزنٍ من غير المالك — **والرسالة تسمّي الرادّ**",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
           }
         }
       },
       "post": {
-        "summary": "إنشاء مستخدم بكلمة مؤقتة مولَّدة، وإسنادٌ اختياريّ في نفس المعاملة (owner فقط)",
+        "summary": "إنشاء مستخدم بكلمة مؤقتة مولَّدة، وإسنادٌ اختياريّ في نفس المعاملة (owner · supervisor: مربّين فقط)",
         "security": [
           {
             "bearerAuth": []
@@ -1701,7 +1711,14 @@
             "$ref": "#/components/responses/Unauthorized"
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "description": "حارسُ الدور · أو الفرضُ المركزي (كيانٌ أو مستخدمٌ لا يبلغه الفاعل) · أو حدُّ «المرّبين فقط» · أو إسنادُ مخزنٍ من غير المالك — **والرسالة تسمّي الرادّ**",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
@@ -1724,7 +1741,7 @@
     },
     "/api/users/{userId}/deactivate": {
       "post": {
-        "summary": "تعطيل حساب (owner فقط)",
+        "summary": "تعطيل حساب (owner · supervisor: مربّيه فقط)",
         "security": [
           {
             "bearerAuth": []
@@ -1759,7 +1776,14 @@
             "$ref": "#/components/responses/Unauthorized"
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "description": "حارسُ الدور · أو الفرضُ المركزي (كيانٌ أو مستخدمٌ لا يبلغه الفاعل) · أو حدُّ «المرّبين فقط» · أو إسنادُ مخزنٍ من غير المالك — **والرسالة تسمّي الرادّ**",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -1779,7 +1803,7 @@
     },
     "/api/users/{userId}/activate": {
       "post": {
-        "summary": "إعادة تفعيل حساب (owner فقط)",
+        "summary": "إعادة تفعيل حساب (owner · supervisor: مربّيه فقط)",
         "security": [
           {
             "bearerAuth": []
@@ -1814,7 +1838,14 @@
             "$ref": "#/components/responses/Unauthorized"
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "description": "حارسُ الدور · أو الفرضُ المركزي (كيانٌ أو مستخدمٌ لا يبلغه الفاعل) · أو حدُّ «المرّبين فقط» · أو إسنادُ مخزنٍ من غير المالك — **والرسالة تسمّي الرادّ**",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -1824,7 +1855,7 @@
     },
     "/api/users/{userId}/assignments": {
       "get": {
-        "summary": "سرد إسنادات مستخدم — السارية والمنتهية (owner فقط)",
+        "summary": "سرد إسنادات مستخدم — السارية والمنتهية (owner · supervisor: مربّيه فقط)",
         "security": [
           {
             "bearerAuth": []
@@ -1859,7 +1890,14 @@
             "$ref": "#/components/responses/Unauthorized"
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "description": "حارسُ الدور · أو الفرضُ المركزي (كيانٌ أو مستخدمٌ لا يبلغه الفاعل) · أو حدُّ «المرّبين فقط» · أو إسنادُ مخزنٍ من غير المالك — **والرسالة تسمّي الرادّ**",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -1867,7 +1905,7 @@
         }
       },
       "post": {
-        "summary": "إنشاء إسناد يبدأ اليوم وبلا نهاية (owner فقط)",
+        "summary": "إنشاء إسناد يبدأ اليوم وبلا نهاية (owner · supervisor: مربّيه فقط، ومخزن الموقع للمالك وحده)",
         "security": [
           {
             "bearerAuth": []
@@ -1912,7 +1950,14 @@
             "$ref": "#/components/responses/Unauthorized"
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "description": "حارسُ الدور · أو الفرضُ المركزي (كيانٌ أو مستخدمٌ لا يبلغه الفاعل) · أو حدُّ «المرّبين فقط» · أو إسنادُ مخزنٍ من غير المالك — **والرسالة تسمّي الرادّ**",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -1935,7 +1980,7 @@
     },
     "/api/users/{userId}/assignments/{assignmentId}/end": {
       "post": {
-        "summary": "إنهاء مدّة الإسناد — **فعلٌ مسمًّى لا حذف** (owner فقط)",
+        "summary": "إنهاء مدّة الإسناد — **فعلٌ مسمًّى لا حذف** (owner · supervisor: مربّيه فقط)",
         "security": [
           {
             "bearerAuth": []
@@ -1979,7 +2024,14 @@
             "$ref": "#/components/responses/Unauthorized"
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "description": "حارسُ الدور · أو الفرضُ المركزي (كيانٌ أو مستخدمٌ لا يبلغه الفاعل) · أو حدُّ «المرّبين فقط» · أو إسنادُ مخزنٍ من غير المالك — **والرسالة تسمّي الرادّ**",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
