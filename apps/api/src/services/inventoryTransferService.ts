@@ -495,22 +495,3 @@ function visibleTransferEndpoint(viewer: { id: number; role: Role }): SQL {
   )`;
   return sql`(${visible(inventoryTransfers.fromWarehouseId)} OR ${visible(inventoryTransfers.toWarehouseId)})`;
 }
-
-/** يُستعمل في اختبار الثابت الثاني — مجموع ما في الطريق لصنف. */
-export async function inTransitTotal(
-  db: Database,
-  tenantId: number,
-  productId: number
-): Promise<number> {
-  const [row] = await db
-    .select({ total: sql<string>`COALESCE(SUM(${inventoryTransfers.quantity}), 0)` })
-    .from(inventoryTransfers)
-    .where(
-      and(
-        eq(inventoryTransfers.tenantId, tenantId),
-        eq(inventoryTransfers.productId, productId),
-        eq(inventoryTransfers.status, "في الطريق")
-      )
-    );
-  return Number(row?.total ?? 0);
-}
