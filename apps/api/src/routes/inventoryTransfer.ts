@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { requireTenantUser } from "../lib/authContext";
 import { requireRole } from "../middleware/requireRole";
+import { confirmTransferReceipt } from "../services/inventoryTransferConfirmService";
 import {
   createTransferOrder,
   executeTransferIssue,
@@ -12,7 +13,7 @@ import {
 } from "../services/inventoryTransferService";
 
 /**
- * التحويل — **الأمر والخروج** (القرار 228). **ولا تأكيد هنا.**
+ * التحويل — **الأمر والخروج** (القرار 228)، **والتأكيد** (القرار 258).
  *
  * **ولا فحص إسناد في الموجّه:** `fromWarehouseId` و`toWarehouseId` **يمسحهما
  * `enforceEntityAccess` من الجسم** — **وكلا الطرفين يُفحصان** (القراران 193
@@ -20,6 +21,21 @@ import {
  */
 
 const idSchema = z.coerce.number().int().positive();
+
+/**
+ * **التأكيد بالكمية لا بزر** (#159 «رابعًا») — **والحقل مطلوبٌ لا اختياريّ**:
+ * غيابُه يجعل التأكيد زرًّا، **وهو بعينه ما مُنع**.
+ *
+ * **ويقبل الصفر ولا يقبل السالب** — **«لم يصل شيء» واقعةٌ تُسجَّل**، والسالب
+ * لا يُعدّ. **ولا حدَّ أعلى: الفائض يُقبل ويُعرض** (حكم المالك في 258).
+ *
+ * **و`.strict()`** كي لا يمرّ حقلٌ لا يقرؤه أحد.
+ */
+const confirmSchema = z
+  .object({
+    receivedQuantity: z.number().nonnegative("الكمية المستلمة لا تكون سالبة"),
+  })
+  .strict();
 
 const orderSchema = z.object({
   fromWarehouseId: idSchema,
@@ -82,6 +98,8 @@ export function inventoryTransferRouter(db: Database): Router {
     }
   );
 
+  mountConfirmRoute(router, db);
+
   /** **ما في الطريق مقروءٌ لا مستنتَج** — شرط #159 «ثالثًا». */
   router.get("/api/inventory/in-transit", async (req, res, next) => {
     try {
@@ -95,4 +113,44 @@ export function inventoryTransferRouter(db: Database): Router {
   });
 
   return router;
+}
+
+/**
+ * **مسارُ التأكيد مفصولٌ في دالّته** — الحدّ 60 سطرًا للدالة يُحترم بالفصل لا
+ * برفعه، **كما فُصلت خدمتُه عن خدمة الخروج**.
+ */
+function mountConfirmRoute(router: Router, db: Database): void {
+  /**
+   * **تأكيد الاستلام — المحطة الثانية في سلسلة العهدة** (القرار 234).
+   *
+   * **وحارسُ الدور يضمّ الأربعة لأن المؤكِّد يتبع مستوى المخزن المستلِم**
+   * (#161 «ثانيًا»): مخزنُ العنبر لمربّيه · ومخزنُ الموقع لمشرفه · والمركزيّ
+   * لأمين مخزنه · **والمالك مع كلٍّ**. **وحصرُ الحكم هنا يقفل محطةً كاملة.**
+   *
+   * **والتضييق من صاحب الدور إلى صاحب المخزن في `assertWarehouseOwner`** —
+   * **فهذا يقول «أيُّ الأدوار قد تؤكّد»، وذاك يقول «أيُّ فردٍ منها يملك هذا
+   * المخزن بعينه»**. **ولا يُغني أحدهما عن الآخر.**
+   */
+  router.post(
+    "/api/inventory/transfers/:transferId/confirm",
+    requireRole("farmer", "supervisor", "storekeeper", "owner"),
+    async (req, res, next) => {
+      try {
+        const user = requireTenantUser(req);
+        const transferId = idSchema.parse(req.params.transferId);
+        const { receivedQuantity } = confirmSchema.parse(req.body);
+        res.json(
+          await confirmTransferReceipt(db, {
+            tenantId: user.tenantId,
+            actorId: user.id,
+            actorRole: user.role,
+            transferId,
+            receivedQuantity,
+          })
+        );
+      } catch (error) {
+        next(error);
+      }
+    }
+  );
 }

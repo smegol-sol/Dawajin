@@ -263,13 +263,23 @@ interface WarehouseRef {
  * **وهذا شكلُ `batchId` و`stepId` بعينه** (القرار 221): **معرّفٌ مشتقّ يُحلّ
  * داخل الحارس لا خارجه** (المبدأ الأول).
  *
- * **والمرسِلُ وحده يُفحص هنا — حكمٌ يُكتب لا سكوتٌ عنه** (القرار 184):
- * **عملية الخروج تمسّ رصيد المرسِل وحده** — تخصم منه ولا تكتب شيئًا في
- * الوجهة (#159 «ثالثًا»: «ولا تدخل رصيد المستلم إلا بتأكيده»). **ووجهةُ
- * الأمر فُحصت لحظة إصداره** حين وصلت في الجسم، **وتُفحص ثانيةً يوم يُبنى
- * التأكيد** لأنه هو ما يمسّها.
+ * **والطرفُ المفحوص يتبع المسار لا يثبت** (القرار 258): **الخروج يمسّ رصيد
+ * المرسِل وحده** — يخصم منه ولا يكتب شيئًا في الوجهة (#159 «ثالثًا») —
+ * **والتأكيد يمسّ الوجهة وحدها**، فيُفحص فيها.
  *
- * @returns معرّف المخزن المرسِل، أو `undefined` إن لم يحمل الطلب تحويلًا
+ * **وتعليقُ هذا الحارس تنبّأ بالحال قبل أن يُبنى:** «ووجهةُ الأمر… **تُفحص
+ * ثانيةً يوم يُبنى التأكيد لأنه هو ما يمسّها**» (القرار 229). **واليوم
+ * يومُه.**
+ *
+ * **والعطب لو ثبت المرسِل لم يكن نقصًا بل اتجاهًا معكوسًا** — **مُثبَتٌ لا
+ * متوقَّع**: اختبارٌ قائم يردّ صاحبَ الوجهة بـ403 على مسارٍ يحمل
+ * `:transferId` («مربٍّ ينفّذ خروجًا من مخزن مزرعةٍ لا يبلغها إسناده»،
+ * والمربّي فيه صاحبُ الوجهة). **فمسارُ تأكيدٍ يرث ذلك يقفل السلسلة كلَّها.**
+ *
+ * **وفرضُ الطرفين معًا مردودٌ بحكم المالك** — **يمنع مربّيًا من تأكيد شحنةٍ
+ * مصدرُها المركزيّ الذي لا يبلغه، فينقض ما بُني لأجله.**
+ *
+ * @returns معرّف المخزن المعنيّ بهذا المسار، أو `undefined` إن لم يحمل الطلب تحويلًا
  * @throws HttpError 404 — تحويلٌ خارج المستأجر يبدو غير موجود (المبدأ السادس)
  */
 async function resolveTransferWarehouseId(
@@ -284,7 +294,10 @@ async function resolveTransferWarehouseId(
   }
 
   const [transfer] = await db
-    .select({ fromWarehouseId: inventoryTransfers.fromWarehouseId })
+    .select({
+      fromWarehouseId: inventoryTransfers.fromWarehouseId,
+      toWarehouseId: inventoryTransfers.toWarehouseId,
+    })
     .from(inventoryTransfers)
     .where(
       and(eq(inventoryTransfers.id, Number(raw)), eq(inventoryTransfers.tenantId, user.tenantId))
@@ -292,7 +305,23 @@ async function resolveTransferWarehouseId(
     .limit(1);
   // **الوجود قبل التعيين** — غير الموجود 404 قبل غير المُسند 403 (المبدأ السادس)
   if (!transfer) throw new HttpError(404, "not_found", "أمر التحويل غير موجود");
-  return transfer.fromWarehouseId;
+  return isConfirmationPath(req) ? transfer.toWarehouseId : transfer.fromWarehouseId;
+}
+
+/**
+ * **هل هذا مسارُ تأكيدٍ؟ — قائمةٌ موجبة لا شرطٌ سالب** (نمط `entityScope.ts`).
+ *
+ * **ومسارٌ جديد لا يصير تأكيدًا بالسكوت**: ما لم يُدرَج هنا يُفحص على المرسِل
+ * — **وهو الاتجاه الآمن**، لأن المرسِل هو من يُخصم منه.
+ *
+ * **ويُقرأ من `req.path` لا من `originalUrl`**: الأخير يحمل سلسلة الاستعلام
+ * فيُطابق ما ليس مسارًا.
+ */
+const CONFIRMATION_PATH_SUFFIXES: readonly string[] = ["/confirm"];
+
+function isConfirmationPath(req: Request): boolean {
+  const path = req.path.replace(/\/+$/, "");
+  return CONFIRMATION_PATH_SUFFIXES.some((suffix) => path.endsWith(suffix));
 }
 
 /** `userId` من الرابط وحده — **لا من الجسم**: `POST /api/users` يُنشئ ولا يستهدف. */
