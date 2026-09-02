@@ -41,9 +41,10 @@ export function generateTemporaryPassword(): string {
 /**
  * بوابة القبول: ترفض أي كلمة مؤقتة لم تخرج من المولّد أعلاه.
  *
- * تُستدعى في **كل** مسار يُنشئ مستخدمًا بكلمة مؤقتة. مسار الإنشاء
- * (`POST /api/users`) لم يُبنَ بعد (المرحلة 4) — هذه البوابة جاهزة له،
- * ويحرسها فاحص `dawajin/no-manual-temp-password` حتى لا يُنسى استدعاؤها.
+ * تُستدعى في **كل** مسار يُنشئ مستخدمًا بكلمة مؤقتة. **وكان هنا «مسار
+ * الإنشاء (`POST /api/users`) لم يُبنَ بعد» — وبطل بالقرار 245** (القرار
+ * 267): **المسار قائمٌ ويستدعيها**، ويحرسها فاحص
+ * `dawajin/no-manual-temp-password` حتى لا يُنسى استدعاؤها في مسارٍ قادم.
  * @throws HttpError 400 إن لم تطابق الكلمة الشكل المولَّد
  */
 export function assertGeneratedTemporaryPassword(candidate: string): void {
