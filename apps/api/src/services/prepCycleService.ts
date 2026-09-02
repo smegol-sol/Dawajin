@@ -15,7 +15,7 @@ import {
   type HouseStatus,
   type PrepProtocol,
 } from "@dawajin/shared";
-import { and, asc, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, isNull, lt, sql } from "drizzle-orm";
 
 /**
  * دورة تجهيز العنبر — `GET /houses/:houseId/prep-cycle` و
@@ -362,11 +362,16 @@ export async function lockOpenCycle(
  * **إعادة قراءة الخطوة تحت القفلين وفرض حرّاسها** — قفل الدورة يسلسل
  * الإكمالات كلها، فلا قراءة قبله يُبنى عليها قرار.
  */
-async function assertStepCompletable(tx: Tx, input: CompletePrepStepInput): Promise<void> {
+async function assertStepCompletable(
+  tx: Tx,
+  input: CompletePrepStepInput,
+  cycleId: number
+): Promise<void> {
   const { tenantId, actorId, actorRole, stepId } = input;
   const [step] = await tx
     .select({
       id: housePrepSteps.id,
+      stepOrder: housePrepSteps.stepOrder,
       completedAt: housePrepSteps.completedAt,
       assignedTo: housePrepSteps.assignedTo,
     })
@@ -384,6 +389,55 @@ async function assertStepCompletable(tx: Tx, input: CompletePrepStepInput): Prom
       stepId,
     });
   }
+  // **الترتيب آخر الحرّاس عمدًا** — الوجود ثم الصلاحية ثم حال الدورة، فلا
+  // يُخبِر رمزُ الترتيب بوجود خطوةٍ لمن لا يملك الوصول إليها أصلًا.
+  await assertEarlierRequiredDone(tx, { tenantId, cycleId, stepOrder: step.stepOrder, stepId });
+}
+
+/**
+ * **حارس الترتيب** — **«لا تُطهَّر قبل الغسيل»** (القرار #55، والقرار 263).
+ *
+ * **وهو حكمٌ صحّيّ لا إداريّ**، فلا يدخل تحت المبدأ الخامس «لا يُمنع الميدان
+ * بسبب الإدارة»: **تطهيرٌ على فرشةٍ لم تُخرَج لا يُطهِّر شيئًا**، والدفعة
+ * القادمة تدفع الثمن بعد أسابيع فلا يُربط بسببه.
+ *
+ * **وترتيبٌ في الواجهة وحدها حراسةٌ وهمية** — **فالفرض هنا لا في الشاشة**.
+ *
+ * **والحاجب الإلزاميّ وحده، والاختيارية لا تحجب** — **وهو نفس ما تفعله
+ * قاعدةُ الانتقال** («عند اكتمال الإلزامية»، §14.6): **اختياريةٌ متروكة لا
+ * يُلزم أحدٌ بإكمالها، فحجبُها ما بعدها يوقف الدورة إلى الأبد بلا مخرج**.
+ *
+ * **والحاجب يُسمّى في الرسالة لا يُعدّ**: «أكمِل الخطوة السابقة» لا تقول
+ * أيَّها، **والميدان يحتاج اسمًا يعمل به**.
+ *
+ * @throws HttpError 422 `earlier_step_incomplete` باسم أوّل حاجبٍ إلزاميّ
+ */
+async function assertEarlierRequiredDone(
+  tx: Tx,
+  args: { tenantId: number; cycleId: number; stepOrder: number; stepId: number }
+): Promise<void> {
+  const [blocker] = await tx
+    .select({ label: housePrepSteps.label, stepOrder: housePrepSteps.stepOrder })
+    .from(housePrepSteps)
+    .where(
+      and(
+        eq(housePrepSteps.cycleId, args.cycleId),
+        eq(housePrepSteps.tenantId, args.tenantId),
+        eq(housePrepSteps.isRequired, true),
+        isNull(housePrepSteps.completedAt),
+        lt(housePrepSteps.stepOrder, args.stepOrder)
+      )
+    )
+    .orderBy(asc(housePrepSteps.stepOrder))
+    .limit(1);
+  if (!blocker) return;
+
+  throw new HttpError(
+    422,
+    "earlier_step_incomplete",
+    `الترتيب ملزم — «${blocker.label}» قبلها ولم تكتمل بعد`,
+    { stepId: args.stepId, blockingStepOrder: blocker.stepOrder, blockingLabel: blocker.label }
+  );
 }
 
 export async function completePrepStep(
@@ -399,7 +453,7 @@ export async function completePrepStep(
     // **القفل يبقى لترتيبه** — العنبر ثم الدورة — وإن لم تعد حالتُه تُقرأ هنا
     await lockHouse(tx, tenantId, address.houseId);
     const cycle = await lockOpenCycle(tx, tenantId, address.cycleId);
-    await assertStepCompletable(tx, input);
+    await assertStepCompletable(tx, input, cycle.id);
 
     const [completed] = await tx
       .update(housePrepSteps)

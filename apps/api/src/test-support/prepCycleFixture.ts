@@ -6,10 +6,11 @@ import {
   housePrepSteps,
   houseStatusHistory,
   houses,
+  tenants,
   userAssignments,
   type Database,
 } from "@dawajin/db";
-import type { HouseStatus } from "@dawajin/shared";
+import type { HouseStatus, PrepProtocol } from "@dawajin/shared";
 import { eq, sql } from "drizzle-orm";
 import pino from "pino";
 import request from "supertest";
@@ -277,4 +278,24 @@ export async function openCycleRow(
     .returning({ id: housePrepCycles.id });
   if (!row) throw new Error("تعذّر إنشاء دورة التجهيز في التجهيزة");
   return row.id;
+}
+
+/**
+ * يُشغّل عملًا ببروتوكول مستأجرٍ مؤقّت ثم يُعيده إلى `null` — **مشتركٌ
+ * يُستورد ولا يُنسخ** بين ملفَّي اختبار التجهيز.
+ *
+ * **والإعادة في `finally`**: بروتوكولٌ يبقى مكتوبًا يسرّب نفسه إلى كل اختبارٍ
+ * بعده في نفس الملف، **فيخضرّ أو يحمرّ لسببٍ ليس فيه**.
+ */
+export async function withProtocol<T>(
+  f: PrepFixture,
+  protocol: PrepProtocol,
+  work: () => Promise<T>
+): Promise<T> {
+  await f.db.update(tenants).set({ prepProtocol: protocol }).where(eq(tenants.id, f.tenantAId));
+  try {
+    return await work();
+  } finally {
+    await f.db.update(tenants).set({ prepProtocol: null }).where(eq(tenants.id, f.tenantAId));
+  }
 }
