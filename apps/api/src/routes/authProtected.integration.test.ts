@@ -117,6 +117,25 @@ describe("مصفوفة الصلاحيات — GET /api/auth/me", () => {
   }
 });
 
+/**
+ * **حجبُ الحقول في ملفّ المستخدم** (القرار 253): `getUserProfile` يقرأ الصفّ
+ * **كاملًا** ثم يبني كائن الرد بيده — **فالحجب في البناء لا في الاستعلام**،
+ * **وعطبُه أن يُعاد الصفّ كما هو فلا خطأ يُرمى ولا صفّ يزيد، بل حقلٌ يظهر**.
+ */
+describe("حجبُ الحقول — GET /api/auth/me لا يُعيد سرًّا (القرار 253)", () => {
+  it("**لا `passwordHash` ولا `phoneE164` ولا `expoPushToken` في الرد**", async () => {
+    const res = await request(app)
+      .get("/api/auth/me")
+      .set("Authorization", `Bearer ${tokensByRole.get("vet") ?? ""}`);
+    expect(res.status).toBe(200);
+
+    const keys = Object.keys(res.body as Record<string, unknown>);
+    expect(keys).not.toContain("passwordHash");
+    expect(keys).not.toContain("phoneE164");
+    expect(keys).not.toContain("expoPushToken");
+  });
+});
+
 describe("مصفوفة الصلاحيات — POST /api/auth/change-password", () => {
   it("POST /api/auth/change-password — 401 بلا توكن", async () => {
     const res = await request(app)

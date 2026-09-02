@@ -93,6 +93,35 @@ afterAll(async () => {
   await pool.end();
 });
 
+/**
+ * **حجبُ حقول الاشتراك** (القرار 253): `pickSettings` يقرأ صفّ المستأجر
+ * **كاملًا** ثم يُرجع **الخمسة المسموحة وحدها** — **وبقيةُ الأعمدة تجاريّة
+ * تخصّ مدير المنصة لا المالك** (#148 و#149).
+ *
+ * **والشاهد يسمّي الغائب** — تأكيدُ حضور `minRestDays` وحده **يخضرّ ولو
+ * أُعيد الصفّ كلّه**.
+ */
+describe("حجبُ الحقول — GET /api/settings يُعيد الخمسة وحدها (القرار 253)", () => {
+  it("**لا `subscriptionPlan` ولا `subscriptionStatus` ولا `maxHouses` ولا `contactPhone`**", async () => {
+    const res = await request(app)
+      .get("/api/settings")
+      .set("Authorization", `Bearer ${ownerToken}`);
+    expect(res.status).toBe(200);
+
+    const keys = Object.keys(res.body as Record<string, unknown>);
+    for (const hidden of [
+      "subscriptionPlan",
+      "subscriptionStatus",
+      "subscriptionExpiresAt",
+      "maxHouses",
+      "contactPhone",
+      "name",
+    ]) {
+      expect(keys).not.toContain(hidden);
+    }
+  });
+});
+
 describe("PATCH /api/settings — request_id يربط سجل التدقيق بالطلب فعليًا", () => {
   it("يُحدِّث القيم ويكتب صف تدقيق يحمل نفس معرّف الطلب المُعاد في الترويسة", async () => {
     const res = await request(app)
