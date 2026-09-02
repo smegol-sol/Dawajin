@@ -2048,6 +2048,122 @@
           }
         }
       }
+    },
+    "/api/inventory/transfers/{transferId}/confirm": {
+      "post": {
+        "summary": "تأكيد الاستلام — بالكمية لا بزر، ويقبل الفائض كما يقبل العجز (القرار 258 على 234)",
+        "description": "المؤكِّد صاحبُ المخزن المستلِم لا من يبلغه: مخزن العنبر لمربّيه · ومخزن الموقع لمشرفه · والمركزيّ لأمين مخزنه — والمالك مع كلٍّ (#161 «ثانيًا»). وحركةُ «تحويل وارد» (+) بالكمية المستلمة فعلًا، والفرق موجبًا أو سالبًا يُعرض ولا يُبتلع.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "transferId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "receivedQuantity": {
+                    "type": "number",
+                    "minimum": 0,
+                    "description": "الكمية المستلمة فعلًا — والصفر مقبول: «لم يصل شيء» واقعةٌ تُسجَّل"
+                  }
+                },
+                "required": ["receivedQuantity"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "التأكيد والفرق والرصيد بعده",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "transferId": {
+                      "type": "integer"
+                    },
+                    "movementId": {
+                      "type": "integer"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": ["مستلم"]
+                    },
+                    "issuedQuantity": {
+                      "type": "number"
+                    },
+                    "receivedQuantity": {
+                      "type": "number"
+                    },
+                    "variance": {
+                      "type": "number",
+                      "description": "الفرق مسمًّى: موجبٌ فائض، سالبٌ عجز، صفرٌ تطابق"
+                    },
+                    "balanceAfter": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "transferId",
+                    "movementId",
+                    "status",
+                    "issuedQuantity",
+                    "receivedQuantity",
+                    "variance",
+                    "balanceAfter"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "description": "من ليس صاحبَ المخزن المستلِم (`not_warehouse_owner`) — أو من لا يبلغه أصلًا من الفرض المركزي",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "description": "حالةٌ لا تسمح (`transfer_not_confirmable`) · مخزنٌ معطَّل (`warehouse_inactive`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {

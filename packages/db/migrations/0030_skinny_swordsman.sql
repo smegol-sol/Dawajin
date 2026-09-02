@@ -1,0 +1,4 @@
+ALTER TABLE "inventory_transfers" ADD COLUMN "received_quantity" numeric(12, 3);--> statement-breakpoint
+ALTER TABLE "inventory_transfers" ADD CONSTRAINT "inventory_transfers_confirm_triple_ck" CHECK (("inventory_transfers"."confirmed_at" IS NULL) = ("inventory_transfers"."confirmed_by" IS NULL)
+          AND ("inventory_transfers"."confirmed_at" IS NULL) = ("inventory_transfers"."received_quantity" IS NULL));--> statement-breakpoint
+ALTER TABLE "inventory_transfers" ADD CONSTRAINT "inventory_transfers_received_quantity_ck" CHECK ("inventory_transfers"."received_quantity" IS NULL OR "inventory_transfers"."received_quantity" >= 0);

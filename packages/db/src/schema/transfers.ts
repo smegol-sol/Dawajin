@@ -66,6 +66,18 @@ export const inventoryTransfers = pgTable(
     issuedAt: timestamp("issued_at", { withTimezone: true }),
     confirmedBy: integer("confirmed_by"),
     confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
+    /**
+     * **الكمية المستلمة فعلًا — لا المُصدَرة** (#159 «رابعًا»، والقرار 258).
+     *
+     * **والعمود هو ما يجعل «التأكيد بالكمية لا بزر» ممكنًا**: بلا ثانٍ لا
+     * فرقَ يُقاس، **والقرار 228 اختار أن يكون العجز «فرقَ رقمين على صفٍّ
+     * واحد» لا رصيدًا عالقًا في مخزنٍ وسيط**.
+     *
+     * **ويقبل الصفر ولا يقبل السالب:** **الاستلام أعمى — المستلِم يعدّ ما
+     * وصله فعلًا**، **ورفضُ الصفر يجبره على كتابة رقمٍ غير الذي عدّه**
+     * فيصير الاستلام طقسًا. **والسالب لا يُعدّ.**
+     */
+    receivedQuantity: numeric("received_quantity", { precision: 12, scale: 3 }),
   },
   (table) => [
     foreignKey({
@@ -82,6 +94,20 @@ export const inventoryTransfers = pgTable(
     check(
       "inventory_transfers_issue_pair_ck",
       sql`(${table.issuedAt} IS NULL) = (${table.issuedBy} IS NULL)`
+    ),
+    // **والتأكيد ثلاثةٌ معًا أو لا شيء** — على نمط `issue_pair_ck`: **مؤكِّدٌ
+    // ووقتٌ وكميةٌ مستلمة**. **فلا كميةَ استلامٍ بلا مؤكِّد** (رقمٌ لا صاحب
+    // له)، **ولا تأكيدَ بلا كمية** (وهو بعينه «التأكيد بزر» الذي منعه #159).
+    check(
+      "inventory_transfers_confirm_triple_ck",
+      sql`(${table.confirmedAt} IS NULL) = (${table.confirmedBy} IS NULL)
+          AND (${table.confirmedAt} IS NULL) = (${table.receivedQuantity} IS NULL)`
+    ),
+    // **والمستلَم لا يكون سالبًا** — والصفر مقبولٌ عمدًا: «لم يصل شيء» واقعةٌ
+    // تُسجَّل لا حالةٌ تُمنع.
+    check(
+      "inventory_transfers_received_quantity_ck",
+      sql`${table.receivedQuantity} IS NULL OR ${table.receivedQuantity} >= 0`
     ),
     // **الحالة تطابق ما وقع فعلًا** — «في الطريق» تلزمها خروجٌ مسجَّل،
     // و«مستلم» تلزمها خروجٌ وتأكيد. **فلا حالةٌ تدّعي فعلًا لم يقع.**
