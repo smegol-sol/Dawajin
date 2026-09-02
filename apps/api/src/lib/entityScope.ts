@@ -23,7 +23,15 @@ export type Role = NonNullable<Request["user"]>["role"];
  * **قائمة موجبة لا شرط سالب عمدًا:** دور جديد يُضاف للنظام لا يحصل على تجاوز
  * صامت — يبقى خارج القيد حتى يُدرَج هنا بقرار مكتوب.
  */
-export const ASSIGNMENT_SCOPED_ROLES = new Set<Role>(["farmer", "supervisor", "vet"]);
+export const ASSIGNMENT_SCOPED_ROLES = new Set<Role>([
+  "farmer",
+  "supervisor",
+  "vet",
+  // **وأمين المخزن أُدرج بالقرار 254** — وكان خارج القائمتين معًا **فيُردّ عن
+  // كل مسار `/api/*` بالفرض المركزي** (القرار 246 «ثانيًا»). **وأثرُ إدراجه
+  // مقصورٌ عليه**: القوائم تُسأل بدور الفاعل وحده، فلا توسّع دورًا آخر.
+  "storekeeper",
+]);
 
 export function isAssignmentScoped(role: Role): boolean {
   return ASSIGNMENT_SCOPED_ROLES.has(role);

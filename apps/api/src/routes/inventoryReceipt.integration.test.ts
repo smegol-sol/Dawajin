@@ -113,6 +113,26 @@ async function seedWarehouses(
   return { centralId: central.id, houseWarehouseId: houseWarehouse.id };
 }
 
+/**
+ * فاعلو الاستلام الخمسة — **مفصولون عن `beforeAll`**: الحدّ 60 سطرًا للدالة
+ * يُحترم بالفصل لا برفعه.
+ * @returns معرّفات من يُسنَد لهم المخزن المركزي بعد إنشائه
+ */
+async function seedReceiptActors(
+  secret: string
+): Promise<{ supervisorId: number; vetId: number; storekeeperId: number }> {
+  ({ token: ownerToken } = await seedUser(db, { tenantId, role: "owner", secret }));
+  const supervisor = await seedUser(db, { tenantId, role: "supervisor", secret });
+  const vet = await seedUser(db, { tenantId, role: "vet", secret });
+  const farmer = await seedUser(db, { tenantId, role: "farmer", secret });
+  const storekeeper = await seedUser(db, { tenantId, role: "storekeeper", secret });
+  supervisorToken = supervisor.token;
+  vetToken = vet.token;
+  farmerToken = farmer.token;
+  storekeeperToken = storekeeper.token;
+  return { supervisorId: supervisor.id, vetId: vet.id, storekeeperId: storekeeper.id };
+}
+
 beforeAll(async () => {
   const env = loadEnv();
   const testUrl = process.env.TEST_DATABASE_URL;
@@ -124,36 +144,8 @@ beforeAll(async () => {
   app = createApp(db, env, pino({ level: "silent" }));
 
   tenantId = await seedTenant(db, `استلام ${S}`);
-  let supervisorId: number;
-  let vetId: number;
-  let storekeeperId: number;
-  ({ token: ownerToken } = await seedUser(db, { tenantId, role: "owner", secret: env.JWT_SECRET }));
-  ({ token: supervisorToken, id: supervisorId } = await seedUser(db, {
-    tenantId,
-    role: "supervisor",
-    secret: env.JWT_SECRET,
-  }));
-  ({ token: vetToken, id: vetId } = await seedUser(db, {
-    tenantId,
-    role: "vet",
-    secret: env.JWT_SECRET,
-  }));
-  ({ token: farmerToken } = await seedUser(db, {
-    tenantId,
-    role: "farmer",
-    secret: env.JWT_SECRET,
-  }));
-  ({ token: storekeeperToken, id: storekeeperId } = await seedUser(db, {
-    tenantId,
-    role: "storekeeper",
-    secret: env.JWT_SECRET,
-  }));
-
-  ({ centralId, houseWarehouseId } = await seedWarehouses(app, ownerToken, {
-    supervisorId,
-    vetId,
-    storekeeperId,
-  }));
+  const assignees = await seedReceiptActors(env.JWT_SECRET);
+  ({ centralId, houseWarehouseId } = await seedWarehouses(app, ownerToken, assignees));
 
   feedId = await seedProduct("علف", "كيس");
   medicineId = await seedProduct("دواء", "زجاجة");
@@ -360,11 +352,27 @@ describe("الصلاحية — §12.2 صفّ «استلام من مورّد» و
     });
     expect(owner.status).toBe(201);
   });
+});
 
-  it("**وأمين المخزن يرفضه الفرض المركزي بـ403** — حدٌّ معلن (القرار 227)", async () => {
+describe("**وأمين المخزن — خانةٌ كانت مكتوبةً ولا تُبلَغ (القرار 254)**", () => {
+  /**
+   * **والحدّ المعلن في القرار 227 رُفع بالقرار 254** — لا بتغيير المصفوفة:
+   * §12.2 تعطيه «✅ المركزي حصرًا» منذ 198، **وكان يُردّ لأنه خارج قائمتَي
+   * `entityScope` معًا** فيمنعه الفرضُ المركزي قبل الموجّه. **فإدراجُه فتح
+   * خانةً كانت مكتوبةً ولا تُبلَغ.**
+   *
+   * **وحارسُه اليوم الإسنادُ لا الدور** — **فالخانتان تُقاسان معًا**، وإلّا
+   * لم يُعرف أنّ الأخضر أخضرُ حارسٍ لا أخضرُ فتحٍ للجميع.
+   */
+  it("**أمين المخزن يستلم في مركزيّه المُسنَد ← 201** (القرار 254)", async () => {
     const res = await receive(storekeeperToken, feedReceipt(10));
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(201);
+    expect(await balanceOf(feedId, centralId)).toBe(10);
   });
+
+  // **ووجهُه الآخر — «ومركزيٌّ لم يُسنَد له ← 403» — في**
+  // `storekeeperScope.integration.test.ts`: **سطحُ الدور كلُّه هناك في ملفٍ
+  // واحد**، ولا يُكتب الشاهد مرتين.
 });
 
 describe("ثابت §13.3 بعد الاستلام", () => {
