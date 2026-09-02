@@ -176,7 +176,7 @@ export const carriers = pgTable(
   ]
 );
 
-/** كتالوج المنتجات — علف/دواء/لقاح/فيتامين/مستلزمات. */
+/** كتالوج المنتجات — سبعُ فئات بعد قسمة «مستلزمات» (القرار 231). */
 export const products = pgTable(
   "products",
   {
@@ -279,11 +279,14 @@ export const products = pgTable(
       .on(table.tenantId, table.emptyBagCondition)
       .where(sql`${table.emptyBagCondition} IS NOT NULL`),
     // **والكيس الفارغ صنفٌ نظاميّ يُعدّ بالكيس** — لا يُنشئه مستخدم ولا يُقاس
-    // بغير وحدته. **و«مستلزمات» أقرب فئة قائمة** — ولا تُضاف فئة سابعة لأجله.
+    // بغير وحدته. **وفئتُه «مستلزمات تشغيل»** — **وكانت «مستلزمات» وسُجِّل
+    // أنها «أقرب فئة قائمة ولا تصفه بدقّة» ورُفضت سابعةٌ لأجله** (القرار 212).
+    // **وقُبلت السابعة بالقرار 231 لأن طالبَها تغيّر:** كان تسميةً أدقّ لصنف،
+    // **وصار قاعدةً لا تُفرَض بدونها** — وهذا هو النسخ في موضعه لا محذوفًا.
     check(
       "products_empty_bag_shape_ck",
       sql`${table.emptyBagCondition} IS NULL
-          OR (${table.isSystem} = true AND ${table.category} = 'مستلزمات'
+          OR (${table.isSystem} = true AND ${table.category} = 'مستلزمات تشغيل'
               AND ${table.stockUnit} = 'كيس')`
     ),
     // **صنف علف بلا حجم عبوة أو بلا وحدتها لا يُقبل** (القرار 201) —

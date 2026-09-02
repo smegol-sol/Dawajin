@@ -218,6 +218,13 @@
       "when": 1788330429200,
       "tag": "0030_skinny_swordsman",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1788357854618,
+      "tag": "0031_fancy_korvac",
+      "breakpoints": true
     }
   ]
 }

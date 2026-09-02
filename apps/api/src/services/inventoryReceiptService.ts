@@ -10,6 +10,7 @@ import {
 } from "@dawajin/shared";
 import { and, eq } from "drizzle-orm";
 
+import { assertCategoryAllowedInWarehouse } from "../lib/houseWarehouseCategories";
 import { computeBalance } from "../lib/inventoryBalance";
 
 /**
@@ -173,6 +174,10 @@ export async function recordWarehouseReceipt(
     // **القفل أولًا** — شرط القرار 223، ولا قراءة قبله يُبنى عليها قرار
     await lockWarehouse(tx, tenantId, warehouseId);
     await assertProductReceivable(tx, { tenantId, productId, unit, actorRole });
+    // **وحدُّ فئات مخزن العنبر يسري على الاستلام كما يسري على التحويل**
+    // (حكم المالك، القرار 260): **الإعفاء في 231 كان مشروطًا بأن يحصر 233
+    // الاستلامَ في المركزيّ — و233 لم يُبنَ، فالشرط غائب**.
+    await assertCategoryAllowedInWarehouse(tx, { tenantId, warehouseId, productId });
 
     const [movement] = await tx
       .insert(inventoryMovements)

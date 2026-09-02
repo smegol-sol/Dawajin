@@ -18,6 +18,7 @@ import {
   visibleWarehouseCondition,
   type Role,
 } from "../lib/entityScope";
+import { assertCategoryAllowedInWarehouse } from "../lib/houseWarehouseCategories";
 import { computeBalance } from "../lib/inventoryBalance";
 
 /**
@@ -186,6 +187,14 @@ export async function createTransferOrder(
       productId: input.productId,
       unit: input.unit,
       quantity: input.quantity,
+    });
+    // **حدُّ فئات مخزن العنبر — على الوجهة** (القرار 231، والفرض 260).
+    // **وعند إصدار الأمر لا عند الخروج**: **أمرٌ لا يجوز تنفيذُه لا يُكتب
+    // أصلًا** — والرفضُ عند الخروج يترك صفًّا معلَّقًا لا يبلغ وجهته أبدًا.
+    await assertCategoryAllowedInWarehouse(tx, {
+      tenantId,
+      warehouseId: toWarehouseId,
+      productId: input.productId,
     });
 
     const [order] = await tx
