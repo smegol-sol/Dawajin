@@ -71,22 +71,26 @@ describe(`رمز قديم بدور مدير منصة — لا يرى شيئًا 
    * هذه الدفعة: الدور خارج القائمتين الموجبتين، **فلا يمرّ `enforceEntityAccess`
    * أصلًا**. وقبل الإتمام كان يمرّ ويرى **أسماء مواقع المستأجر** بعدّادات أصفار.
    */
-  it("سرد المواقع ← 403 — لا أسماء مواقع ولا قائمة فارغة مهذّبة", async () => {
+  it("سرد المواقع ← 403 — لا أسماء مواقع ولا قائمة فارغة مهذّبة — الرادُّ الفرض المركزي", async () => {
     const token = await legacyPlatformToken(tenantId);
     const res = await request(app).get("/api/sites").set("Authorization", `Bearer ${token}`);
 
     expect(res.status).toBe(403);
+    expect((res.body as { code: string }).code).toBe("forbidden");
+    expect((res.body as { message: string }).message).toContain("غير مخوَّل بالوصول");
     const body = JSON.stringify(res.body);
     expect(body).not.toContain("موقع الفصل");
   });
 
-  it("سرد مزارع موقع قائم ← 403 لا محتوى", async () => {
+  it("سرد مزارع موقع قائم ← 403 لا محتوى — الرادُّ الفرض المركزي", async () => {
     const token = await legacyPlatformToken(tenantId);
     const res = await request(app)
       .get(`/api/sites/${String(siteId)}/farms`)
       .set("Authorization", `Bearer ${token}`);
 
     expect(res.status).toBe(403);
+    expect((res.body as { code: string }).code).toBe("forbidden");
+    expect((res.body as { message: string }).message).toContain("غير مخوَّل بالوصول");
   });
 
   it("الإعدادات (للمالك وحده) ← 403 — حارس الدور لا يعرف القيمة", async () => {

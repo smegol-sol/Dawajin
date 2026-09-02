@@ -207,7 +207,7 @@ function post(token: string, body: Record<string, unknown>) {
 }
 
 describe(`عنونة المخزن — مخزن العنبر يُحلّ بإسناد عنبره (${S})`, () => {
-  it("مخزن عنبر غير مُسند للمربّي ← 403", async () => {
+  it("مخزن عنبر غير مُسند للمربّي ← 403 — الرادُّ الفرض المركزي", async () => {
     const res = await post(farmerToken, { warehouseId: unassignedHouseWarehouse });
     expect(res.status).toBe(403);
     expect((res.body as { code?: string }).code).toBe("forbidden");
@@ -223,7 +223,7 @@ describe(`عنونة المخزن — مخزن العنبر يُحلّ بإسن�
     expect(res.status).toBe(404);
   });
 
-  it("إسناد انتهت مدته أمس ← 403 (شرط «سارٍ اليوم» يسري على المخزن كما على العنبر)", async () => {
+  it("إسناد انتهت مدته أمس ← 403 (شرط «سارٍ اليوم» يسري على المخزن كما على العنبر) — الرادُّ الفرض المركزي", async () => {
     const { id, token } = await seedUser(db, { tenantId, role: "farmer", secret: JWT_SECRET });
     await db.insert(userAssignments).values({
       tenantId,
@@ -235,13 +235,17 @@ describe(`عنونة المخزن — مخزن العنبر يُحلّ بإسن�
 
     const res = await post(token, { warehouseId: unassignedHouseWarehouse });
     expect(res.status).toBe(403);
+    expect((res.body as { code: string }).code).toBe("forbidden");
+    expect((res.body as { message: string }).message).toContain("غير مخوَّل بالوصول");
   });
 });
 
 describe(`عنونة المخزن — المركزي والقيمة المجهولة (${S})`, () => {
-  it("مخزن مركزي لمشرف بلا إسناد مخزن ← 403", async () => {
+  it("مخزن مركزي لمشرف بلا إسناد مخزن ← 403 — الرادُّ الفرض المركزي", async () => {
     const res = await post(supervisorToken, { warehouseId });
     expect(res.status).toBe(403);
+    expect((res.body as { code: string }).code).toBe("forbidden");
+    expect((res.body as { message: string }).message).toContain("غير مخوَّل بالوصول");
   });
 
   it("مخزن مركزي للمالك ← يمرّ", async () => {
@@ -254,40 +258,48 @@ describe(`عنونة المخزن — المركزي والقيمة المجهو
     expect(res.status).toBe(404);
   });
 
-  it("معرّف ليس رقمًا ← 403 لا تمرير صامت", async () => {
+  it("معرّف ليس رقمًا ← 403 لا تمرير صامت — الرادُّ الفرض المركزي", async () => {
     const res = await post(ownerToken, { warehouseId: "silo" });
     expect(res.status).toBe(403);
   });
 
-  it("معرّف صفر ← 403 (لا يشير إلى مخزن)", async () => {
+  it("معرّف صفر ← 403 (لا يشير إلى مخزن) — الرادُّ الفرض المركزي", async () => {
     const res = await post(ownerToken, { warehouseId: 0 });
     expect(res.status).toBe(403);
+    expect((res.body as { code: string }).code).toBe("forbidden");
+    expect((res.body as { message: string }).message).toContain("قيمة warehouseId غير");
   });
 });
 
 describe(`عنونة المخزن — طرفا التحويل معًا (${S})`, () => {
-  it("من مخزن مُسند إلى مخزن غير مُسند ← 403 (الوجهة تُفحص لا المصدر وحده)", async () => {
+  it("من مخزن مُسند إلى مخزن غير مُسند ← 403 (الوجهة تُفحص لا المصدر وحده) — الرادُّ الفرض المركزي", async () => {
     const res = await post(farmerToken, {
       fromWarehouseId: assignedHouseWarehouse,
       toWarehouseId: unassignedHouseWarehouse,
     });
     expect(res.status).toBe(403);
+    expect((res.body as { code: string }).code).toBe("forbidden");
+    expect((res.body as { message: string }).message).toContain("غير مخوَّل بالوصول");
   });
 
-  it("من مخزن غير مُسند إلى مخزنه المُسند ← 403 (المصدر يُفحص كذلك)", async () => {
+  it("من مخزن غير مُسند إلى مخزنه المُسند ← 403 (المصدر يُفحص كذلك) — الرادُّ الفرض المركزي", async () => {
     const res = await post(farmerToken, {
       fromWarehouseId: unassignedHouseWarehouse,
       toWarehouseId: assignedHouseWarehouse,
     });
     expect(res.status).toBe(403);
+    expect((res.body as { code: string }).code).toBe("forbidden");
+    expect((res.body as { message: string }).message).toContain("غير مخوَّل بالوصول");
   });
 
-  it("من المركزي إلى مخزن عنبر غير مُسند ← 403 وإن كان المركزي مسموحًا للمالك", async () => {
+  it("من المركزي إلى مخزن عنبر غير مُسند ← 403 وإن كان المركزي مسموحًا للمالك — الرادُّ الفرض المركزي", async () => {
     const res = await post(farmerToken, {
       fromWarehouseId: warehouseId,
       toWarehouseId: unassignedHouseWarehouse,
     });
     expect(res.status).toBe(403);
+    expect((res.body as { code: string }).code).toBe("forbidden");
+    expect((res.body as { message: string }).message).toContain("غير مخوَّل بالوصول");
   });
 
   it("طرفان سليمان للمالك ← يمرّان", async () => {
@@ -311,12 +323,14 @@ describe(`عنونة المخزن — طرفا التحويل معًا (${S})`, 
  * إسناد المخزن لزميله** — **فلو اشتُقّ الوصول من إسناد المزارع لمرّ**.
  */
 describe(`مخزن الموقع — إسنادٌ صريح لا اشتقاق (${S})`, () => {
-  it("مشرفٌ مُسنَدٌ لمزرعةٍ في الموقع، بلا إسناد المخزن ← 403", async () => {
+  it("مشرفٌ مُسنَدٌ لمزرعةٍ في الموقع، بلا إسناد المخزن ← 403 — الرادُّ الفرض المركزي", async () => {
     const res = await post(supervisorAToken, { warehouseId: siteWarehouseId });
     expect(res.status).toBe(403);
+    expect((res.body as { code: string }).code).toBe("forbidden");
+    expect((res.body as { message: string }).message).toContain("غير مخوَّل بالوصول");
   });
 
-  it("**وإسنادٌ منتهي المدة لا يفتحه** — «سارٍ اليوم» يسري هنا كغيره", async () => {
+  it("**وإسنادٌ منتهي المدة لا يفتحه** — «سارٍ اليوم» يسري هنا كغيره — الرادُّ الفرض المركزي", async () => {
     // **الصفّ موجود ولا يكفي وجودُه** (القرار 190، وشرط #158)
     await db.insert(userAssignments).values({
       tenantId,
@@ -327,6 +341,8 @@ describe(`مخزن الموقع — إسنادٌ صريح لا اشتقاق (${S
     });
     const res = await post(supervisorBToken, { warehouseId: siteWarehouseId });
     expect(res.status).toBe(403);
+    expect((res.body as { code: string }).code).toBe("forbidden");
+    expect((res.body as { message: string }).message).toContain("غير مخوَّل بالوصول");
   });
 
   it("ثم يُسنَد المخزن صراحةً للمشرف (أ) ← يمرّ", async () => {
@@ -340,8 +356,10 @@ describe(`مخزن الموقع — إسنادٌ صريح لا اشتقاق (${S
     expect(res.status).toBe(200);
   });
 
-  it("**ومشرفُ المزرعة الأخرى في نفس الموقع يبقى 403** — فالاشتقاق لم يقع", async () => {
+  it("**ومشرفُ المزرعة الأخرى في نفس الموقع يبقى 403** — فالاشتقاق لم يقع — الرادُّ الفرض المركزي", async () => {
     const res = await post(supervisorBToken, { warehouseId: siteWarehouseId });
     expect(res.status).toBe(403);
+    expect((res.body as { code: string }).code).toBe("forbidden");
+    expect((res.body as { message: string }).message).toContain("غير مخوَّل بالوصول");
   });
 });

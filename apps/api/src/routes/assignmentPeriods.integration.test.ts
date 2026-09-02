@@ -218,7 +218,7 @@ describe(`الإسناد بمدة — عدّاد العنابر (${S})`, () => {
 });
 
 describe(`الإسناد بمدة — حدّا المدة (${S})`, () => {
-  it("إسناد يبدأ غدًا لا يمرّ اليوم ← 403", async () => {
+  it("إسناد يبدأ غدًا لا يمرّ اليوم ← 403 — الرادُّ الفرض المركزي", async () => {
     const houseId = await houseVia(app, ownerToken, farmId, `عنبر يبدأ غدًا ${S}`);
     const { id: futureFarmerId, token: futureFarmerToken } = await seedUser(db, {
       tenantId,
@@ -236,6 +236,8 @@ describe(`الإسناد بمدة — حدّا المدة (${S})`, () => {
       .get(`/api/houses/${String(houseId)}`)
       .set("Authorization", `Bearer ${futureFarmerToken}`);
     expect(res.status).toBe(403);
+    expect((res.body as { code: string }).code).toBe("forbidden");
+    expect((res.body as { message: string }).message).toContain("غير مخوَّل بالوصول");
   });
 
   it("إسناد بلا نهاية يمرّ ← 200 (الفراغ سريان بلا أجل لا انتهاء)", async () => {

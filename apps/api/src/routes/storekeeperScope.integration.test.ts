@@ -17,6 +17,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../app";
 import { loadEnv } from "../lib/env";
 import { assertIsTestDatabase } from "../lib/testGuard";
+import { expectRejecter } from "../test-support/expectRejecter";
 import { farmVia, houseVia, seedTenant, seedUser, siteVia, today } from "../test-support/hierarchy";
 
 /**
@@ -141,9 +142,10 @@ describe(`ما لا يراه أمين المخزن — والرادُّ مسمً
     expect((res.body as ErrorBody).message).toContain("لهذا الموقع");
   });
 
-  it("**وسردُ مزارع الموقع ← 403** — لا قائمةً فارغة (#129)", async () => {
+  it("**وسردُ مزارع الموقع ← 403** — لا قائمةً فارغة (#129) — الرادُّ الفرض المركزي", async () => {
     const res = await asStorekeeper(`/api/sites/${String(siteId)}/farms`);
     expect(res.status).toBe(403);
+    expectRejecter(res, "forbidden", "غير مخوَّل بالوصول");
     expect((res.body as ErrorBody).message).toContain("لهذا الموقع");
   });
 
@@ -164,23 +166,28 @@ describe(`ما لا يراه أمين المخزن — والرادُّ مسمً
    * مخزنُ العنبر كيانٌ قائم (القرار 198)، **وصاحبُه مربّيه بإسناد عنبره** —
    * **فلا يبلغه أمينُ المخزن ولو كان مخزنًا**.
    */
-  it("**ومخزنُ العنبر ← 403** — الكيانُ مخزنٌ والحكمُ حكمُ عنبره", async () => {
+});
+
+describe(`وما لا يراه من المخازن — الحكمُ حكمُ الكيان لا اسمُ المخزن (${S})`, () => {
+  it("**ومخزنُ العنبر ← 403** — الكيانُ مخزنٌ والحكمُ حكمُ عنبره — الرادُّ الفرض المركزي", async () => {
     const res = await request(app)
       .post("/api/inventory/warehouse-receipt")
       .set("Authorization", `Bearer ${storekeeperToken}`)
       .send({ warehouseId: houseWarehouseId, productId: 1, quantity: 1, unit: "كيس" });
     expect(res.status).toBe(403);
+    expectRejecter(res, "forbidden", "غير مخوَّل بالوصول");
     // **والرسالة تسمّي «العنبر» لا «المخزن»** — وهو حرفُ الحكم لا سهو:
     // `assertWarehouseAccess` **يحلّ مخزن العنبر إلى عنبره** ثم يحكم بحكمه.
     expect((res.body as ErrorBody).message).toContain("لهذا العنبر");
   });
 
-  it("**ومركزيٌّ لم يُسنَد له ← 403** — الإسنادُ مخزنٌ بعينه لا الشركةُ كلها", async () => {
+  it("**ومركزيٌّ لم يُسنَد له ← 403** — الإسنادُ مخزنٌ بعينه لا الشركةُ كلها — الرادُّ الفرض المركزي", async () => {
     const res = await request(app)
       .post("/api/inventory/warehouse-receipt")
       .set("Authorization", `Bearer ${storekeeperToken}`)
       .send({ warehouseId: unassignedCentralId, productId: 1, quantity: 1, unit: "كيس" });
     expect(res.status).toBe(403);
+    expectRejecter(res, "forbidden", "غير مخوَّل بالوصول");
     expect((res.body as ErrorBody).message).toContain("لهذا المخزن");
   });
 

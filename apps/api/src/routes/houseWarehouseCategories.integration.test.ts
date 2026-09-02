@@ -144,7 +144,7 @@ describe(`القائمة الموجبة — سبعُ فئات والممنوع �
 });
 
 describe(`الفرض على وجهة التحويل (${S})`, () => {
-  it("**فئةٌ ممنوعة إلى مخزن عنبر ← 422، ولا صفَّ أمرٍ يُكتب**", async () => {
+  it("**فئةٌ ممنوعة إلى مخزن عنبر ← 422، ولا صفَّ أمرٍ يُكتب** — الرادُّ حدّ فئات مخزن العنبر", async () => {
     const res = await orderTo(toWarehouseId, equipmentId);
     expect(res.status).toBe(422);
     expect((res.body as ErrorBody).code).toBe("category_not_allowed_in_house_warehouse");
@@ -183,7 +183,7 @@ describe(`الفرض على وجهة التحويل (${S})`, () => {
    * **المشرف مُسنَدٌ لمزرعتَي الطرفين فيمرّ الفرضَ المركزي**، **ودورُه يمرّ
    * `requireRole("supervisor","owner")`** — **فلا يبقى قبل الفئة حارس**.
    */
-  it("**والمشرف يبلغ الطرفين ويملك الإصدار ← يُردّ بحدّ الفئة وحده**", async () => {
+  it("**والمشرف يبلغ الطرفين ويملك الإصدار ← يُردّ بحدّ الفئة وحده** — الرادُّ حدّ فئات مخزن العنبر", async () => {
     const res = await request(app)
       .post("/api/inventory/transfers")
       .set("Authorization", `Bearer ${supervisorToken}`)
@@ -205,7 +205,7 @@ describe(`والفرض على الاستلام كذلك — الإعفاء كا�
    * تحويلًا كان أو استلامًا**». **وعلّتُه أن إعفاء 231 بُني على شرطٍ لم
    * يتحقّق**: **233 يحصر الاستلام في المركزيّ ولم يُبنَ**.
    */
-  it("**فئةٌ ممنوعة تُستلم في مخزن عنبر ← 422، ولا رصيد**", async () => {
+  it("**فئةٌ ممنوعة تُستلم في مخزن عنبر ← 422، ولا رصيد** — الرادُّ حدّ فئات مخزن العنبر", async () => {
     const res = await receiveInto(toWarehouseId, equipmentId);
     expect(res.status).toBe(422);
     expect((res.body as ErrorBody).code).toBe("category_not_allowed_in_house_warehouse");

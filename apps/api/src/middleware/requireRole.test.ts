@@ -18,7 +18,7 @@ describe("requireRole", () => {
     expect(error.status).toBe(401);
   });
 
-  it("403 لدور غير مسموح", () => {
+  it("403 لدور غير مسموح — الرادُّ حارس الدور", () => {
     const next = vi.fn();
     requireRole("owner")(fakeRequest({ id: 1, tenantId: 1, role: "farmer" }), {} as Response, next);
 

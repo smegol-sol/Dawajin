@@ -272,7 +272,7 @@ describe(`حارسُ الملكية — «يبلغه» ليس «يملكه» (${
    *
    * **وبلا هذا الصفّ كان إسقاطُ القيد لا يُسقط شيئًا** — مقيسٌ لا مفترَض.
    */
-  it("**ومشرفٌ مُسنَدٌ للمركزيّ ← 403** — الإسنادُ قائم، والدورُ لا يملك المستوى", async () => {
+  it("**ومشرفٌ مُسنَدٌ للمركزيّ ← 403** — الإسنادُ قائم، والدورُ لا يملك المستوى — الرادُّ حارس ملكية المخزن", async () => {
     const id = await centralBoundOrder(12);
     const res = await confirm(miscastSupervisorToken, id, 12);
     expect(res.status).toBe(403);
@@ -291,7 +291,7 @@ describe(`حارسُ الملكية — «يبلغه» ليس «يملكه» (${
    * **وهو الفارق كلُّه بين `visibleWarehouseCondition` وحارس الملكية:** الأولى
    * تقبل `ua.house_id` **أو** `ua.farm_id`، **وهذا لا يقبل إلا الأول**.
    */
-  it("**ومربٍّ مُسنَدٌ للمزرعة لا للعنبر ← 403** — يبلغ المخزن ولا يملكه", async () => {
+  it("**ومربٍّ مُسنَدٌ للمزرعة لا للعنبر ← 403** — يبلغ المخزن ولا يملكه — الرادُّ حارس ملكية المخزن", async () => {
     const id = await inTransitOrder(20);
     const res = await confirm(miscastFarmerToken, id, 20);
     expect(res.status).toBe(403);
@@ -407,7 +407,7 @@ describe(`الحالة والحركة (${S})`, () => {
 });
 
 describe(`المخالفات المتعمَّدة — بأسمائها (${S})`, () => {
-  it("**وتأكيدٌ مرتين ← 422، والرصيد لم يتضاعف**", async () => {
+  it("**وتأكيدٌ مرتين ← 422، والرصيد لم يتضاعف** — الرادُّ حارس خدمة تأكيد الاستلام", async () => {
     const id = await inTransitOrder(20);
     expect((await confirm(destFarmerToken, id, 20)).status).toBe(200);
     const second = await confirm(destFarmerToken, id, 20);
@@ -416,7 +416,7 @@ describe(`المخالفات المتعمَّدة — بأسمائها (${S})`, 
     expect(await balanceOf(toWarehouseId)).toBe(20);
   });
 
-  it("**وتأكيدٌ قبل الخروج ← 422** — «صادر» لا تُؤكَّد", async () => {
+  it("**وتأكيدٌ قبل الخروج ← 422** — «صادر» لا تُؤكَّد — الرادُّ حارس خدمة تأكيد الاستلام", async () => {
     const order = await request(app)
       .post("/api/inventory/transfers")
       .set("Authorization", `Bearer ${supervisorToken}`)
@@ -430,12 +430,13 @@ describe(`المخالفات المتعمَّدة — بأسمائها (${S})`, 
     expect((res.body as ErrorBody).code).toBe("transfer_not_confirmable");
   });
 
-  it("**ومخزنُ وجهةٍ معطَّل ← 422، ولا حركة**", async () => {
+  it("**ومخزنُ وجهةٍ معطَّل ← 422، ولا حركة** — الرادُّ حارس خدمة تأكيد الاستلام", async () => {
     const id = await inTransitOrder(20);
     await db.update(warehouses).set({ isActive: false }).where(eq(warehouses.id, toWarehouseId));
     const res = await confirm(destFarmerToken, id, 20);
     expect(res.status).toBe(422);
     expect((res.body as ErrorBody).code).toBe("warehouse_inactive");
+    expect((res.body as { message: string }).message).toContain("المخزن المستلِم معطَّل");
     expect(await balanceOf(toWarehouseId)).toBe(0);
   });
 

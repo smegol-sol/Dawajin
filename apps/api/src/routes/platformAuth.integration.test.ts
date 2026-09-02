@@ -261,7 +261,7 @@ describe(`الاسترداد — الطبقة الأولى (${S})`, () => {
     expect(target[0]?.mustChangePassword).toBe(true);
   });
 
-  it("مدير يحاول إعادة تعيين نفسه ← 403", async () => {
+  it("مدير يحاول إعادة تعيين نفسه ← 403 — الرادُّ حارس خدمة مصادقة المنصة", async () => {
     const token = await tokenFor(adminPhone, ADMIN_PASSWORD, adminSecret);
 
     const res = await request(app)
@@ -270,6 +270,8 @@ describe(`الاسترداد — الطبقة الأولى (${S})`, () => {
       .send({ adminId });
 
     expect(res.status).toBe(403);
+    expect((res.body as { code: string }).code).toBe("forbidden");
+    expect((res.body as { message: string }).message).toContain("لا يُعيد المدير");
   });
 });
 

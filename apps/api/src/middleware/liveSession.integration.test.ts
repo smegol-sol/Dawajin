@@ -81,7 +81,7 @@ afterAll(async () => {
 });
 
 describe(`requireLiveSession — كلمة مؤقتة (${S})`, () => {
-  it("تمنع مسار قراءة (GET /api/settings) بـ403", async () => {
+  it("تمنع مسار قراءة (GET /api/settings) بـ403 — الرادُّ حارس الجلسة الحيّة", async () => {
     const { phone, tenantId } = await seedUser(true);
     const res = await request(app)
       .get("/api/settings")
@@ -90,13 +90,14 @@ describe(`requireLiveSession — كلمة مؤقتة (${S})`, () => {
     expect((res.body as { code: string }).code).toBe("password_change_required");
   });
 
-  it("تمنع مسار كتابة آخر (POST /api/auth/register-push-token) بـ403", async () => {
+  it("تمنع مسار كتابة آخر (POST /api/auth/register-push-token) بـ403 — الرادُّ حارس الجلسة الحيّة", async () => {
     const { phone, tenantId } = await seedUser(true);
     const res = await request(app)
       .post("/api/auth/register-push-token")
       .set("Authorization", `Bearer ${await tokenFor(phone, TEMP, tenantId)}`)
       .send({ expoPushToken: "ExponentPushToken[x]" });
     expect(res.status).toBe(403);
+    expect((res.body as { code: string }).code).toBe("password_change_required");
   });
 
   it("تسمح بـ/api/auth/me و/api/auth/change-password، وتفتح القفل بعد التغيير", async () => {

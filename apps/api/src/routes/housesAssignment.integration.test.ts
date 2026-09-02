@@ -142,13 +142,14 @@ describe(`GET العنابر — الإسناد بالعنبر: المربّي (
     expect(res.status).toBe(200);
   });
 
-  it("المربّي يقرأ عنبرًا **غير مُسند** له ← 403 (المبدأ السادس · القرار #126)", async () => {
+  it("المربّي يقرأ عنبرًا **غير مُسند** له ← 403 (المبدأ السادس · القرار #126) — الرادُّ الفرض المركزي", async () => {
     const id = await houseVia(app, ownerToken, farmAId, `غير مُسند ${S}`);
     const res = await request(app)
       .get(`/api/houses/${String(id)}`)
       .set("Authorization", `Bearer ${farmerToken}`);
     expect(res.status).toBe(403);
     expect((res.body as { code?: string }).code).toBe("forbidden");
+    expect((res.body as { message: string }).message).toContain("غير مخوَّل بالوصول");
   });
 
   /**
@@ -176,7 +177,7 @@ describe(`GET العنابر — الإسناد بالمزرعة: المشرف �
     }
   });
 
-  it("المشرف المُسند بمزرعة ← 403 لعنبر في مزرعة أخرى بنفس المستأجر", async () => {
+  it("المشرف المُسند بمزرعة ← 403 لعنبر في مزرعة أخرى بنفس المستأجر — الرادُّ الفرض المركزي", async () => {
     const outside = await houseVia(app, ownerToken, farmA2Id, `خارج نطاق المشرف ${S}`);
     const res = await request(app)
       .get(`/api/houses/${String(outside)}`)
@@ -185,12 +186,14 @@ describe(`GET العنابر — الإسناد بالمزرعة: المشرف �
     expect((res.body as { code?: string }).code).toBe("forbidden");
   });
 
-  it("الطبيب بلا إسناد ← 403 (القيد لا يخصّ المربّي وحده)", async () => {
+  it("الطبيب بلا إسناد ← 403 (القيد لا يخصّ المربّي وحده) — الرادُّ الفرض المركزي", async () => {
     const id = await houseVia(app, ownerToken, farmAId, `بلا إسناد للطبيب ${S}`);
     const res = await request(app)
       .get(`/api/houses/${String(id)}`)
       .set("Authorization", `Bearer ${vetToken}`);
     expect(res.status).toBe(403);
+    expect((res.body as { code: string }).code).toBe("forbidden");
+    expect((res.body as { message: string }).message).toContain("غير مخوَّل بالوصول");
   });
 
   it("الطبيب مُسند بمزرعة ← 200 لعنبر داخلها", async () => {
@@ -205,12 +208,14 @@ describe(`GET العنابر — الإسناد بالمزرعة: المشرف �
     expect(res.status).toBe(200);
   });
 
-  it("المربّي مُسند بالعنبر لا بالمزرعة — إسناد مزرعته لا يفتح له عنبرًا آخر", async () => {
+  it("المربّي مُسند بالعنبر لا بالمزرعة — إسناد مزرعته لا يفتح له عنبرًا آخر — الرادُّ الفرض المركزي", async () => {
     const other = await houseVia(app, ownerToken, farmAId, `عنبر آخر للمربّي ${S}`);
     const res = await request(app)
       .get(`/api/houses/${String(other)}`)
       .set("Authorization", `Bearer ${farmerToken}`);
     expect(res.status).toBe(403);
+    expect((res.body as { code: string }).code).toBe("forbidden");
+    expect((res.body as { message: string }).message).toContain("غير مخوَّل بالوصول");
   });
 });
 
@@ -274,7 +279,7 @@ describe(`GET /farms/:farmId/houses — فلترة السرد بالإسناد (
     expect((res.body as { houses: unknown[] }).houses).toHaveLength(5);
   });
 
-  it("المشرف المُسند بالمزرعة يرى الخمسة، والطبيب غير المُسند ← 403", async () => {
+  it("المشرف المُسند بالمزرعة يرى الخمسة، والطبيب غير المُسند ← 403 — الرادُّ الفرض المركزي", async () => {
     await db.insert(userAssignments).values({
       tenantId: tenantAId,
       userId: supervisorId,
@@ -293,6 +298,7 @@ describe(`GET /farms/:farmId/houses — فلترة السرد بالإسناد (
       .set("Authorization", `Bearer ${vetToken}`);
     expect(denied.status).toBe(403);
     expect((denied.body as { code?: string }).code).toBe("forbidden");
+    expect((denied.body as { message: string }).message).toContain("غير مخوَّل بالوصول");
   });
 });
 
@@ -305,7 +311,7 @@ describe(`GET /farms/:farmId/houses — رفض المزرعة قبل الفلت�
    * **403 لا قائمة فارغة.** الفارغة تقول «لا عنابر هنا» وهي كذبة عن مزرعة
    * مليئة بعنابر ليست له — والفرق يظهر للمستخدم كنفي وجود لا كنفي صلاحية.
    */
-  it("مربّي بلا أي إسناد في المزرعة ← 403 لا قائمة فارغة", async () => {
+  it("مربّي بلا أي إسناد في المزرعة ← 403 لا قائمة فارغة — الرادُّ الفرض المركزي", async () => {
     const emptyFarm = await farmVia(app, ownerToken, listSiteId, `مزرعة بلا إسناد ${S}`);
     await houseVia(app, ownerToken, emptyFarm, `عنبر مخفي ${S}`);
 
@@ -313,6 +319,8 @@ describe(`GET /farms/:farmId/houses — رفض المزرعة قبل الفلت�
       .get(`/api/farms/${String(emptyFarm)}/houses`)
       .set("Authorization", `Bearer ${farmerToken}`);
     expect(res.status).toBe(403);
+    expect((res.body as { code: string }).code).toBe("forbidden");
+    expect((res.body as { message: string }).message).toContain("غير مخوَّل بالوصول");
   });
 
   it("مزرعة مستأجر آخر ← 404 لا 403 (الوجود قبل التعيين)", async () => {
@@ -342,7 +350,7 @@ describe(`GET العنابر — مداخل أخرى (${S})`, () => {
  * أُعيدتا هنا حارسًا دائمًا: **تسقطان على الكود قبل الإصلاح وتخضرّان بعده**.
  */
 describe(`GET /farms/:farmId — الفرض بالإسناد (${S})`, () => {
-  it("مربٍّ انتهت مدته أمس ← 403", async () => {
+  it("مربٍّ انتهت مدته أمس ← 403 — الرادُّ الفرض المركزي", async () => {
     const farm = await farmVia(app, ownerToken, listSiteId, `مزرعة المربّي المنتهي ${S}`);
     const house = await houseVia(app, ownerToken, farm, `عنبر المربّي المنتهي ${S}`);
     const { id, token } = await seedUser(db, {
@@ -363,9 +371,10 @@ describe(`GET /farms/:farmId — الفرض بالإسناد (${S})`, () => {
       .set("Authorization", `Bearer ${token}`);
     expect(res.status).toBe(403);
     expect((res.body as { code?: string }).code).toBe("forbidden");
+    expect((res.body as { message: string }).message).toContain("غير مخوَّل بالوصول");
   });
 
-  it("مشرف انتهت مدته أمس ← 403", async () => {
+  it("مشرف انتهت مدته أمس ← 403 — الرادُّ الفرض المركزي", async () => {
     const farm = await farmVia(app, ownerToken, listSiteId, `مزرعة المشرف المنتهي ${S}`);
     const { id, token } = await seedUser(db, {
       tenantId: tenantAId,
@@ -384,14 +393,18 @@ describe(`GET /farms/:farmId — الفرض بالإسناد (${S})`, () => {
       .get(`/api/farms/${String(farm)}`)
       .set("Authorization", `Bearer ${token}`);
     expect(res.status).toBe(403);
+    expect((res.body as { code: string }).code).toBe("forbidden");
+    expect((res.body as { message: string }).message).toContain("غير مخوَّل بالوصول");
   });
 
-  it("مربّي بلا أي إسناد يبلغ المزرعة ← 403 (موجودة غير مُسندة)", async () => {
+  it("مربّي بلا أي إسناد يبلغ المزرعة ← 403 (موجودة غير مُسندة) — الرادُّ الفرض المركزي", async () => {
     const farm = await farmVia(app, ownerToken, listSiteId, `مزرعة بلا إسناد للقراءة ${S}`);
     const res = await request(app)
       .get(`/api/farms/${String(farm)}`)
       .set("Authorization", `Bearer ${farmerToken}`);
     expect(res.status).toBe(403);
+    expect((res.body as { code: string }).code).toBe("forbidden");
+    expect((res.body as { message: string }).message).toContain("غير مخوَّل بالوصول");
   });
 });
 

@@ -126,7 +126,7 @@ describe("enforceEntityAccess — عنونة المخزن (القراران 193 
     expect(error.status).toBe(401);
   });
 
-  it("403 لمعرّف مخزن غير معلوم يصل من الرابط — بلا استعلام قاعدة", async () => {
+  it("403 لمعرّف مخزن غير معلوم يصل من الرابط — بلا استعلام قاعدة — الرادُّ الفرض المركزي", async () => {
     const middleware = enforceEntityAccess(throwingDb() as never);
     const next = vi.fn();
 
