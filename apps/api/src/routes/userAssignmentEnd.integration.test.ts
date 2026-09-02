@@ -125,7 +125,7 @@ describe("إنهاء المدّة — لا حذف صفّ", () => {
     expect((res.body as { message: string }).message).toContain("هذا العنبر");
   });
 
-  it("**وإنهاءٌ ثانٍ ← 422** — لا يُنهى ما انتهى", async () => {
+  it("**وإنهاءٌ ثانٍ ← 422** — لا يُنهى ما انتهى — الرادُّ حارس خدمة الإسناد", async () => {
     const res = await endAssignmentReq(farmerId, assignmentId);
     expect(res.status).toBe(422);
     expect((res.body as ErrorBody).code).toBe("assignment_already_ended");

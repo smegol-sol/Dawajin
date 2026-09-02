@@ -223,12 +223,13 @@ describe(`GET المزارع — الإسناد والعزل (${S})`, () => {
    * في الموقع لا يحقّ له سرد مزارعه أصلًا. و**403 لا قائمة فارغة**: الفارغة
    * تُقرأ نفيَ وجود لا نفيَ صلاحية.
    */
-  it("المربي بلا إسناد في الموقع ← 403 لا قائمة فارغة", async () => {
+  it("المربي بلا إسناد في الموقع ← 403 لا قائمة فارغة — الرادُّ الفرض المركزي", async () => {
     const res = await request(app)
       .get(`/api/sites/${String(siteAId)}/farms`)
       .set("Authorization", `Bearer ${farmerToken}`);
     expect(res.status).toBe(403);
     expect((res.body as { code?: string }).code).toBe("forbidden");
+    expect((res.body as { message: string }).message).toContain("غير مخوَّل بالوصول");
   });
 
   it("قراءة مزرعة مستأجر آخر ← 404 لا 403", async () => {

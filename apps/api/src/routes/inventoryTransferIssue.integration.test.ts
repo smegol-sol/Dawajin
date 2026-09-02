@@ -167,7 +167,7 @@ describe("إصدار الأمر — #159 «ثانيًا»", () => {
     expect(res.status).toBe(403);
   });
 
-  it("مخالفة: مشرفٌ مُسنَدٌ لواحدة فقط ← 403", async () => {
+  it("مخالفة: مشرفٌ مُسنَدٌ لواحدة فقط ← 403 — الرادُّ حارس خدمة التحويل", async () => {
     const res = await order(otherSupervisorToken, defaultOrder());
     expect(res.status).toBe(403);
   });
@@ -180,14 +180,16 @@ describe("إصدار الأمر — #159 «ثانيًا»", () => {
 });
 
 describe("**أمين حفظ لا آمر صرف** — #161 «ثالث عشر» ٢", () => {
-  it("أمين المخزن لا يُصدر أمرًا ← 403", async () => {
+  it("أمين المخزن لا يُصدر أمرًا ← 403 — الرادُّ الفرض المركزي", async () => {
     const res = await order(storekeeperToken, defaultOrder());
     expect(res.status).toBe(403);
   });
 
-  it("والمربّي لا يُصدر ← 403 — المشرف وحده يبدأ", async () => {
+  it("والمربّي لا يُصدر ← 403 — المشرف وحده يبدأ — الرادُّ الفرض المركزي", async () => {
     const res = await order(farmerToken, defaultOrder());
     expect(res.status).toBe(403);
+    expect((res.body as { code: string }).code).toBe("forbidden");
+    expect((res.body as { message: string }).message).toContain("غير مخوَّل بالوصول");
   });
 
   /**
@@ -372,7 +374,7 @@ describe("الثوابت بعد الخروج", () => {
 });
 
 describe("التزامن — والقفل هنا يحمل وزنًا (خلافًا للقرار 227)", () => {
-  it("**خروجان متزامنان على رصيدٍ يكفي واحدًا ← أحدهما يُرفض ولا يصير سالبًا**", async () => {
+  it("**خروجان متزامنان على رصيدٍ يكفي واحدًا ← أحدهما يُرفض ولا يصير سالبًا** — الرادُّ حارس خدمة التحويل", async () => {
     await stock(fromWarehouseId, 30);
     const [a, b] = await Promise.all([orderId(20), orderId(20)]);
 
@@ -424,13 +426,15 @@ async function outsideOrder(quantity = 20): Promise<number> {
 }
 
 describe("فرضُ الإسناد على المخزن المشتقّ من التحويل (القرار 229)", () => {
-  it("**مربٍّ ينفّذ خروجًا من مخزن مزرعةٍ لا يبلغها إسناده ← 403، والرصيد لم يتحرّك**", async () => {
+  it("**مربٍّ ينفّذ خروجًا من مخزن مزرعةٍ لا يبلغها إسناده ← 403، والرصيد لم يتحرّك** — الرادُّ الفرض المركزي", async () => {
     await stock(outsideWarehouseId, 50);
     const id = await outsideOrder(20);
     const before = await balanceOfLocal(outsideWarehouseId);
 
     const res = await issue(farmerToken, id);
     expect(res.status).toBe(403);
+    expect((res.body as { code: string }).code).toBe("forbidden");
+    expect((res.body as { message: string }).message).toContain("غير مخوَّل بالوصول");
     // **الرقم هو الدليل** — لا الحالة وحدها
     expect(await balanceOfLocal(outsideWarehouseId)).toBe(before);
     expect(before).toBe(50);

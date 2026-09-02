@@ -18,6 +18,7 @@ import { createApp } from "../app";
 import { loadEnv } from "../lib/env";
 import { computeBalance, computeTotalMovements } from "../lib/inventoryBalance";
 import { assertIsTestDatabase } from "../lib/testGuard";
+import { expectRejecter } from "../test-support/expectRejecter";
 import { farmVia, houseVia, seedTenant, seedUser, siteVia, today } from "../test-support/hierarchy";
 
 /**
@@ -70,6 +71,15 @@ function receive(token: string, body: Record<string, unknown>): request.Test {
 
 function feedReceipt(quantity: number): Record<string, unknown> {
   return { warehouseId: centralId, productId: feedId, quantity, unit: "كيس" };
+}
+
+/** استلامٌ في المركزيّ لصنفٍ ووحدةٍ بعينهما — **يختصر الحرفيّات المكرَّرة**. */
+function centralReceipt(
+  productId: number,
+  quantity: number,
+  unit: string
+): Record<string, unknown> {
+  return { warehouseId: centralId, productId, quantity, unit };
 }
 
 async function balanceOf(productId: number, warehouseId: number): Promise<number> {
@@ -252,14 +262,9 @@ describe("المخالفات المتعمَّدة — بأسمائها", () => {
   });
 
   it("وحدةٌ لا تطابق الصنف ← 422 `unit_mismatch` ولا حركة", async () => {
-    const res = await receive(ownerToken, {
-      warehouseId: centralId,
-      productId: feedId,
-      quantity: 10,
-      unit: "لتر",
-    });
+    const res = await receive(ownerToken, centralReceipt(feedId, 10, "لتر"));
     expect(res.status).toBe(422);
-    expect((res.body as { code: string }).code).toBe("unit_mismatch");
+    expectRejecter(res, "unit_mismatch");
     expect(await balanceOf(feedId, centralId)).toBe(0);
   });
 
@@ -267,7 +272,7 @@ describe("المخالفات المتعمَّدة — بأسمائها", () => {
     await db.update(warehouses).set({ isActive: false }).where(eq(warehouses.id, centralId));
     const res = await receive(ownerToken, feedReceipt(20));
     expect(res.status).toBe(422);
-    expect((res.body as { code: string }).code).toBe("warehouse_inactive");
+    expectRejecter(res, "warehouse_inactive");
     expect(await balanceOf(feedId, centralId)).toBe(0);
   });
 
@@ -275,7 +280,7 @@ describe("المخالفات المتعمَّدة — بأسمائها", () => {
     await db.update(products).set({ isActive: false }).where(eq(products.id, feedId));
     const res = await receive(ownerToken, feedReceipt(20));
     expect(res.status).toBe(422);
-    expect((res.body as { code: string }).code).toBe("product_inactive");
+    expectRejecter(res, "product_inactive");
   });
 });
 
@@ -291,20 +296,16 @@ describe("المخالفات المتعمَّدة — العزل والوجود"
   });
 
   it("صنفٌ لا وجود له ← 404", async () => {
-    const res = await receive(ownerToken, {
-      warehouseId: centralId,
-      productId: 99999999,
-      quantity: 10,
-      unit: "كيس",
-    });
+    const res = await receive(ownerToken, centralReceipt(99999999, 10, "كيس"));
     expect(res.status).toBe(404);
   });
 });
 
 describe("الصلاحية — §12.2 صفّ «استلام من مورّد» وحده الحاكم", () => {
-  it("المربّي لا يستلم ← 403 (قائمة موجبة لا سكوت)", async () => {
+  it("المربّي لا يستلم ← 403 (قائمة موجبة لا سكوت) — الرادُّ الفرض المركزي", async () => {
     const res = await receive(farmerToken, feedReceipt(10));
     expect(res.status).toBe(403);
+    expectRejecter(res, "forbidden", "غير مخوَّل بالوصول");
   });
 
   it("المشرف يستلم علفًا ← 201", async () => {
@@ -312,48 +313,33 @@ describe("الصلاحية — §12.2 صفّ «استلام من مورّد» و
     expect(res.status).toBe(201);
   });
 
-  it("**والمشرف لا يستلم دواءً** ← 403 يسمّي الفئة", async () => {
-    const res = await receive(supervisorToken, {
-      warehouseId: centralId,
-      productId: medicineId,
-      quantity: 3,
-      unit: "زجاجة",
-    });
+  it("**والمشرف لا يستلم دواءً** ← 403 يسمّي الفئة — الرادُّ حارس خدمة الاستلام", async () => {
+    const res = await receive(supervisorToken, centralReceipt(medicineId, 3, "زجاجة"));
     expect(res.status).toBe(403);
+    expectRejecter(res, "forbidden", "دورك لا يستلم");
     expect((res.body as { message: string }).message).toContain("دواء");
   });
 
-  it("الطبيب يستلم دواءً ← 201، **ولا يستلم علفًا** ← 403", async () => {
-    const allowed = await receive(vetToken, {
-      warehouseId: centralId,
-      productId: medicineId,
-      quantity: 4,
-      unit: "زجاجة",
-    });
+  it("الطبيب يستلم دواءً ← 201، **ولا يستلم علفًا** ← 403 — الرادُّ حارس خدمة الاستلام", async () => {
+    const allowed = await receive(vetToken, centralReceipt(medicineId, 4, "زجاجة"));
     expect(allowed.status).toBe(201);
     const refused = await receive(vetToken, feedReceipt(10));
     expect(refused.status).toBe(403);
+    expectRejecter(refused, "forbidden", "دورك لا يستلم");
   });
+});
 
-  it("**«فيتامين» لا يبلغها إلا المالك** — قراءةٌ للمصفوفة لا حكمٌ عليها", async () => {
+describe("الصلاحية — الفئتان المقصورتان على المالك، والمعدّاتُ الإنشائية", () => {
+  it("**«فيتامين» لا يبلغها إلا المالك** — قراءةٌ للمصفوفة لا حكمٌ عليها — الرادُّ حارس خدمة الاستلام", async () => {
     // **صارت ثلاثًا يومًا واحدًا ثم عادت اثنتين** (القراران 260 و261):
     // **قسمةُ «مستلزمات» أسقطت المعدّات الإنشائية إلى المالك بالاشتقاق**،
     // **وأعادها حكمُ المالك إلى صفّ المشرف** — **فمن يطلب الصيانة هو من
     // يستلمها**. **والشاهد يقرأ المصفوفة ولا يحكم عليها.**
     expect([...OWNER_ONLY_RECEIPT_CATEGORIES]).toEqual(["فيتامين", "معقمات ومطهرات"]);
-    const vet = await receive(vetToken, {
-      warehouseId: centralId,
-      productId: vitaminId,
-      quantity: 2,
-      unit: "زجاجة",
-    });
+    const vet = await receive(vetToken, centralReceipt(vitaminId, 2, "زجاجة"));
     expect(vet.status).toBe(403);
-    const owner = await receive(ownerToken, {
-      warehouseId: centralId,
-      productId: vitaminId,
-      quantity: 2,
-      unit: "زجاجة",
-    });
+    expectRejecter(vet, "forbidden", "دورك لا يستلم");
+    const owner = await receive(ownerToken, centralReceipt(vitaminId, 2, "زجاجة"));
     expect(owner.status).toBe(201);
   });
 
@@ -366,12 +352,7 @@ describe("الصلاحية — §12.2 صفّ «استلام من مورّد» و
    */
   it("**المشرف يستلم معدّاتٍ إنشائية ← 201** — من يطلب الصيانة يستلمها", async () => {
     const equipmentId = await seedProduct("معدات ومستلزمات إنشائية", "قطعة");
-    const res = await receive(supervisorToken, {
-      warehouseId: centralId,
-      productId: equipmentId,
-      quantity: 3,
-      unit: "قطعة",
-    });
+    const res = await receive(supervisorToken, centralReceipt(equipmentId, 3, "قطعة"));
     expect(res.status).toBe(201);
     expect(await balanceOf(equipmentId, centralId)).toBe(3);
   });

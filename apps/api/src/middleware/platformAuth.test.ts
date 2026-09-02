@@ -66,7 +66,7 @@ describe("requirePlatformAdmin — فروع الرفض", () => {
     expect(error?.status).toBe(401);
   });
 
-  it("403 لكلمة مؤقتة لم تُبدَّل على مسار غير مسموح", async () => {
+  it("403 لكلمة مؤقتة لم تُبدَّل على مسار غير مسموح — الرادُّ حارس مصادقة المنصة", async () => {
     const token = await signPlatformToken({ sub: "7", tokenType: "platform" }, SECRET, "30d");
     const db = fakeDb([{ id: 7, isActive: true, mustChangePassword: true }]);
     const error = await run(db, fakeRequest(`Bearer ${token}`, "/platform/admins/reset-password"));

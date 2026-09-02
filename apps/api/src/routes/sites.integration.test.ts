@@ -246,13 +246,15 @@ describe(`PATCH /api/sites/:siteId — إعادة التسمية (${S})`, () => 
     expect(row?.name).toBe(`الجاح المعدَّل ${S}`);
   });
 
-  it("المربي ← 403", async () => {
+  it("المربي ← 403 — الرادُّ الفرض المركزي", async () => {
     const id = await createSiteVia(ownerToken, `الخماسية ${S}`);
     const res = await request(app)
       .patch(`/api/sites/${String(id)}`)
       .set("Authorization", `Bearer ${farmerToken}`)
       .send({ name: "محاولة" });
     expect(res.status).toBe(403);
+    expect((res.body as { code: string }).code).toBe("forbidden");
+    expect((res.body as { message: string }).message).toContain("غير مخوَّل بالوصول");
   });
 
   it("تسمية موقع مستأجر آخر ← 404 (لا يُعدَّل ولا يُكشف وجوده)", async () => {

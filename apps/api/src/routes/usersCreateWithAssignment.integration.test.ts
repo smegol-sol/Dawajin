@@ -153,7 +153,7 @@ describe("الإنشاء والإسناد معًا — معاملةٌ واحدة
 });
 
 describe("الذرّية — أو لا يقع شيء", () => {
-  it("**مستوًى لا يقبله الدور ← 422 ولا مستخدم يُنشأ**", async () => {
+  it("**مستوًى لا يقبله الدور ← 422 ولا مستخدم يُنشأ** — الرادُّ حارس خدمة الإسناد", async () => {
     const phone = nextPhone();
     const res = await createUserReq(ownerToken, {
       fullName: "مربٍّ بمزرعة",
@@ -178,7 +178,7 @@ describe("الذرّية — أو لا يقع شيء", () => {
     expect(await countUsersWithPhone(phone)).toBe(0);
   });
 
-  it("**بدايةٌ ليست اليوم ← 422 ولا مستخدم يُنشأ**", async () => {
+  it("**بدايةٌ ليست اليوم ← 422 ولا مستخدم يُنشأ** — الرادُّ حارس خدمة الإسناد", async () => {
     const phone = nextPhone();
     const res = await createUserReq(ownerToken, {
       fullName: "مربّي بداية غد",

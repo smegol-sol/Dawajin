@@ -135,7 +135,7 @@ describe(`مفتاح الطوارئ — التنفيذ السليم (${S})`, () 
 });
 
 describe(`مفتاح الطوارئ — الجلسة بعده (${S})`, () => {
-  it("المدير يدخل بالمؤقتة ويُحجب عن كل مسار عدا التغيير", async () => {
+  it("المدير يدخل بالمؤقتة ويُحجب عن كل مسار عدا التغيير — الرادُّ حارس مصادقة المنصة", async () => {
     const env = loadEnv();
     const admin = await seedAdmin();
     const { temporaryPassword } = await emergencyResetPlatformAdminPassword(db, env, {

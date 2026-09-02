@@ -8,6 +8,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../app";
 import { loadEnv } from "../lib/env";
 import { assertIsTestDatabase } from "../lib/testGuard";
+import { expectRejecter } from "../test-support/expectRejecter";
 import { farmVia, houseVia, seedTenant, seedUser, siteVia, today } from "../test-support/hierarchy";
 
 /**
@@ -212,11 +213,12 @@ describe("مصفوفة الصلاحيات — الإسناد للمالك وال
    * **وحدُّ «المرّبين فقط» يُقاس بهدفٍ يراه المشرف** — طبيبٌ في مزرعته:
    * **يمرّ محلِّلُ `userId` ويمرّ حارسُ الدور**، فيكون الرادُّ الحدَّ نفسه.
    */
-  it("**مشرفٌ يُسنِد طبيبًا يراه ← 403 من حدّ «المرّبين فقط»**", async () => {
+  it("**مشرفٌ يُسنِد طبيبًا يراه ← 403 من حدّ «المرّبين فقط»** — الرادُّ حدّ إدارة المستخدمين", async () => {
     const res = await assign(probeTokens.get("supervisor") ?? "", reachVetId, {
       farmId: probeBody.others.farmId,
     });
     expect(res.status).toBe(403);
+    expectRejecter(res, "forbidden", "لا تملك إدارة");
     expect((res.body as ErrorBody).message).toContain("هذا الصنف");
   });
 
@@ -225,7 +227,7 @@ describe("مصفوفة الصلاحيات — الإسناد للمالك وال
    * عمدًا**: بلا إسناده يردّه `assertWarehouseAccess` **قبل** هذا الحدّ،
    * فيخضرّ الصفّ بلا علاقة بما يقيس (الشكل الخامس، القرار 248).
    */
-  it("**مشرفٌ يُسنِد مخزنَ موقعه لمربٍّ ← 403 — الإسناد للمالك وحده**", async () => {
+  it("**مشرفٌ يُسنِد مخزنَ موقعه لمربٍّ ← 403 — الإسناد للمالك وحده** — الرادُّ حدّ إدارة المستخدمين", async () => {
     await db.insert(userAssignments).values({
       tenantId,
       userId: mustGetSupervisorProbeId(),
@@ -237,6 +239,7 @@ describe("مصفوفة الصلاحيات — الإسناد للمالك وال
       warehouseId: siteWarehouseId,
     });
     expect(res.status).toBe(403);
+    expectRejecter(res, "forbidden", "إسناد المخازن للمالك");
     expect((res.body as ErrorBody).message).toContain("للمالك وحده");
   });
 
@@ -269,7 +272,7 @@ describe("المستوى يطابق الدور — قائمة موجبة لا ش
     expect(row?.startDate).toBe(today);
   });
 
-  it("**مربٍّ ← مزرعة: 422** — المستوى لا يقبله الدور", async () => {
+  it("**مربٍّ ← مزرعة: 422** — المستوى لا يقبله الدور — الرادُّ حارس خدمة الإسناد", async () => {
     const res = await assign(ownerToken, farmerId, { farmId });
     expect(res.status).toBe(422);
     expect((res.body as ErrorBody).code).toBe("assignment_level_not_allowed_for_role");
@@ -281,7 +284,7 @@ describe("المستوى يطابق الدور — قائمة موجبة لا ش
     expect([supervisor.status, vet.status]).toEqual([201, 201]);
   });
 
-  it("**مالكٌ ← أي مستوى: 422** — لا مستوى له، ورؤيته بدوره لا بصفّ", async () => {
+  it("**مالكٌ ← أي مستوى: 422** — لا مستوى له، ورؤيته بدوره لا بصفّ — الرادُّ حارس خدمة الإسناد", async () => {
     const res = await assign(ownerToken, ownerId, { farmId });
     expect(res.status).toBe(422);
     expect((res.body as ErrorBody).code).toBe("assignment_level_not_allowed_for_role");
@@ -295,13 +298,13 @@ describe("مخزن الموقع — حكم المالك نصًّا (القرار
     expect((res.body as AssignmentBody).warehouseId).toBe(siteWarehouseId);
   });
 
-  it("**مشرف ← المخزن المركزي: 422** — المركزيّ لأمين المخزن لا له (254)", async () => {
+  it("**مشرف ← المخزن المركزي: 422** — المركزيّ لأمين المخزن لا له (254) — الرادُّ حارس خدمة الإسناد", async () => {
     const res = await assign(ownerToken, supervisorId, { warehouseId: centralWarehouseId });
     expect(res.status).toBe(422);
     expect((res.body as ErrorBody).code).toBe("warehouse_level_not_allowed_for_role");
   });
 
-  it("**مربٍّ ← مخزن موقع: 422** — الدور لا يقبل مستوى المخزن أصلًا", async () => {
+  it("**مربٍّ ← مخزن موقع: 422** — الدور لا يقبل مستوى المخزن أصلًا — الرادُّ حارس خدمة الإسناد", async () => {
     const res = await assign(ownerToken, farmerId, { warehouseId: siteWarehouseId });
     expect(res.status).toBe(422);
     expect((res.body as ErrorBody).code).toBe("assignment_level_not_allowed_for_role");
@@ -335,19 +338,19 @@ describe("أمين المخزن — المركزيّ وحده، وبيد الم�
     expect((res.body as AssignmentBody).farmId).toBeNull();
   });
 
-  it("**وأمين المخزن ← مخزن الموقع: 422** — نوعُ المخزن لا يوافق دوره", async () => {
+  it("**وأمين المخزن ← مخزن الموقع: 422** — نوعُ المخزن لا يوافق دوره — الرادُّ حارس خدمة الإسناد", async () => {
     const res = await assign(ownerToken, storekeeperId, { warehouseId: siteWarehouseId });
     expect(res.status).toBe(422);
     expect((res.body as ErrorBody).code).toBe("warehouse_level_not_allowed_for_role");
   });
 
-  it("**وأمين المخزن ← مزرعة: 422** — الدور لا يقبل مستوى المزرعة أصلًا", async () => {
+  it("**وأمين المخزن ← مزرعة: 422** — الدور لا يقبل مستوى المزرعة أصلًا — الرادُّ حارس خدمة الإسناد", async () => {
     const res = await assign(ownerToken, storekeeperId, { farmId });
     expect(res.status).toBe(422);
     expect((res.body as ErrorBody).code).toBe("assignment_level_not_allowed_for_role");
   });
 
-  it("**وأمين المخزن ← عنبر: 422** — ولا يرى العنابر أصلًا (#161 «سابعًا»)", async () => {
+  it("**وأمين المخزن ← عنبر: 422** — ولا يرى العنابر أصلًا (#161 «سابعًا») — الرادُّ حارس خدمة الإسناد", async () => {
     const res = await assign(ownerToken, storekeeperId, { houseId });
     expect(res.status).toBe(422);
     expect((res.body as ErrorBody).code).toBe("assignment_level_not_allowed_for_role");
@@ -392,13 +395,13 @@ describe("أمين المخزن — المركزيّ وحده، وبيد الم�
 });
 
 describe("البداية اليوم — سياسةُ مسارٍ لا قيدُ نموذج", () => {
-  it("**بدايةٌ غدًا ← 422** — والنموذج يحتملها، والمنع في المسار وحده", async () => {
+  it("**بدايةٌ غدًا ← 422** — والنموذج يحتملها، والمنع في المسار وحده — الرادُّ حارس خدمة الإسناد", async () => {
     const res = await assign(ownerToken, vetId, { farmId, startDate: "2099-01-01" });
     expect(res.status).toBe(422);
     expect((res.body as ErrorBody).code).toBe("assignment_start_not_today");
   });
 
-  it("**وبدايةٌ بالأمس ← 422** — إسنادٌ بأثر رجعي يدّعي مسؤوليةً عن يومٍ مضى", async () => {
+  it("**وبدايةٌ بالأمس ← 422** — إسنادٌ بأثر رجعي يدّعي مسؤوليةً عن يومٍ مضى — الرادُّ حارس خدمة الإسناد", async () => {
     const res = await assign(ownerToken, vetId, { farmId, startDate: "2000-01-01" });
     expect(res.status).toBe(422);
     expect((res.body as ErrorBody).code).toBe("assignment_start_not_today");

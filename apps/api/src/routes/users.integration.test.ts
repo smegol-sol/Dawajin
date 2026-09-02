@@ -245,12 +245,14 @@ describe("المشرف — يملك إدارة المرّبين وحدهم (ال
     expect(res.status).toBe(404);
   });
 
-  it("**ومشرفٌ يُنشئ مشرفًا ← 403 من حدّ «المرّبين فقط»**", async () => {
+  it("**ومشرفٌ يُنشئ مشرفًا ← 403 من حدّ «المرّبين فقط»** — الرادُّ حدّ إدارة المستخدمين", async () => {
     const res = await request(app)
       .post("/api/users")
       .set("Authorization", `Bearer ${tokensByRole.get("supervisor") ?? ""}`)
       .send({ fullName: "مشرف ثانٍ", role: "supervisor", phone: "0770000010" });
     expect(res.status).toBe(403);
+    expect((res.body as { code: string }).code).toBe("forbidden");
+    expect((res.body as { message: string }).message).toContain("لا تملك إدارة");
     expect((res.body as ErrorBody).message).toContain("هذا الصنف");
   });
 
@@ -305,7 +307,7 @@ describe("الإنشاء — الكلمة تُولَّد ولا تُستقبَل
     expect(Object.keys(body.user)).not.toContain("phoneE164");
   });
 
-  it("**والإلزام أثرٌ لا حقل**: يدخل بكلمته ثم يُحجب عن كل مسار سوى التغيير", async () => {
+  it("**والإلزام أثرٌ لا حقل**: يدخل بكلمته ثم يُحجب عن كل مسار سوى التغيير — الرادُّ حارس الجلسة الحيّة", async () => {
     const login = await request(app)
       .post("/api/auth/login")
       .send({ phone: NEW_PHONE, password: created.temporaryPassword, tenantId });
@@ -381,7 +383,7 @@ describe("التعطيل والتفعيل — أثرٌ على الدخول لا 
     expect(login.status).toBe(200);
   });
 
-  it("**تعطيل الذات ← 422** — والمالك يبقى فعّالًا في القاعدة", async () => {
+  it("**تعطيل الذات ← 422** — والمالك يبقى فعّالًا في القاعدة — الرادُّ حارس خدمة المستخدمين", async () => {
     const res = await request(app)
       .post(`/api/users/${String(ownerId)}/deactivate`)
       .set("Authorization", `Bearer ${ownerToken}`);
