@@ -1,7 +1,15 @@
 import { randomInt } from "node:crypto";
 
-import { createDbClient, userAssignments, warehouses, type Database } from "@dawajin/db";
-import { eq } from "drizzle-orm";
+import {
+  createDbClient,
+  inventoryMovements,
+  inventoryTransfers,
+  products,
+  userAssignments,
+  warehouses,
+  type Database,
+} from "@dawajin/db";
+import { eq, sql } from "drizzle-orm";
 import pino from "pino";
 import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -41,6 +49,7 @@ let houseId: number;
 let centralId: number;
 let unassignedCentralId: number;
 let houseWarehouseId: number;
+let feedId: number;
 
 interface ErrorBody {
   code: string;
@@ -98,6 +107,13 @@ beforeAll(async () => {
   await db
     .insert(userAssignments)
     .values({ tenantId, userId: storekeeper.id, warehouseId: centralId, startDate: today() });
+
+  const [feed] = await db
+    .insert(products)
+    .values({ tenantId, category: "علف", name: `علف ${S}`, stockUnit: "كيس" })
+    .returning({ id: products.id });
+  if (!feed) throw new Error("تعذّر تجهيز الصنف");
+  feedId = feed.id;
 });
 
 afterAll(async () => {
@@ -209,5 +225,97 @@ describe(`وما يبلغه — البابُ الذي فتحه إدراجُه ($
     const res = await asStorekeeper("/api/inventory/in-transit");
     expect(res.status).toBe(200);
     expect((res.body as { transfers: unknown[] }).transfers).toHaveLength(0);
+  });
+});
+
+/** أمرٌ من مركزيّ أمين المخزن إلى عنبرٍ — **والمالك يُصدره لأنه الآمر بالصرف**. */
+async function orderFromCentral(fromId: number, quantity = 10): Promise<number> {
+  const res = await request(app)
+    .post("/api/inventory/transfers")
+    .set("Authorization", `Bearer ${ownerToken}`)
+    .send({
+      fromWarehouseId: fromId,
+      toWarehouseId: houseWarehouseId,
+      productId: feedId,
+      quantity,
+      unit: "كيس",
+    });
+  if (res.status !== 201) throw new Error(`تعذّر الإصدار: ${String(res.status)}`);
+  return (res.body as { transferId: number }).transferId;
+}
+
+function issue(token: string, transferId: number): request.Test {
+  return request(app)
+    .post(`/api/inventory/transfers/${String(transferId)}/issue`)
+    .set("Authorization", `Bearer ${token}`)
+    .send({});
+}
+
+describe(`تنفيذًا لا أمرًا — خانةُ «تحويل» في §12.2 (${S})`, () => {
+  /**
+   * **الخانة كانت مكتوبةً ولا تُبلَغ** — «✅ المركزي (تنفيذًا لا أمرًا)» —
+   * **وحاجبُها زال بالقرار 258**: فتحُ التنفيذ قبل تأكيد المحطتين **يُخرج بلا
+   * مؤكِّد**.
+   *
+   * **والرادُّ قبل الدفعة كان `requireRole` وحده** — والمخزن مخزنُه فيمرّ
+   * الفرضَ المركزي، **فالإسقاطُ الذي يُسقط هذا الصفّ إخراجُ الدور من حارس
+   * الموجّه لا شيءٌ آخر**.
+   */
+  it("**أمين المخزن ينفّذ خروجًا من مركزيّه ← 200**", async () => {
+    await db.insert(inventoryMovements).values({
+      tenantId,
+      warehouseId: centralId,
+      productId: feedId,
+      movementType: "استلام",
+      quantity: "100.000",
+      unit: "كيس",
+      sourceType: "test",
+      sourceUuid: sql`gen_random_uuid()`,
+    });
+    const id = await orderFromCentral(centralId, 10);
+    const res = await issue(storekeeperToken, id);
+    expect(res.status).toBe(200);
+    expect((res.body as { status: string }).status).toBe("في الطريق");
+  });
+
+  /**
+   * **ونطاقُه لم يتّسع حرفًا:** الفرضُ المركزي يحلّ التحويل إلى **مخزنه
+   * المرسِل** (258)، **وإسنادُه مخزنٌ بعينه** (254). **فالرادُّ هنا الفرضُ
+   * المركزي لا حارسُ الدور** — والرسالة تسمّيه.
+   */
+  it("**ولا ينفّذ من مركزيٍّ لم يُسنَد له ← 403 من الفرض المركزي**", async () => {
+    const id = await orderFromCentral(unassignedCentralId, 10);
+    const res = await issue(storekeeperToken, id);
+    expect(res.status).toBe(403);
+    expect((res.body as ErrorBody).message).toContain("لهذا المخزن");
+  });
+
+  /**
+   * **والأمرُ يبقى ممنوعًا — «أمين حفظ لا آمر صرف»** (#161 «ثالث عشر» ٢).
+   *
+   * **والمصدرُ مخزنُه هو والوجهةُ مخزنُ عنبر — فيبلغ المصدر ولا يبلغ الوجهة**،
+   * **فالرادُّ الفرضُ المركزي على الوجهة**. **وحارسُ الدور خلفه، وحارسُ
+   * «أمين حفظ» خلفهما** — **ولا يُبلَغ أيٌّ منهما من هذا المسار**، **وهو
+   * ما سجّله القرار 228 §٥ ويبقى صحيحًا بعد الدفعة**.
+   */
+  it("**ولا يُصدر أمرًا ← 403** — والرادّ الفرضُ المركزي على الوجهة لا حارسُ الدور", async () => {
+    const res = await request(app)
+      .post("/api/inventory/transfers")
+      .set("Authorization", `Bearer ${storekeeperToken}`)
+      .send({
+        fromWarehouseId: centralId,
+        toWarehouseId: houseWarehouseId,
+        productId: feedId,
+        quantity: 5,
+        unit: "كيس",
+      });
+    expect(res.status).toBe(403);
+    expect((res.body as ErrorBody).message).toContain("لهذا العنبر");
+    // **ولا صفَّ أمرٍ يُكتب** — الرقم هو الدليل لا الحالة
+    const rows = await db
+      .select({ id: inventoryTransfers.id })
+      .from(inventoryTransfers)
+      .where(eq(inventoryTransfers.fromWarehouseId, centralId));
+    expect(rows).toHaveLength(1);
   });
 });
