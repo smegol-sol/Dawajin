@@ -23,6 +23,7 @@ import { checkLayoutRtl } from "./checks/layout-rtl";
 import { checkLogoSingleSource } from "./checks/logo-single-source";
 import { checkRoleGuardOwner } from "./checks/role-guard-owner";
 import { checkMigrationChain } from "./checks/migration-chain";
+import { checkDeclaredLimits } from "./checks/declared-limits";
 import { checkNavCoverage } from "./checks/nav-coverage";
 import { checkOpenApiCoverage } from "./checks/openapi-coverage";
 import { checkPrettier } from "./checks/prettier";
@@ -45,6 +46,7 @@ const checks: { name: string; run: CheckFn }[] = [
   { name: "سلسلة الترحيلات", run: checkMigrationChain },
   { name: "الشعار مصدر واحد", run: checkLogoSingleSource },
   { name: "حارس الدور يذكر المالك", run: checkRoleGuardOwner },
+  { name: "الحدود المعلنة", run: checkDeclaredLimits },
   { name: "typecheck", run: checkTypecheck },
   { name: "ESLint", run: checkEslint },
   { name: "Prettier", run: checkPrettier },
