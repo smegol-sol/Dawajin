@@ -187,6 +187,15 @@ describe("POST /api/auth/login", () => {
     expect(body.token).toBeTruthy();
     expect(body.user.role).toBe("farmer");
     expect(body.user.tenantId).toBe(tenantAId);
+
+    // **وحجبُ الحقول يُؤكَّد هنا لا في طلبٍ سادس** (القرار 253): حدّ المحاولات
+    // 5/دقيقة، **ولا يُرفع لأجل اختبار** — والطلب القائم يحمل الرد نفسه.
+    // **والتأكيد يسمّي الغائب**: `getUserProfile` يقرأ الصفّ كاملًا ويبني
+    // كائن الرد بيده، **فعطبُه أن يُعاد الصفّ كما هو — حقلٌ يظهر بلا خطأ**.
+    const keys = Object.keys(body.user as unknown as Record<string, unknown>);
+    expect(keys).not.toContain("passwordHash");
+    expect(keys).not.toContain("phoneE164");
+    expect(keys).not.toContain("expoPushToken");
   });
 
   it("طلب 2: كلمة مرور خاطئة ← 401 برسالة عامة", async () => {

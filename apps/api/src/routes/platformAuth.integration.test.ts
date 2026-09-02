@@ -338,3 +338,51 @@ describe(`حرّاسٌ سليمان بلا شاهد — أُغلقا باختب�
     expect((res.body as { token?: string }).token).toBeTruthy();
   });
 });
+
+/**
+ * **حجبُ الحقول — والسرُّ أخطر ما يُحجب** (القرار 253).
+ *
+ * **والشكل الذي تحرسه هذه الاختبارات:** `platformAuthService` يقرأ الصفّ
+ * **كاملًا** (`select()` بلا أعمدة) **ثم يبني كائن الرد بيده** فيسقط
+ * `totp_secret` و`password_hash`. **وعطبُه أن يُعاد الصفّ كما هو أو يُنشر
+ * بـ`...` — فلا خطأ يُرمى ولا صفّ يزيد، بل حقلٌ يظهر.**
+ *
+ * **و`totp_secret` سرُّ الطبقة الثانية من المصادقة** (القرار 188) —
+ * **وتسريبُه يُسقطها كلها**، وهي الطبقة التي بُنيت لأن الأولى وحدها لم تكفِ.
+ *
+ * **والتأكيد وجهان لا وجه:** غيابُ **اسم** الحقل من المفاتيح، **وغيابُ قيمة
+ * السرّ نفسها من نصّ الرد كلّه** — فلا يمرّ تحت مفتاحٍ آخر ولا متداخلًا.
+ */
+describe(`حجبُ الحقول في مسار المنصة — السرّ والتجزئة (${S}، القرار 253)`, () => {
+  it("**ردُّ الدخول لا يحمل `totpSecret` ولا `passwordHash` — اسمًا ولا قيمة**", async () => {
+    const fresh = await seedPlatformAdmin({ password: ADMIN_PASSWORD });
+    const res = await loginAdmin(
+      freshApp(),
+      fresh.phone,
+      ADMIN_PASSWORD,
+      currentCode(fresh.secret)
+    );
+    expect(res.status).toBe(200);
+
+    const admin = (res.body as { admin: Record<string, unknown> }).admin;
+    expect(Object.keys(admin)).not.toContain("totpSecret");
+    expect(Object.keys(admin)).not.toContain("passwordHash");
+    // **والقيمة نفسها غائبة من الرد كلّه** — لا تحت مفتاحٍ آخر ولا متداخلة
+    expect(JSON.stringify(res.body)).not.toContain(fresh.secret);
+  });
+
+  it("**وملفُّ المدير لا يحملهما كذلك** — والحجب في الموضعين لا موضع", async () => {
+    const fresh = await seedPlatformAdmin({ password: ADMIN_PASSWORD });
+    const app = freshApp();
+    const login = await loginAdmin(app, fresh.phone, ADMIN_PASSWORD, currentCode(fresh.secret));
+    const token = (login.body as { token: string }).token;
+
+    const res = await request(app).get("/platform/auth/me").set("Authorization", `Bearer ${token}`);
+    expect(res.status).toBe(200);
+
+    const body = res.body as Record<string, unknown>;
+    expect(Object.keys(body)).not.toContain("totpSecret");
+    expect(Object.keys(body)).not.toContain("passwordHash");
+    expect(JSON.stringify(body)).not.toContain(fresh.secret);
+  });
+});
