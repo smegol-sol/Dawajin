@@ -1,6 +1,6 @@
 import { entityAuditLog, farms, houses, userAssignments, users, warehouses } from "@dawajin/db";
 import type { Database } from "@dawajin/db";
-import { HttpError, type UserRole } from "@dawajin/shared";
+import { HttpError, type UserRole, type WarehouseLevel } from "@dawajin/shared";
 import { and, desc, eq, sql } from "drizzle-orm";
 
 import { writeAuditLog } from "../lib/auditLog";
@@ -62,6 +62,26 @@ const ALLOWED_LEVELS: Partial<Record<UserRole, ReadonlySet<AssignmentLevel["kind
   farmer: new Set(["house"]),
   supervisor: new Set(["farm", "warehouse"]),
   vet: new Set(["farm"]),
+  // **أمين المخزن بالمخزن وحده** (القرار 254): لا مزرعة ولا عنبر — **يرى
+  // مخزنه وحركاته، ولا يرى أرصدة العنابر ولا الدفعات ولا المزارع ولا
+  // المواقع** (#161 «سابعًا»).
+  storekeeper: new Set(["warehouse"]),
+};
+
+/**
+ * **أيُّ مستوى مخزنٍ يقبله أيُّ دور — قائمة موجبة كأختها** (القرار 254).
+ *
+ * **والمخزن مستوًى واحد في `user_assignments` وثلاثةُ أنواعٍ في `warehouses`**
+ * (مركزي · موقع · عنبر) — **فالتطابق حكمٌ ثانٍ فوق تطابق الدور بالمستوى**:
+ *
+ * - **المشرف ← مخزن موقعه** (القرار 247).
+ * - **وأمين المخزن ← المركزيّ** (#161 «ثالث عشر» ٢: أمينُ حفظٍ للمركزيّ).
+ * - **ومخزن العنبر لا يُسنَد لأحد** — صاحبه مربّيه بإسناد عنبره (القرار 199)،
+ *   **فإسنادٌ فوقه لغو**.
+ */
+const ALLOWED_WAREHOUSE_LEVELS: Partial<Record<UserRole, WarehouseLevel>> = {
+  supervisor: "موقع",
+  storekeeper: "مركزي",
 };
 
 /** يقرأ «اليوم» **بساعة القاعدة لا بساعة الخادم** — نفس ساعة قيد التداخل (القرار 190). */
@@ -100,7 +120,8 @@ async function readAssigneeRole(tx: Reader, tenantId: number, userId: number): P
 async function assertLevelEntityExists(
   tx: Reader,
   tenantId: number,
-  level: AssignmentLevel
+  level: AssignmentLevel,
+  role: UserRole
 ): Promise<void> {
   if (level.kind === "house") {
     const [row] = await tx
@@ -126,12 +147,13 @@ async function assertLevelEntityExists(
     .where(and(eq(warehouses.id, level.id), eq(warehouses.tenantId, tenantId)))
     .limit(1);
   if (!row) throw new HttpError(404, "not_found", "المخزن غير موجود");
-  if (row.level !== "موقع") {
+  const expected = ALLOWED_WAREHOUSE_LEVELS[role];
+  if (expected === undefined || row.level !== expected) {
     throw new HttpError(
       422,
-      "warehouse_not_site_level",
-      "لا يُسنَد إلا مخزن موقع — مخزن العنبر يتبع إسناد عنبره، والمركزيّ للمالك",
-      { warehouseId: level.id, level: row.level }
+      "warehouse_level_not_allowed_for_role",
+      "نوع المخزن لا يوافق دور المُسنَد إليه — المشرف بمخزن موقعه، وأمين المخزن بالمركزيّ",
+      { warehouseId: level.id, level: row.level, role }
     );
   }
 }
@@ -224,7 +246,7 @@ export async function insertAssignmentWithin(
   }
 
   assertLevelAllowedForRole(role, level);
-  await assertLevelEntityExists(tx, tenantId, level);
+  await assertLevelEntityExists(tx, tenantId, level, role);
 
   const [created] = await tx
     .insert(userAssignments)

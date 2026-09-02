@@ -95,6 +95,33 @@ async function filterShows(actor: Actor, warehouseId: number): Promise<boolean> 
   return rows.length === 1;
 }
 
+/** مخزنُ عنبرٍ — أنشأه `createHouse` (القرار 224)، فيُقرأ ولا يُنشأ. */
+async function warehouseOf(houseId: number): Promise<number> {
+  const [row] = await db
+    .select({ id: warehouses.id })
+    .from(warehouses)
+    // eslint-disable-next-line dawajin/no-unvetted-house-id-reuse
+    .where(eq(warehouses.houseId, houseId));
+  if (!row) throw new Error("مخزن العنبر غير موجود");
+  return row.id;
+}
+
+/** المخزنان اللذان لا عنبر لهما — **ولا مسار إنشاءٍ لهما بعد**، فإدراجٌ مباشر. */
+async function seedStandaloneWarehouses(
+  siteId: number
+): Promise<{ central: number; siteWarehouse: number }> {
+  const [central] = await db
+    .insert(warehouses)
+    .values({ tenantId, name: `مركزي ${S}`, level: "مركزي" })
+    .returning({ id: warehouses.id });
+  const [siteWarehouse] = await db
+    .insert(warehouses)
+    .values({ tenantId, name: `مخزن موقع ${S}`, level: "موقع", siteId })
+    .returning({ id: warehouses.id });
+  if (!central || !siteWarehouse) throw new Error("تعذّر تجهيز المخازن");
+  return { central: central.id, siteWarehouse: siteWarehouse.id };
+}
+
 beforeAll(async () => {
   const env = loadEnv();
   const testUrl = process.env.TEST_DATABASE_URL;
@@ -119,31 +146,17 @@ beforeAll(async () => {
   const assignedHouse = await houseVia(app, owner.token, farmId, `عنبر مُسند ${S}`);
   const otherHouse = await houseVia(app, owner.token, otherFarmId, `عنبر آخر ${S}`);
 
-  const warehouseOf = async (houseId: number): Promise<number> => {
-    const [row] = await db
-      .select({ id: warehouses.id })
-      .from(warehouses)
-      // eslint-disable-next-line dawajin/no-unvetted-house-id-reuse
-      .where(eq(warehouses.houseId, houseId));
-    if (!row) throw new Error("مخزن العنبر غير موجود");
-    return row.id;
-  };
-
-  const [central] = await db
-    .insert(warehouses)
-    .values({ tenantId, name: `مركزي ${S}`, level: "مركزي" })
-    .returning({ id: warehouses.id });
-  const [siteWarehouse] = await db
-    .insert(warehouses)
-    .values({ tenantId, name: `مخزن موقع ${S}`, level: "موقع", siteId })
-    .returning({ id: warehouses.id });
-  if (!central || !siteWarehouse) throw new Error("تعذّر تجهيز المخازن");
+  const { central, siteWarehouse } = await seedStandaloneWarehouses(siteId);
 
   // المربّي بعنبره · المشرف بمزرعته · والمشرف يُسنَد مخزن الموقع صراحةً (225)
   await db.insert(userAssignments).values([
     { tenantId, userId: farmer.id, houseId: assignedHouse, startDate: today() },
     { tenantId, userId: supervisor.id, farmId, startDate: today() },
-    { tenantId, userId: supervisor.id, warehouseId: siteWarehouse.id, startDate: today() },
+    { tenantId, userId: supervisor.id, warehouseId: siteWarehouse, startDate: today() },
+    // **وأمين المخزن بالمركزيّ** (القرار 254) — **مُسندًا لا مجرَّدًا**:
+    // فاعلٌ بلا إسناد يُمنع في الأربع خانات، **فيتطابق الحكمان على «الكلّ
+    // يُمنع» ولا يُقاس شيء**.
+    { tenantId, userId: storekeeper.id, warehouseId: central, startDate: today() },
   ]);
 
   actors = [
@@ -151,13 +164,18 @@ beforeAll(async () => {
     { label: "المشرف", id: supervisor.id, role: "supervisor", token: supervisor.token },
     { label: "المربّي", id: farmer.id, role: "farmer", token: farmer.token },
     { label: "الطبيب غير المُسنَد", id: vet.id, role: "vet", token: vet.token },
-    { label: "أمين المخزن", id: storekeeper.id, role: "storekeeper", token: storekeeper.token },
+    {
+      label: "أمين المخزن المُسنَد للمركزيّ",
+      id: storekeeper.id,
+      role: "storekeeper",
+      token: storekeeper.token,
+    },
   ];
   places = [
     { label: "مخزن عنبرٍ مُسند", warehouseId: await warehouseOf(assignedHouse) },
     { label: "مخزن عنبرٍ غير مُسند", warehouseId: await warehouseOf(otherHouse) },
-    { label: "مخزنٌ بلا عنبر — موقع", warehouseId: siteWarehouse.id },
-    { label: "مخزنٌ بلا عنبر — مركزي", warehouseId: central.id },
+    { label: "مخزنٌ بلا عنبر — موقع", warehouseId: siteWarehouse },
+    { label: "مخزنٌ بلا عنبر — مركزي", warehouseId: central },
   ];
 });
 
@@ -217,6 +235,29 @@ describe("والخانات المسمّاة — كي لا يمرّ تطابقٌ 
     expect(await filterShows(supervisor, site.warehouseId)).toBe(true);
     expect(await guardAllows(supervisor, central.warehouseId)).toBe(false);
     expect(await filterShows(supervisor, central.warehouseId)).toBe(false);
+  });
+
+  /**
+   * **وأمين المخزن — خانتان لا خانةٌ واحدة** (القرار 254): **المركزيّ المُسنَد
+   * نعم**، **ومخزن الموقع لا** — **ولا يُشتق له مخزنٌ من إسناد مزرعةٍ ولا
+   * عنبر** لأنه لا يُسند إليهما أصلًا.
+   *
+   * **وحدُّ نطاقه هنا يُقاس لا يُوصف:** مخزنُ العنبر ممنوعٌ عنه في الطرفين،
+   * **وهو ما يعني «لا يرى أرصدة العنابر»** (#161 «سابعًا») على مستوى المخزن.
+   */
+  it("أمين المخزن: المركزيّ المُسنَد نعم، ومخزن الموقع ومخزن العنبر لا", async () => {
+    const storekeeper = actors.find((a) => a.role === "storekeeper");
+    const central = places.find((p) => p.label.includes("مركزي"));
+    const site = places.find((p) => p.label.includes("موقع"));
+    const house = places.find((p) => p.label === "مخزن عنبرٍ مُسند");
+    if (!storekeeper || !central || !site || !house) throw new Error("تجهيزة ناقصة");
+
+    expect(await guardAllows(storekeeper, central.warehouseId)).toBe(true);
+    expect(await filterShows(storekeeper, central.warehouseId)).toBe(true);
+    for (const place of [site, house]) {
+      expect(await guardAllows(storekeeper, place.warehouseId)).toBe(false);
+      expect(await filterShows(storekeeper, place.warehouseId)).toBe(false);
+    }
   });
 
   it("المالك: كل الأربعة نعم في الطرفين — رؤيةٌ كاملة", async () => {

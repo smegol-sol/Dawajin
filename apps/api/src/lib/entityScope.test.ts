@@ -24,8 +24,15 @@ import {
  * دور غير مُدرَج في أي قائمة. **يُصطنع بـ`as` عمدًا**: النوع لا يسمح به اليوم،
  * والاختبار يفحص ما يحدث **حين يُضاف دور غدًا** — وهو بالضبط ما لا يكشفه
  * المترجم.
+ *
+ * **وكان `"storekeeper"` حتى القرار 254 — فابتلعه إدراجُ الدور في القائمة
+ * الموجبة**، **وسقطت الثلاثة معًا فانكشف الأمر**. **والدرس أن نائبَ «دورٌ خارج
+ * القائمتين» لا يكون دورًا حقيقيًّا**: كلُّ دورٍ حقيقيّ **مرشَّحٌ لأن يُدرَج
+ * يومًا**، **فيتحوّل الشاهد صامتًا من «الغريب يُمنع» إلى «المعروف يُمنع»** —
+ * **ولولا أنّ ثلاثتها سقطت دفعةً لمرّ التحوّل**. **فصار نصًّا مصطنعًا لا اسمَ
+ * دورٍ قائم.**
  */
-const UNKNOWN_ROLE = "storekeeper" as Role;
+const UNKNOWN_ROLE = "__role_not_in_either_list__" as Role;
 
 function viewer(role: Role): Viewer {
   return { id: 7, role };
@@ -114,4 +121,20 @@ describe("الأدوار المعروفة لم يتغيّر سلوكها", () =>
       expect(chunks(visibleHouseScope(viewer(role)))).toContain("EXISTS");
     }
   );
+
+  /**
+   * **وأمين المخزن مقيَّدٌ بالإسناد منذ القرار 254 — لا صاحبَ رؤيةٍ كاملة.**
+   *
+   * **والفارق يُثبَّت هنا لأن الشرطين نصّهما واحد** (`EXISTS` على
+   * `user_assignments`) **ومعناهما مختلف**: **إسنادُه مخزنٌ لا مزرعة ولا
+   * عنبر**، **فالشرطان يُرجعان صفرًا لا `true`** — **وهو ما يجعله لا يرى
+   * مزرعةً ولا عنبرًا** (#161 «سابعًا»)، **بلا سطرٍ خاصٍّ به في أيّ منهما**.
+   */
+  it("أمين المخزن: مقيَّدٌ بالإسناد لا مطلقٌ — والمزرعة والعنبر بشرطٍ لا يبلغه", () => {
+    expect(FULL_VISIBILITY_ROLES.has("storekeeper")).toBe(false);
+    expect(ASSIGNMENT_SCOPED_ROLES.has("storekeeper")).toBe(true);
+    // **`EXISTS` لا `true`** — فلو صار `true` لرأى كل مزارع مستأجره
+    expect(chunks(visibleFarmCondition(viewer("storekeeper")))).toContain("EXISTS");
+    expect(chunks(visibleHouseScope(viewer("storekeeper")))).toContain("EXISTS");
+  });
 });

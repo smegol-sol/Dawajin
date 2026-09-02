@@ -49,10 +49,15 @@ export function assertMayManageUser(actorRole: UserRole, targetRole: UserRole): 
  *
  * **ومخزن الموقع رصيدٌ لا مزرعة** — ومشرفٌ يُسند نفسه أو زميله **يفتح بابًا
  * على رصيد لم يأتمنه عليه أحد**.
+ *
+ * **والمركزيّ معه بالقرار 254 — بالعلّة نفسها لا بقياسٍ جديد:** إسنادُ أمين
+ * المخزن **بيد المالك وحده**، **لأن المركزيّ رصيدٌ لا مزرعة** كذلك. **والشرط
+ * على `kind` لا على مستوى المخزن** — **فمستوًى ثالثٌ يُقبل غدًا يرثه هذا
+ * الحكم بالسكوت لا يفلت منه**، وهو الاتجاه الآمن.
  * @throws HttpError 403
  */
 export function assertMayAssignLevel(actorRole: UserRole, level: AssignmentLevel): void {
   if (level.kind !== "warehouse") return;
   if (actorRole === "owner") return;
-  throw new HttpError(403, "forbidden", "إسناد مخزن الموقع للمالك وحده", { actorRole });
+  throw new HttpError(403, "forbidden", "إسناد المخازن للمالك وحده", { actorRole });
 }

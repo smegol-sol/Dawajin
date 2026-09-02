@@ -19,11 +19,12 @@ import { loadEnv } from "../lib/env";
 import { computeTotalMovements } from "../lib/inventoryBalance";
 import { assertIsTestDatabase } from "../lib/testGuard";
 import { inTransitTotal } from "../services/inventoryTransferService";
-import { farmVia, houseVia, seedTenant, siteVia, today } from "../test-support/hierarchy";
+import { seedTenant } from "../test-support/hierarchy";
 import {
   balanceOfWarehouse,
   seedActors,
   seedForeignWarehouse,
+  seedTransferTree,
   stockWarehouse,
 } from "../test-support/transferFixture";
 
@@ -109,43 +110,14 @@ beforeAll(async () => {
   } = actors);
   const { otherSupervisorId, farmerId } = actors;
 
-  const siteId = await siteVia(app, ownerToken, `موقع ${S}`);
-  const farmA = await farmVia(app, ownerToken, siteId, `مزرعة أ ${S}`);
-  const farmB = await farmVia(app, ownerToken, siteId, `مزرعة ب ${S}`);
-  const farmOutside = await farmVia(app, ownerToken, siteId, `مزرعة خارج ${S}`);
-  const houseA = await houseVia(app, ownerToken, farmA, `عنبر أ ${S}`);
-  const houseB = await houseVia(app, ownerToken, farmB, `عنبر ب ${S}`);
-  const houseOutside = await houseVia(app, ownerToken, farmOutside, `عنبر خارج ${S}`);
-
-  const warehouseOf = async (houseId: number): Promise<number> => {
-    const [row] = await db
-      .select({ id: warehouses.id })
-      .from(warehouses)
-      // eslint-disable-next-line dawajin/no-unvetted-house-id-reuse
-      .where(eq(warehouses.houseId, houseId));
-    if (!row) throw new Error("مخزن العنبر غير موجود");
-    return row.id;
-  };
-  fromWarehouseId = await warehouseOf(houseA);
-  toWarehouseId = await warehouseOf(houseB);
-  outsideWarehouseId = await warehouseOf(houseOutside);
-
-  // **المشرف مُسنَدٌ للمزرعتين لا الثالثة** — شرط #159 «ثانيًا»
-  await db.insert(userAssignments).values([
-    { tenantId, userId: supervisorId, farmId: farmA, startDate: today() },
-    { tenantId, userId: supervisorId, farmId: farmB, startDate: today() },
-    { tenantId, userId: otherSupervisorId, farmId: farmA, startDate: today() },
-    // **المشرف الثاني يبلغ «مزرعة خارج»** — كي يُبنى تحويلٌ مصدرُه مخزنٌ
-    // محجوبٌ عن المربّي فيُقاس أنه لا يراه ولا ينفّذه (القرار 229).
-    { tenantId, userId: otherSupervisorId, farmId: farmOutside, startDate: today() },
-    { tenantId, userId: farmerId, houseId: houseA, startDate: today() },
-    // **وإسنادُ عنبر «ب» للمشرف الثاني** — **لا إسنادُ مزرعته**: مخزنُ العنبر
-    // **يُحلّ بإسناد العنبر نفسه** في الفرض المركزي (#161 «ثانيًا»، ولا
-    // يُقرأ `warehouse_id` له أصلًا)، **فيمرّ الطبقةَ الأولى ويقف عند حارس
-    // الإسناد في الخدمة** — **وبلا هذا الصفّ يسقط الطلب في الأولى فلا يُقاس
-    // الثاني إطلاقًا**.
-    { tenantId, userId: otherSupervisorId, houseId: houseB, startDate: today() },
-  ]);
+  ({ fromWarehouseId, toWarehouseId, outsideWarehouseId } = await seedTransferTree(db, app, {
+    tenantId,
+    ownerToken,
+    label: S,
+    supervisorId,
+    otherSupervisorId,
+    farmerId,
+  }));
 
   foreignWarehouseId = await seedForeignWarehouse(db, await seedTenant(db, `مستأجر آخر ${S}`), S);
 
@@ -451,35 +423,5 @@ describe("فرضُ الإسناد على المخزن المشتقّ من الت
     await stock(fromWarehouseId, 40);
     const res = await issue(farmerToken, await orderId(10));
     expect(res.status).toBe(200);
-  });
-});
-
-describe("سردُ ما في الطريق — لا يكشف معرّف مخزنٍ محجوب (#129)", () => {
-  it("**المربّي لا يرى تحويلًا مصدرُه مخزنٌ لا يبلغه إسناده، ويرى ما يخصّه**", async () => {
-    await stock(outsideWarehouseId, 50);
-    await stock(fromWarehouseId, 50);
-    const outside = await outsideOrder(20);
-    expect((await issue(otherSupervisorToken, outside)).status).toBe(200);
-    await issue(farmerToken, await orderId(15));
-
-    const res = await request(app)
-      .get("/api/inventory/in-transit")
-      .set("Authorization", `Bearer ${farmerToken}`);
-    expect(res.status).toBe(200);
-    const { transfers } = res.body as { transfers: { fromWarehouseId: number }[] };
-    expect(transfers.map((t) => t.fromWarehouseId)).toEqual([fromWarehouseId]);
-  });
-
-  it("والمالك يرى الاثنين — رؤيةٌ كاملة", async () => {
-    await stock(outsideWarehouseId, 50);
-    await stock(fromWarehouseId, 50);
-    const outside = await outsideOrder(20);
-    expect((await issue(otherSupervisorToken, outside)).status).toBe(200);
-    await issue(farmerToken, await orderId(15));
-
-    const res = await request(app)
-      .get("/api/inventory/in-transit")
-      .set("Authorization", `Bearer ${ownerToken}`);
-    expect((res.body as { transfers: unknown[] }).transfers).toHaveLength(2);
   });
 });

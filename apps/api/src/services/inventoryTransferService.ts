@@ -9,7 +9,8 @@ import {
   type Database,
 } from "@dawajin/db";
 import { HttpError, type StockUnit, type UserRole } from "@dawajin/shared";
-import { and, eq, isNotNull, sql } from "drizzle-orm";
+import { and, eq, isNotNull, sql, type SQL } from "drizzle-orm";
+import type { AnyPgColumn } from "drizzle-orm/pg-core";
 
 import {
   assignmentActiveToday,
@@ -448,24 +449,42 @@ export async function listInTransit(
       fromWarehouseId: inventoryTransfers.fromWarehouseId,
     })
     .from(inventoryTransfers)
-    .innerJoin(
-      warehouses,
-      and(
-        eq(warehouses.id, inventoryTransfers.fromWarehouseId),
-        eq(warehouses.tenantId, inventoryTransfers.tenantId)
-      )
-    )
     .where(
       and(
         eq(inventoryTransfers.tenantId, tenantId),
         eq(inventoryTransfers.status, "في الطريق"),
         // **وما لا يخصّ المستخدم غائبٌ من الرد — لا اسمًا ولا معرّفًا**
         // (القرار #129): **السرد كان يكشف `fromWarehouseId` لمخزنٍ محجوب**،
-        // **والفلترة هنا بشرطٍ واحد مشترك مع الحارس** (القرار 229).
-        visibleWarehouseCondition(viewer)
+        // **والفلترة بشرطٍ واحد مشترك مع الحارس** (القرار 229).
+        //
+        // **والطرفان معًا لا المرسِل وحده** (القرار 254): كان الانضمام على
+        // `from_warehouse_id` وحده، **فما يصل المخزن لا يُرى إطلاقًا** — ومن
+        // ينتظر شحنةً لا يعرف أنها في الطريق إليه. **وحكم المالك «الصادرة منه
+        // والواردة إليه»**، **وهو شرط #159 «ثالثًا» في وجهه الثاني**: «في
+        // الطريق» حالةٌ تُقرأ عند الطرفين لا عند المُصدِر وحده.
+        //
+        // **ويسري على كل دور لا على أمين المخزن وحده** — حكمُ رؤيةٍ في بيتٍ
+        // واحد، **وقصرُه على دور يجعل السرد يعني معنيين بحسب من يسأل**.
+        visibleTransferEndpoint(viewer)
       )
     );
   return rows.map((row) => ({ ...row, quantity: Number(row.quantity) }));
+}
+
+/**
+ * **طرفا التحويل معًا — مرسِلًا أو مستقبِلًا** (القرار 254).
+ *
+ * **ولا يُعاد كتابة حكم الرؤية**: `visibleWarehouseCondition` هو البيت الوحيد،
+ * **ويُطبَّق على كل طرفٍ على حدة** بـ`EXISTS` مستقلّة — فلا شرطٌ يوسّع الآخر.
+ */
+function visibleTransferEndpoint(viewer: { id: number; role: Role }): SQL {
+  const visible = (column: AnyPgColumn): SQL => sql`EXISTS (
+    SELECT 1 FROM ${warehouses}
+    WHERE ${warehouses.id} = ${column}
+      AND ${warehouses.tenantId} = ${inventoryTransfers.tenantId}
+      AND ${visibleWarehouseCondition(viewer)}
+  )`;
+  return sql`(${visible(inventoryTransfers.fromWarehouseId)} OR ${visible(inventoryTransfers.toWarehouseId)})`;
 }
 
 /** يُستعمل في اختبار الثابت الثاني — مجموع ما في الطريق لصنف. */

@@ -50,6 +50,8 @@ let ownerToken: string;
 let farmerId: number;
 let supervisorId: number;
 let vetId: number;
+let storekeeperId: number;
+let storekeeperToken: string;
 let ownerId: number;
 let farmId: number;
 let houseId: number;
@@ -98,6 +100,10 @@ beforeAll(async () => {
     if (role === "supervisor") supervisorId = seeded.id;
     if (role === "vet") vetId = seeded.id;
   }
+
+  const storekeeper = await seedUser(db, { tenantId, role: "storekeeper", secret: env.JWT_SECRET });
+  storekeeperId = storekeeper.id;
+  storekeeperToken = storekeeper.token;
 
   const siteId = await siteVia(app, ownerToken, "موقع الإسناد");
   farmId = await farmVia(app, ownerToken, siteId, "مزرعة الإسناد");
@@ -289,10 +295,10 @@ describe("مخزن الموقع — حكم المالك نصًّا (القرار
     expect((res.body as AssignmentBody).warehouseId).toBe(siteWarehouseId);
   });
 
-  it("**مشرف ← المخزن المركزي: 422** — المركزيّ للمالك (#161)", async () => {
+  it("**مشرف ← المخزن المركزي: 422** — المركزيّ لأمين المخزن لا له (254)", async () => {
     const res = await assign(ownerToken, supervisorId, { warehouseId: centralWarehouseId });
     expect(res.status).toBe(422);
-    expect((res.body as ErrorBody).code).toBe("warehouse_not_site_level");
+    expect((res.body as ErrorBody).code).toBe("warehouse_level_not_allowed_for_role");
   });
 
   it("**مربٍّ ← مخزن موقع: 422** — الدور لا يقبل مستوى المخزن أصلًا", async () => {
@@ -305,6 +311,83 @@ describe("مخزن الموقع — حكم المالك نصًّا (القرار
     const res = await assign(ownerToken, supervisorId, { warehouseId: siteWarehouseId });
     expect(res.status).toBe(409);
     expect((res.body as ErrorBody).message).toContain("هذا المخزن");
+  });
+});
+
+/**
+ * **أمين المخزن — مخزنٌ بعينه لا عدةُ مخازن ولا الشركة كلها** (القرار 254،
+ * حكمُ مالكٍ على #161 «حادي عشر»).
+ *
+ * **وعلّتُه أن المخزن رصيد**: **من يمسّه يُسمّى واحدًا واحدًا لا يُمنح جملةً**.
+ * **ومن أراد أمينًا على مخزنين أسنده مرتين** — فيبقى كلُّ إسناد **قابلًا
+ * للسحب وحده**، **ومعلومًا متى بدأ ومتى انتهى**.
+ *
+ * **ولا مستوى جديد يُستحدَث**: يوافق قيدَ المستوى الواحد القائم
+ * (`CHECK ((house_id IS NULL) <> (farm_id IS NULL))` بفرعه الثالث للمخزن).
+ */
+describe("أمين المخزن — المركزيّ وحده، وبيد المالك وحده (القرار 254)", () => {
+  it("**أمين المخزن ← المخزن المركزي: 201**", async () => {
+    const res = await assign(ownerToken, storekeeperId, { warehouseId: centralWarehouseId });
+    expect(res.status).toBe(201);
+    expect((res.body as AssignmentBody).warehouseId).toBe(centralWarehouseId);
+    // **والمستويان الآخران عدمٌ** — صفٌّ واحد بمستوًى واحد حتمًا
+    expect((res.body as AssignmentBody).houseId).toBeNull();
+    expect((res.body as AssignmentBody).farmId).toBeNull();
+  });
+
+  it("**وأمين المخزن ← مخزن الموقع: 422** — نوعُ المخزن لا يوافق دوره", async () => {
+    const res = await assign(ownerToken, storekeeperId, { warehouseId: siteWarehouseId });
+    expect(res.status).toBe(422);
+    expect((res.body as ErrorBody).code).toBe("warehouse_level_not_allowed_for_role");
+  });
+
+  it("**وأمين المخزن ← مزرعة: 422** — الدور لا يقبل مستوى المزرعة أصلًا", async () => {
+    const res = await assign(ownerToken, storekeeperId, { farmId });
+    expect(res.status).toBe(422);
+    expect((res.body as ErrorBody).code).toBe("assignment_level_not_allowed_for_role");
+  });
+
+  it("**وأمين المخزن ← عنبر: 422** — ولا يرى العنابر أصلًا (#161 «سابعًا»)", async () => {
+    const res = await assign(ownerToken, storekeeperId, { houseId });
+    expect(res.status).toBe(422);
+    expect((res.body as ErrorBody).code).toBe("assignment_level_not_allowed_for_role");
+  });
+
+  /**
+   * **والإسناد بيد المالك وحده — كمخزن الموقع وللعلّة نفسها: رصيدٌ لا مزرعة.**
+   *
+   * **ورادُّ المشرف مقيسٌ لا مفترَض:** يردّه **الفرضُ المركزي** على
+   * `warehouseId` في الجسم — **لأنه لا يبلغ المركزيّ أصلًا** (القرار 225: لا
+   * إسناد مخزنٍ يُشتق). **فـ`assertMayAssignLevel` لا يُبلَغ هنا البتّة**،
+   * **ويُقاس بمخزنٍ يبلغه** — وهو ما يفعله شاهدُ «مشرفٌ يُسنِد مخزنَ موقعه»
+   * أعلاه. **وحارسان يمنعان، وأسبقُهما هو الرادّ — والشاهد يسمّيه.**
+   */
+  it("**ومشرفٌ يُسند المركزيّ ← 403 من الفرض المركزي** — لا يبلغه أصلًا", async () => {
+    const res = await assign(tokensByRole.get("supervisor") ?? "", storekeeperId, {
+      warehouseId: centralWarehouseId,
+    });
+    expect(res.status).toBe(403);
+    expect((res.body as ErrorBody).message).toContain("لهذا المخزن");
+  });
+
+  /**
+   * **وأمينُ المخزن لا يرى مستخدمًا البتّة — ولا نفسه.**
+   *
+   * **وهو أثرُ إدراجه في `ASSIGNMENT_SCOPED_ROLES` مع بقاء مستوى المخزن خارج
+   * `visibleUserCondition` عمدًا** (القرار 251): **المستخدم يُرى بما هو مُسندٌ
+   * إليه**، **وفرعا الشرط عنبرٌ ومزرعة لا مخزن** — **فمن كلُّ إسناده مخزنٌ لا
+   * يبلغ أحدًا**. **وهذا هو المقصود: أمينُ المخزن لا يدير موظفين.**
+   *
+   * **ويُقاس على مسار السرد لا الإنشاء عمدًا**: مسارُ الإنشاء يحمل كيانًا في
+   * الجسم **فيردّه مسحُ الجسم أولًا** — **فيصير الشاهد عن حارسٍ آخر**.
+   * **والسرد لا معرّف فيه إلا `:userId`، فالرادّ محلِّلُه وحده.**
+   */
+  it("**وأمينُ المخزن لا يرى مستخدمًا ولا نفسه ← 403 من محلِّل `userId` وحده**", async () => {
+    const res = await request(app)
+      .get(`/api/users/${String(storekeeperId)}/assignments`)
+      .set("Authorization", `Bearer ${storekeeperToken}`);
+    expect(res.status).toBe(403);
+    expect((res.body as ErrorBody).message).toContain("لهذا المستخدم");
   });
 });
 
