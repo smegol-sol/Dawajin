@@ -178,6 +178,9 @@ describe("الصلاحية — §12.2 صفّ «خطوة تجهيز»", () => {
       assignedTo: f.farmerId,
     });
     expect(assignRes.status).toBe(200);
+    // **السابقة تُكمَل أولًا** — حارسُ الترتيب (263) يردّ ما قبلها ناقصة،
+    // **والمقيس هنا الإسناد لا الترتيب**
+    expect((await completeVia(f, first.id, f.supervisorToken)).status).toBe(200);
     const assigned = await completeVia(f, second.id, f.farmerToken);
     expect(assigned.status).toBe(200);
   });

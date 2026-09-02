@@ -1,4 +1,4 @@
-import { housePrepCycles, tenants } from "@dawajin/db";
+import { housePrepCycles } from "@dawajin/db";
 import { eq } from "drizzle-orm";
 import type request from "supertest";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
@@ -13,6 +13,7 @@ import {
   resetHouse,
   setStatus,
   statusOf,
+  withProtocol,
   type FixtureStep,
   type PrepFixture,
 } from "../test-support/prepCycleFixture";
@@ -93,18 +94,6 @@ function lastRequired(steps: FixtureStep[]): FixtureStep {
   return last;
 }
 
-async function withProtocol<T>(
-  protocol: typeof SHORT_PROTOCOL,
-  work: () => Promise<T>
-): Promise<T> {
-  await f.db.update(tenants).set({ prepProtocol: protocol }).where(eq(tenants.id, f.tenantAId));
-  try {
-    return await work();
-  } finally {
-    await f.db.update(tenants).set({ prepProtocol: null }).where(eq(tenants.id, f.tenantAId));
-  }
-}
-
 describe("الانتقال التلقائي — §14.6", () => {
   it("اعتماد آخر إلزامية: راحة + صفّ سجل + rest_started_at — معًا", async () => {
     const { cycleId, steps } = await openCycleForSubject(f);
@@ -139,7 +128,7 @@ describe("الانتقال التلقائي — §14.6", () => {
   });
 
   it("**إلزاميةٌ مكتملةٌ غير معتمدة تحجب الانتقال** — والعدّ بالاعتماد لا بالإكمال", async () => {
-    await withProtocol(TWO_REQUIRED_PROTOCOL, async () => {
+    await withProtocol(f, TWO_REQUIRED_PROTOCOL, async () => {
       const { steps } = await openCycleForSubject(f);
       const [a, b] = steps.filter((s) => s.isRequired);
       if (!a || !b) throw new Error("لا إلزاميتين في التجهيزة");
@@ -178,7 +167,7 @@ describe("الانتقال التلقائي — §14.6", () => {
 
 describe("الانتقال التلقائي — الاختيارية", () => {
   it("الاختيارية الباقية لا تحجب الانتقال — «عند اكتمال الإلزامية» نصًّا", async () => {
-    await withProtocol(SHORT_PROTOCOL, async () => {
+    await withProtocol(f, SHORT_PROTOCOL, async () => {
       const { steps } = await openCycleForSubject(f);
       const requiredStep = steps.find((s) => s.isRequired);
       if (!requiredStep) throw new Error("لا خطوة إلزامية في التجهيزة");
@@ -190,7 +179,7 @@ describe("الانتقال التلقائي — الاختيارية", () => {
   });
 
   it("إكمال اختيارية بعد بدء الراحة: تسجيلُ عمل لا مُطلِقٌ ثانٍ", async () => {
-    await withProtocol(SHORT_PROTOCOL, async () => {
+    await withProtocol(f, SHORT_PROTOCOL, async () => {
       const { steps } = await openCycleForSubject(f);
       const requiredStep = steps.find((s) => s.isRequired);
       const optionalStep = steps.find((s) => !s.isRequired);
@@ -291,7 +280,7 @@ describe("التزامن — برهانا قفلٍ حتميّان لا سباق�
 
 describe("التزامن — براهين القفل على المُطلِق الجديد (القرار 239)", () => {
   it("**الاعتماد ينتظر قفل صفّ الدورة فعلًا**", async () => {
-    await withProtocol(TWO_REQUIRED_PROTOCOL, async () => {
+    await withProtocol(f, TWO_REQUIRED_PROTOCOL, async () => {
       const { cycleId, steps } = await openCycleForSubject(f);
       await approveAllRequiredBut(f, steps, 1);
       const last = lastRequired(steps);
@@ -319,7 +308,7 @@ describe("التزامن — براهين القفل على المُطلِق ا�
   });
 
   it("**العدّ بعد القفل لا قبله** — اعتمادٌ ملتزمٌ أثناء الانتظار يُرى فيقع الانتقال", async () => {
-    await withProtocol(TWO_REQUIRED_PROTOCOL, async () => {
+    await withProtocol(f, TWO_REQUIRED_PROTOCOL, async () => {
       const { cycleId, steps } = await openCycleForSubject(f);
       const [a, b] = steps.filter((s) => s.isRequired).slice(-2);
       if (!a || !b) throw new Error("لا خطوتين أخيرتين في التجهيزة");

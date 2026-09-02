@@ -1207,7 +1207,7 @@
             "$ref": "#/components/responses/NotFound"
           },
           "422": {
-            "description": "دورة مكتملة (`prep_cycle_completed`) · خطوة مكتملة (`step_already_completed`)",
+            "description": "دورة مكتملة (`prep_cycle_completed`) · خطوة مكتملة (`step_already_completed`) · سابقةٌ إلزامية لم تكتمل (`earlier_step_incomplete`)",
             "content": {
               "application/json": {
                 "schema": {
