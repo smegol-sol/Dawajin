@@ -16,9 +16,9 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { createApp } from "../app";
 import { loadEnv } from "../lib/env";
+import { IN_TRANSIT_SOURCES, inTransitTotal } from "../lib/inTransit";
 import { computeTotalMovements } from "../lib/inventoryBalance";
 import { assertIsTestDatabase } from "../lib/testGuard";
-import { inTransitTotal } from "../services/inventoryTransferService";
 import { seedTenant } from "../test-support/hierarchy";
 import {
   balanceOfWarehouse,
@@ -346,6 +346,28 @@ describe("الثوابت بعد الخروج", () => {
     const transit = await inTransitTotal(db, tenantId, feedId);
     expect(total + transit).toBe(100);
     expect(transit).toBe(30);
+  });
+
+  /**
+   * **والطرف الأيمن يجمع كلَّ مصدرٍ لا التحويلات وحدها** (القرار 261).
+   *
+   * **والشاهد يعدّ لا يؤكّد الحالة** — **فالثابت ثابتٌ لا حارسٌ رامٍ، ولا
+   * رمزَ خطأ يفرّق فيه**: **يُجمَع كلُّ مصدرٍ على حدة ويُقارَن بالمجموع**،
+   * **فمصدرٌ يسقط من القائمة يُنقص الرقم فيحمرّ** بدل أن يكذب صامتًا.
+   */
+  it("**ومجموعُ المصادر المسمّاة يساوي «ما في الطريق»** — لا يُقرأ من جدولٍ واحد", async () => {
+    await stock(fromWarehouseId, 100);
+    await issue(farmerToken, await orderId(30));
+    await issue(farmerToken, await orderId(12));
+
+    const perSource = await Promise.all(
+      IN_TRANSIT_SOURCES.map((source) => source(db, tenantId, feedId))
+    );
+    const summed = perSource.reduce((a, b) => a + b, 0);
+    expect(await inTransitTotal(db, tenantId, feedId)).toBe(summed);
+    // **والرقم مسمًّى لا مجرَّد تطابق** — فتطابقُ صفرٍ بصفرٍ ليس شاهدًا
+    expect(summed).toBe(42);
+    expect(IN_TRANSIT_SOURCES).toHaveLength(1);
   });
 });
 
