@@ -105,7 +105,7 @@ describe(`مستأجر جديد يحصل على أصنافه كاملة (${S})`,
     );
     await db.execute(
       sql`INSERT INTO products (tenant_id, category, name, is_system, stock_unit, empty_bag_condition)
-          VALUES (${tenantId}, 'مستلزمات', ${`أكياس فارغة — صالح ${S}`}, true, 'كيس', 'صالح')`
+          VALUES (${tenantId}, 'مستلزمات تشغيل', ${`أكياس فارغة — صالح ${S}`}, true, 'كيس', 'صالح')`
     );
     expect(await systemProducts(tenantId)).toHaveLength(1);
 

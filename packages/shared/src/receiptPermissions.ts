@@ -7,7 +7,7 @@ import { PRODUCT_CATEGORY, type ProductCategory, type UserRole } from "./enums";
  * | الدور | ما يستلمه في §12.2 |
  * |---|---|
  * | `farmer` | ❌ |
- * | `supervisor` | ✅ **علف + مستلزمات** |
+ * | `supervisor` | ✅ **علف + مستلزمات تشغيل** |
  * | `vet` | ✅ **أدوية + لقاحات** |
  * | `owner` | ✅ **الكل** |
  * | `storekeeper` | ✅ **المركزي** |
@@ -20,7 +20,7 @@ import { PRODUCT_CATEGORY, type ProductCategory, type UserRole } from "./enums";
  */
 export const RECEIPT_CATEGORIES_BY_ROLE: Readonly<Record<UserRole, readonly ProductCategory[]>> = {
   farmer: [],
-  supervisor: ["علف", "مستلزمات"],
+  supervisor: ["علف", "مستلزمات تشغيل"],
   vet: ["دواء", "لقاح"],
   owner: PRODUCT_CATEGORY,
   // **§12.2 يعطيه «المركزي»** — **ولا يبلغ هذا المسار اليوم**: `storekeeper`

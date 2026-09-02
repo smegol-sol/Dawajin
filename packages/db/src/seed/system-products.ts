@@ -58,7 +58,7 @@ export async function ensureSystemProducts(
   for (const condition of EMPTY_BAG_CONDITION) {
     const result = (await tx.execute(sql`
       INSERT INTO products (tenant_id, category, name, is_system, stock_unit, empty_bag_condition)
-      VALUES (${tenantId}, 'مستلزمات', ${`أكياس فارغة — ${condition}`}, true, 'كيس', ${condition})
+      VALUES (${tenantId}, 'مستلزمات تشغيل', ${`أكياس فارغة — ${condition}`}, true, 'كيس', ${condition})
       ON CONFLICT (tenant_id, empty_bag_condition) WHERE empty_bag_condition IS NOT NULL
       DO NOTHING
       RETURNING id

@@ -132,7 +132,12 @@ async function seedProducts(
   const otherProductId = firstRow(
     await tx
       .insert(products)
-      .values({ tenantId, category: "مستلزمات", name: `مستلزم ${label} ${S}`, stockUnit: "كيس" })
+      .values({
+        tenantId,
+        category: "مستلزمات تشغيل",
+        name: `مستلزم ${label} ${S}`,
+        stockUnit: "كيس",
+      })
       .returning({ id: products.id })
   ).id;
   return { feedId, otherProductId };

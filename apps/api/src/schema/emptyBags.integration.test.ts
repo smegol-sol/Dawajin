@@ -64,12 +64,12 @@ async function seedTenant(label: string): Promise<Tree> {
   );
   const emptyOkId = await insertId(
     sql`INSERT INTO products (tenant_id, category, name, stock_unit, is_system, empty_bag_condition)
-        VALUES (${tenantId}, 'مستلزمات', ${`كيس فارغ صالح ${label} ${S}`}, 'كيس', true, 'صالح')
+        VALUES (${tenantId}, 'مستلزمات تشغيل', ${`كيس فارغ صالح ${label} ${S}`}, 'كيس', true, 'صالح')
         RETURNING id`
   );
   const emptyTornId = await insertId(
     sql`INSERT INTO products (tenant_id, category, name, stock_unit, is_system, empty_bag_condition)
-        VALUES (${tenantId}, 'مستلزمات', ${`كيس فارغ تالف ${label} ${S}`}, 'كيس', true, 'تالف')
+        VALUES (${tenantId}, 'مستلزمات تشغيل', ${`كيس فارغ تالف ${label} ${S}`}, 'كيس', true, 'تالف')
         RETURNING id`
   );
   const houseWarehouseId = await insertId(
@@ -320,7 +320,7 @@ describe(`شكل صنف الكيس الفارغ (${S})`, () => {
     await expect(
       db.execute(
         sql`INSERT INTO products (tenant_id, category, name, stock_unit, is_system, empty_bag_condition)
-            VALUES (${A.tenantId}, 'مستلزمات', ${`كيس ثالث ${S}`}, 'كيس', true, 'صالح')`
+            VALUES (${A.tenantId}, 'مستلزمات تشغيل', ${`كيس ثالث ${S}`}, 'كيس', true, 'صالح')`
       )
     ).rejects.toThrow();
   });
@@ -329,7 +329,7 @@ describe(`شكل صنف الكيس الفارغ (${S})`, () => {
     await expect(
       db.execute(
         sql`INSERT INTO products (tenant_id, category, name, stock_unit, is_system, empty_bag_condition)
-            VALUES (${B.tenantId}, 'مستلزمات', ${`كيس غير نظامي ${S}`}, 'كيس', false, 'صالح')`
+            VALUES (${B.tenantId}, 'مستلزمات تشغيل', ${`كيس غير نظامي ${S}`}, 'كيس', false, 'صالح')`
       )
     ).rejects.toThrow();
     await expect(
