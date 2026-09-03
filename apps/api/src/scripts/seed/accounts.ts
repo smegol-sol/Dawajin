@@ -83,6 +83,71 @@ async function readUserIds(
   return ids;
 }
 
+/** صفُّ حسابٍ جاهزٌ للإدراج — يُبنى مرةً ويُستعمل في الإنشاء والاستدراك معًا. */
+function accountRow(
+  account: DemoAccount,
+  args: { tenantId: number; countryCode: string; passwordHash: string }
+): typeof users.$inferInsert {
+  return {
+    tenantId: args.tenantId,
+    fullName: account.fullName,
+    role: account.role,
+    phone: account.phone,
+    phoneE164: normalizePhoneE164(account.phone, args.countryCode),
+    passwordHash: args.passwordHash,
+    // **الأربعةُ `false` عمدًا**: حسابُ عرضٍ يُدخل به فورًا من الجوال.
+    // **والخامسُ `true`** — **شرطٌ بيانيّ لا حسابُ عرض** (القرار 290):
+    // اعتراضُ الرجوع العتاديّ على شاشة التغيير معلَّقٌ عليه منذ 171،
+    // **ومسارُ الإلزام المبنيّ في 245 لم تره عينٌ قطّ**.
+    //
+    // **ولا يمرّ عبر `POST /users` رغم وجوده** (تضييقٌ للقرار 27 لا نقضٌ له):
+    // **ذاك المسار يولّد الكلمة ولا يستقبلها** (245 «أولًا») — **وحسابُ عرضٍ
+    // كلمتُه من البيئة لا يُنشأ به**. **يسقط يوم يقبل مسارٌ كلمةً معلومة.**
+    mustChangePassword: account.mustChangePassword ?? false,
+  };
+}
+
+/**
+ * **يستدرك حسابًا أُضيف إلى `DEMO_ACCOUNTS` بعد أول بذر** (القرار 290).
+ *
+ * **وبلا هذا يسقط البذر على كل قاعدةٍ مبذورةٍ سابقًا**: العطالة بالاسم تُرجع
+ * المستأجر القائم، **فيرمي `readUserIds` «حساب العرض مفقود»** — **وقع فعلًا
+ * لحظةَ إضافة الخامس**.
+ *
+ * **ولا يمسّ القائم**: يُدرج الغائبَ وحده ولا يحدّث صفًّا موجودًا — **فكلمةٌ
+ * غيّرها المالك على جواله تبقى كما هي**.
+ */
+async function backfillMissingAccounts(
+  db: Database,
+  args: { tenantId: number; countryCode: string; password: string; bcryptRounds: number }
+): Promise<void> {
+  const present = new Set(
+    (
+      await db
+        .select({ phoneE164: users.phoneE164 })
+        .from(users)
+        .where(eq(users.tenantId, args.tenantId))
+    ).map((row) => row.phoneE164)
+  );
+  const missing = DEMO_ACCOUNTS.filter(
+    (account) => !present.has(normalizePhoneE164(account.phone, args.countryCode))
+  );
+  if (missing.length === 0) return;
+
+  const passwordHash = await bcrypt.hash(args.password, args.bcryptRounds);
+  await db.insert(users).values(
+    missing.map((account) =>
+      accountRow(account, {
+        tenantId: args.tenantId,
+        countryCode: args.countryCode,
+        passwordHash,
+      })
+    )
+  );
+  // **«تسمية: عدد» لا «عدد + معدود»** (القرار 287): «استُدرك 1 حسابًا» خطأ
+  console.log(`[seed:demo] حسابات استُدركت بعد أول بذر: ${missing.length.toString()}`);
+}
+
 interface BootstrapInput {
   readonly db: Database;
   readonly tenantName: string;
@@ -103,6 +168,12 @@ export async function bootstrapAccounts(input: BootstrapInput): Promise<Bootstra
 
   const existing = await findTenant(db, tenantName);
   if (existing !== undefined) {
+    await backfillMissingAccounts(db, {
+      tenantId: existing,
+      countryCode,
+      password,
+      bcryptRounds,
+    });
     return {
       tenantId: existing,
       userIds: await readUserIds(db, existing, countryCode),
@@ -129,19 +200,13 @@ export async function bootstrapAccounts(input: BootstrapInput): Promise<Bootstra
     // يملك إنشاءها، والحارس يمنع تعديل بنيتها.
     await ensureSystemProducts(tx, tenant.id);
 
-    await tx.insert(users).values(
-      DEMO_ACCOUNTS.map((account) => ({
-        tenantId: tenant.id,
-        fullName: account.fullName,
-        role: account.role,
-        phone: account.phone,
-        phoneE164: normalizePhoneE164(account.phone, countryCode),
-        passwordHash,
-        // false عمدًا: حساب عرض يُدخل به فورًا من الجوال. والكلمة المؤقتة
-        // ومسار تغييرها الإجباري (#99 و#100) يخصّان `POST /users` الحقيقي.
-        mustChangePassword: false,
-      }))
-    );
+    await tx
+      .insert(users)
+      .values(
+        DEMO_ACCOUNTS.map((account) =>
+          accountRow(account, { tenantId: tenant.id, countryCode, passwordHash })
+        )
+      );
     return tenant.id;
   });
 
