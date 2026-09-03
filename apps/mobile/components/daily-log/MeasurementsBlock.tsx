@@ -1,0 +1,145 @@
+import { StyleSheet, View } from "react-native";
+
+import { FormField } from "@/components/ui/FormField";
+import { NumberStepper } from "@/components/ui/NumberStepper";
+import { SectionHeader } from "@/components/ui/SectionHeader";
+import { spacing } from "@/constants/theme";
+import { avgWeightLine, waterComputedLine, type DailyLogDraft } from "@/lib/dailyLogForm";
+
+/**
+ * **الماء والوزن والمناخ والملاحظات** (§2) — **تدفّقٌ رأسيّ واحد متصل**،
+ * ممنوعٌ تقسيمُه إلى خطوات أو تبويبات.
+ *
+ * **وحقلُ الماء يُخفى كلَّه حين لا سعةَ لخزان العنبر** (§7.1) — **والخادم
+ * يردّ 422 حينها** (`house_without_tank_capacity`)، **فعرضُ الحقل يَعِد بما
+ * يُرفض**. **وهذا عرضٌ لا حراسة: الردّ قائمٌ سواءٌ أخفينا الحقل أم لا.**
+ *
+ * **والصورة والملاحظة الصوتية مؤجَّلتان بحدٍّ معلن (قاعدة 268):** §2 يذكرهما
+ * مع الملاحظات، **ولا مسارَ رفعٍ في المستودع كلِّه** — **وعمودا
+ * `photo_urls` و`voice_note_url` قائمان فارغين ولا يُحذفان**. **ويسقط الحدُّ
+ * يوم يُبنى أوّلُ مسارِ رفع**، **وهو قرارُ نطاقٍ لا سطر**: أين تُخزَّن، ومن
+ * يقرؤها، وما حدُّ الحجم والمدة، وماذا يحدث في شبكةٍ ضعيفة.
+ */
+export function MeasurementsBlock({
+  draft,
+  tankCapacityL,
+  onChange,
+}: {
+  draft: DailyLogDraft;
+  tankCapacityL: number | null;
+  onChange: (patch: Partial<DailyLogDraft>) => void;
+}) {
+  return (
+    <View style={styles.block}>
+      <WaterField draft={draft} tankCapacityL={tankCapacityL} onChange={onChange} />
+      <SampleFields draft={draft} onChange={onChange} />
+      <ClimateFields draft={draft} onChange={onChange} />
+    </View>
+  );
+}
+
+/** **الماء — ويُخفى كلَّه لعنبرٍ بلا سعة خزان** (§7.1). */
+function WaterField({
+  draft,
+  tankCapacityL,
+  onChange,
+}: {
+  draft: DailyLogDraft;
+  tankCapacityL: number | null;
+  onChange: (patch: Partial<DailyLogDraft>) => void;
+}) {
+  if (tankCapacityL === null) return null;
+  const line = waterComputedLine(tankCapacityL, draft.waterTanks);
+  return (
+    <>
+      <SectionHeader title="الماء" />
+      <NumberStepper
+        label="عدد الخزانات"
+        value={draft.waterTanks}
+        step={0.25}
+        onChange={(waterTanks) => {
+          onChange({ waterTanks });
+        }}
+        {...(line === undefined ? {} : { computedLine: line })}
+      />
+    </>
+  );
+}
+
+/** **معاينة الوزن — رقمان معًا أو لا شيء**، والمتوسطُ يُعرض ولا يُرسَل. */
+function SampleFields({
+  draft,
+  onChange,
+}: {
+  draft: DailyLogDraft;
+  onChange: (patch: Partial<DailyLogDraft>) => void;
+}) {
+  const average = avgWeightLine(draft.sampledBirds, draft.sampledWeightKg);
+  return (
+    <>
+      <SectionHeader title="معاينة الوزن" />
+      <NumberStepper
+        label="عدد الطيور المعاينة"
+        value={draft.sampledBirds}
+        step={1}
+        onChange={(sampledBirds) => {
+          onChange({ sampledBirds });
+        }}
+      />
+      <NumberStepper
+        label="الوزن الإجمالي (كجم)"
+        value={draft.sampledWeightKg}
+        step={0.25}
+        onChange={(sampledWeightKg) => {
+          onChange({ sampledWeightKg });
+        }}
+        {...(average === undefined ? {} : { computedLine: average })}
+      />
+    </>
+  );
+}
+
+/** **المناخ والملاحظات — والصورةُ والصوتُ مؤجَّلان بحدّهما المعلن أعلاه.** */
+function ClimateFields({
+  draft,
+  onChange,
+}: {
+  draft: DailyLogDraft;
+  onChange: (patch: Partial<DailyLogDraft>) => void;
+}) {
+  return (
+    <>
+      <SectionHeader title="المناخ والملاحظات" />
+      <FormField
+        label="الحرارة (م)"
+        type="text"
+        keyboardType="numeric"
+        value={draft.temperatureC}
+        onChangeText={(temperatureC) => {
+          onChange({ temperatureC });
+        }}
+      />
+      <FormField
+        label="الرطوبة (%)"
+        type="text"
+        keyboardType="numeric"
+        value={draft.humidityPct}
+        onChangeText={(humidityPct) => {
+          onChange({ humidityPct });
+        }}
+      />
+      <FormField
+        label="ملاحظات"
+        type="longText"
+        value={draft.notes}
+        onChangeText={(notes) => {
+          onChange({ notes });
+        }}
+      />
+    </>
+  );
+}
+
+const styles = StyleSheet.create({
+  block: { gap: spacing.md },
+});
