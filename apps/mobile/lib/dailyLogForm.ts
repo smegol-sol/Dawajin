@@ -75,6 +75,18 @@ export function feedProductsOf(products: readonly ProductCard[], stage: FeedStag
 }
 
 /**
+ * **عدّادُ القسم — يُعرض حين يفيد وحده** (`SectionHeader` يعرض ما يُمرَّر إليه).
+ *
+ * **وصفرٌ بجانب عنوان قسمٍ فارغ رقمٌ لا يفيد** — **والشاشة تُقرأ واقفًا في
+ * عنبرٍ تحت شمس، فكلُّ رقمٍ لا يفيد يزاحم ما يفيد** (حكم المالك).
+ *
+ * @returns العدد، أو `undefined` فلا يُمرَّر إلى `SectionHeader` أصلًا
+ */
+export function sectionCount(rows: readonly unknown[]): number | undefined {
+  return rows.length === 0 ? undefined : rows.length;
+}
+
+/**
  * **سطرُ الكجم المحسوب تحت الأكياس** (§2) — **ولا يُرسَل**: الخادم يحسبه من
  * وزن الكيس المجمَّد (القرار 201)، **وقبولُه من العميل يجعل الحساب دعوى**.
  *
@@ -85,6 +97,8 @@ export function feedComputedLine(
   bags: number
 ): string | undefined {
   if (product?.packageSize == null || product.packageUnit === null) return undefined;
+  // **ولا سطرَ قبل أوّل إدخال** — `= 0 كجم` **رقمٌ لا يفيد يزاحم ما يفيد**
+  if (bags <= 0) return undefined;
   return `= ${formatNumber(bags * product.packageSize)} ${product.packageUnit}`;
 }
 
@@ -96,6 +110,8 @@ export function feedComputedLine(
  */
 export function waterComputedLine(tankCapacityL: number | null, tanks: number): string | undefined {
   if (tankCapacityL === null) return undefined;
+  // **ولا سطرَ قبل أوّل إدخال** — نفس حكم الكجم أعلاه في موضعه الثاني
+  if (tanks <= 0) return undefined;
   return `= ${formatNumber(tanks * tankCapacityL)} لتر`;
 }
 

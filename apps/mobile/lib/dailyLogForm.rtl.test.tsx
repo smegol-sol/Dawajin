@@ -9,6 +9,7 @@ import {
   feedComputedLine,
   feedProductsOf,
   formatNumber,
+  sectionCount,
   newClientId,
   patchFeedRow,
   removeFeedRow,
@@ -86,6 +87,23 @@ describe("الأسطر المحسوبة — تُعرض ولا تُرسَل", () 
   it("ولا سطر بلا صنفٍ أو بلا وزن عبوة — فلا يُفترض وزن", () => {
     expect(feedComputedLine(undefined, 3)).toBeUndefined();
     expect(feedComputedLine(feed(1, "بادئ", null), 3)).toBeUndefined();
+  });
+
+  /**
+   * **ولا رقمَ لا يفيد** (حكم المالك): الشاشة تُقرأ **واقفًا في عنبرٍ تحت
+   * شمس**، **فسطرُ `= 0` قبل أوّل إدخالٍ يزاحم ما يفيد**.
+   */
+  it("ولا سطرَ حسابٍ قبل أوّل إدخال — في الموضعين", () => {
+    expect(feedComputedLine(feed(1, "بادئ", 50), 0)).toBeUndefined();
+    expect(feedComputedLine(feed(1, "بادئ", 50), 0.5)).toBe("= 25 كجم");
+    expect(waterComputedLine(1000, 0)).toBeUndefined();
+    expect(waterComputedLine(1000, 0.25)).toBe("= 250 لتر");
+  });
+
+  it("وعدّادُ القسم يغيب وهو فارغ ويظهر حين يفيد", () => {
+    expect(sectionCount([])).toBeUndefined();
+    expect(sectionCount([1])).toBe(1);
+    expect(sectionCount([1, 2, 3])).toBe(3);
   });
 
   it("ولترات الماء = الخزانات × السعة، ولا سطر لعنبرٍ بلا سعة", () => {
