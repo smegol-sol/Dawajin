@@ -45,14 +45,24 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: spacing.sm,
   },
+  /**
+   * **خطُّ التطبيق لا خطُّ النظام** (القرار 289): كانت الكتلتان تضبطان
+   * `fontSize` **ولا تضبطان `fontFamily` إطلاقًا** — **فتسقط العربيةُ على
+   * خطّ النظام في كل شاشةٍ نائبة، وهي ثمانَ عشرةَ من عشرين**.
+   *
+   * **و`fontWeight: "700"` كان الآليّة الخطأ لا القيمة الخطأ:** الخطّ ثابتُ
+   * الوزن **فكلُّ وزنٍ عائلةٌ تُختار بالاسم** (`constants/theme.ts`) —
+   * **والوزنُ وحده بلا عائلةٍ يُثقّل خطَّ النظام لا خطَّنا**.
+   */
   title: {
     fontSize: font.size.screenTitle,
-    fontWeight: "700",
+    fontFamily: font.familyBold,
     color: color.brandPrimary,
     writingDirection: "rtl",
   },
   note: {
     fontSize: font.size.content,
+    fontFamily: font.familyRegular,
     color: color.textBody,
     writingDirection: "rtl",
   },
