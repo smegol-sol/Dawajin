@@ -19,6 +19,7 @@ import { requireTenant } from "./middleware/tenant";
 import { authProtectedRouter } from "./routes/authProtected";
 import { authPublicRouter } from "./routes/authPublic";
 import { chickShipmentsRouter } from "./routes/chickShipments";
+import { dailyLogsRouter } from "./routes/dailyLogs";
 import { farmsRouter } from "./routes/farms";
 import { healthRouter } from "./routes/health";
 import { housesRouter } from "./routes/houses";
@@ -166,6 +167,7 @@ export function createApp(db: Database, env: Env, logger: Logger): Express {
   api.use(inventoryRouter(db));
   api.use(inventoryTransferRouter(db));
   api.use(chickShipmentsRouter(db));
+  api.use(dailyLogsRouter(db));
   app.use(api);
 
   app.use(errorHandler(logger));

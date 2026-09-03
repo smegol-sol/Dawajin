@@ -50,7 +50,18 @@ export const dailyLogs = pgTable(
     voiceNoteUrl: text("voice_note_url"),
     reviewStatus: reviewStatusEnum("review_status").notNull().default("none"),
     correctionOfId: integer("correction_of_id"),
-    clientId: uuid("client_id"), // عطالة عند إعادة الإرسال
+    /**
+     * **عطالةُ إعادة الإرسال — ويحرسها فهرسٌ فريد لا فحصُ خدمةٍ وحده**
+     * (القرار 278، على نمط #119).
+     *
+     * **والميدان يوجبها:** المربّي يسجّل في عنبرٍ بشبكةٍ ضعيفة، **فالطلب يُعاد
+     * إرساله ولا يُعلم أوصَل الأول**. **وفحصٌ في الخدمة وحده حارسٌ إجرائيّ**:
+     * طلبان متزامنان بنفس المعرّف يقرآن «لا سجلّ» معًا فيُدرجان سجلَّين.
+     *
+     * **والفهرس جزئيّ لأن العمود يقبل العدم**: سجلٌّ يُنشأ بلا معرّف عميل
+     * (من مسارٍ آخر أو تصحيحٍ) لا يُزاحم غيره على `NULL`.
+     */
+    clientId: uuid("client_id"),
     createdBy: integer("created_by").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -80,6 +91,9 @@ export const dailyLogs = pgTable(
       .on(table.batchId, table.logDate)
       .where(sql`${table.correctionOfId} IS NULL`),
     index("daily_logs_tenant_house_date_idx").on(table.tenantId, table.houseId, table.logDate),
+    uniqueIndex("daily_logs_tenant_client_id_uq")
+      .on(table.tenantId, table.clientId)
+      .where(sql`${table.clientId} IS NOT NULL`),
   ]
 );
 
