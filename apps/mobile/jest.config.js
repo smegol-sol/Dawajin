@@ -50,6 +50,13 @@ module.exports = {
     "lib/capabilities.ts": { statements: 100, branches: 100, functions: 100, lines: 100 },
     "lib/infrastructureErrors.ts": { statements: 100, branches: 100, functions: 100, lines: 100 },
     "lib/houseStatusTone.ts": { statements: 100, branches: 100, functions: 100, lines: 100 },
+    // **ودفعةُ شاشة السجل اليوميّ — بنفس المعيار لا بأقلّ منه (280+):**
+    // `dailyLogForm` يحمل **الحسابَ المعروض وسببَ تعطيل الحفظ وبناءَ الطلب** —
+    // **وكلُّ سطرٍ فيه يقابل ردًّا يرميه الخادم**، فانحدارُه يُري المربّي رقمًا
+    // خاطئًا أو يُسقط طلبَه بعد الضغط. **و`dailyLogErrors` نصُّ ما يقرؤه عند
+    // الفشل** — نفس حجّة `authErrors` و`infrastructureErrors`.
+    "lib/dailyLogForm.ts": { statements: 100, branches: 100, functions: 100, lines: 100 },
+    "lib/dailyLogErrors.ts": { statements: 100, branches: 100, functions: 100, lines: 100 },
   },
   transform: {
     ...jestExpoPreset.transform,
