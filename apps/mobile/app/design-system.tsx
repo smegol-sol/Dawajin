@@ -200,7 +200,7 @@ function BottomTabBarSection() {
           { key: "home", label: "الرئيسية", icon: Home, active: true },
           { key: "logs", label: "سجلاتي", icon: ClipboardList, active: false },
           { key: "notif", label: "الإشعارات", icon: Bell, active: false, badgeCount: 3 },
-          { key: "users", label: "المستخدمون", icon: Users, active: false },
+          { key: "users", label: "الموظفون", icon: Users, active: false },
           { key: "settings", label: "الإعدادات", icon: Settings, active: false },
         ]}
       />
