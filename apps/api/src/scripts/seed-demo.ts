@@ -3,7 +3,7 @@ import pino from "pino";
 
 import { loadEnv } from "../lib/env";
 import { DEMO_ACCOUNTS } from "./seed/fixtures";
-import { seedDemo } from "./seed/seedDemo";
+import { seedDemo, type SeedDemoResult } from "./seed/seedDemo";
 
 /**
  * بيانات العرض — **المواقع السبعة وما تحتها عبر الـAPI حصريًا** (القاعدة #27،
@@ -27,6 +27,37 @@ function readPassword(): string {
   return value;
 }
 
+/**
+ * **ما فعلته سلسلةُ الاستقبال — مقروءًا من ردود الخادم لا محسوبًا هنا** (285).
+ *
+ * **والأرقام تُطبع كي تُقارَن بما يُرى على الشاشة** — فالبذر برهانٌ لا تعبئة.
+ */
+function printArrival(arrival: SeedDemoResult["arrival"]): void {
+  if (arrival === undefined) return;
+  console.log(
+    `[seed:demo] سلسلة الاستقبال: شحنة #${arrival.shipmentId.toString()} — ` +
+      "المالك أدخلها، والمشرف وزّعها، والمربّي أكّد بحسابه."
+  );
+  for (const one of arrival.confirmed) {
+    // **المخصَّصُ والفرقُ مقروءان بحساب المالك** — والمربّي أعمى عنهما (276)
+    const gap =
+      one.variance === null
+        ? "الفرق غير مقروء"
+        : `المخصَّص ${one.allocatedQuantity.toString()} · الفرق ${one.variance.toString()} (${one.varianceStatus ?? "—"})`;
+    console.log(
+      `  دفعة #${one.batchId.toString()} — عدّ ${one.countedQuantity.toString()} · ` +
+        `نافقٌ عند الوصول ${one.deadOnArrival.toString()} · ` +
+        `مستلم ${one.receivedBirdCount.toString()} · ${gap}`
+    );
+  }
+  console.log(
+    `  و${arrival.arrivingHouses.toString()} عنبرًا «قيد الوصول» بلا تأكيد` +
+      (arrival.houseWithoutBatch === undefined
+        ? ""
+        : ` · وعنبرٌ بلا دفعة إطلاقًا (#${arrival.houseWithoutBatch.toString()})`)
+  );
+}
+
 async function main(): Promise<void> {
   const env = loadEnv();
   const password = readPassword();
@@ -45,6 +76,7 @@ async function main(): Promise<void> {
         `[seed:demo] تم: ${sites.toString()} مواقع · ${farms.toString()} مزارع · ` +
           `${houses.toString()} عنابر — كلها عبر الـAPI بصلاحية المالك.`
       );
+      printArrival(result.arrival);
     }
 
     console.log("\n[seed:demo] حسابات الدخول (كلمة المرور من متغيّر البيئة):");

@@ -20,6 +20,8 @@ import { seedDemo } from "./seed/seedDemo";
 
 const PASSWORD = "Seed#2026";
 const EXPECTED = { sites: 7, farms: 13, houses: 35 } as const;
+/** ما تنتظره السلسلة بعد البذر — **مقروءٌ من الرد لا مفترضًا**. */
+let arrival: Awaited<ReturnType<typeof seedDemo>>["arrival"];
 const SITE_NAMES = ["الجاح", "الجبل", "الحمراء", "الخماسية", "الصعيد", "الطويلة", "الكرنة"];
 const logger = pino({ level: "silent" });
 
@@ -67,6 +69,7 @@ beforeAll(async () => {
 
   const result = await seedDemo({ db, env, logger, password: PASSWORD, tenantName });
   tenantId = result.tenantId;
+  arrival = result.arrival;
   expect(result.alreadySeeded).toBe(false);
   expect(result.counts).toEqual(expect.objectContaining(EXPECTED));
 
@@ -103,7 +106,9 @@ describe("بذر بيانات العرض — ما أُنشئ", () => {
       .select({ houseId: userAssignments.houseId, farmId: userAssignments.farmId })
       .from(userAssignments)
       .where(eq(userAssignments.tenantId, tenantId));
-    expect(rows).toHaveLength(9);
+    // **أحدَ عشرَ صفًّا لا تسعة** (285): أربعةُ عنابر للمربّي بدل اثنين —
+    // ثلاثةٌ تدخل سلسلةَ الاستقبال ورابعٌ يبقى بلا دفعة
+    expect(rows).toHaveLength(11);
     for (const row of rows) {
       expect((row.houseId === null) !== (row.farmId === null)).toBe(true);
     }
@@ -142,5 +147,83 @@ describe("بذر بيانات العرض — نطاق الرؤية والعطا�
       .from(tenants)
       .where(eq(tenants.name, rejected));
     expect(rows).toHaveLength(0);
+  });
+});
+
+/**
+ * **سلسلةُ الاستقبال في البذر — برهانٌ لا تعبئة** (القرار 285).
+ *
+ * **وكلُّ ما هنا يُقرأ من الـAPI بحساب صاحبه** — فالبذرُ مرّ بسلسلة الفرض
+ * كاملةً: **المالك أدخل، والمشرف صادق ووزّع، والمربّي أكّد بما عدّه**.
+ */
+describe("بذر بيانات العرض — سلسلة الاستقبال", () => {
+  /** قراءةُ الشحنة بحساب — **مفلترةٌ بالإسناد ومحجوبةٌ عن المربّي** (276). */
+  async function shipmentSeenBy(phone: string): Promise<Record<string, unknown>> {
+    const id = arrival?.shipmentId ?? 0;
+    const res = await request(app)
+      .get(`/api/chick-shipments/${id.toString()}`)
+      .set("Authorization", `Bearer ${tokenFor(phone)}`);
+    expect(res.status).toBe(200);
+    return res.body as Record<string, unknown>;
+  }
+
+  /** دفعاتُ عنبرٍ بحساب — بالـAPI لا باستعلام. */
+  async function batchesOf(phone: string, houseId: number): Promise<Record<string, unknown>[]> {
+    const res = await request(app)
+      .get(`/api/houses/${houseId.toString()}/batches`)
+      .set("Authorization", `Bearer ${tokenFor(phone)}`);
+    expect(res.status).toBe(200);
+    return (res.body as { batches: Record<string, unknown>[] }).batches;
+  }
+
+  it("تُنشئ توزيعتين مؤكَّدتين — واحدةٌ مطابقةٌ بنافق وأخرى بعجزٍ ظاهر", () => {
+    expect(arrival?.confirmed).toHaveLength(2);
+    const [matching, short] = arrival?.confirmed ?? [];
+    // **مطابقٌ بنافق**: 50×100 = 5000 مقابل 5000 مخصَّصة، والنافق 12 خارج الفرق
+    expect(matching?.variance).toBe(0);
+    expect(matching?.varianceStatus).toBe("مطابق");
+    expect(matching?.receivedBirdCount).toBe(4988);
+    // **عجزٌ ظاهر بلا نافق**: 49×100 = 4900 مقابل 5000
+    expect(short?.variance).toBe(-100);
+    expect(short?.varianceStatus).toBe("فرق مسجّل");
+    expect(short?.receivedBirdCount).toBe(4900);
+  });
+
+  it("وتترك عنبرًا «قيد الوصول» وآخرَ بلا دفعة — فالحالات الثلاث مرئية", async () => {
+    expect(arrival?.arrivingHouses).toBe(1);
+    const houseWithoutBatch = arrival?.houseWithoutBatch;
+    expect(houseWithoutBatch).toEqual(expect.any(Number));
+    expect(await batchesOf("770000004", houseWithoutBatch ?? 0)).toEqual([]);
+  });
+
+  it("والمربّي أعمى عن المخصَّص في المسارين معًا — والمالك يراه", async () => {
+    const farmerView = await shipmentSeenBy("770000004");
+    const distributions = farmerView.distributions as Record<string, unknown>[];
+    for (const one of distributions) {
+      expect(Object.keys(one)).not.toContain("allocatedQuantity");
+      expect(Object.keys(one)).not.toContain("variance");
+    }
+    const ownerView = await shipmentSeenBy("770000001");
+    const ownerDistributions = ownerView.distributions as Record<string, unknown>[];
+    expect(ownerDistributions[0]).toEqual(expect.objectContaining({ allocatedQuantity: 5000 }));
+  });
+
+  /**
+   * **والحجبُ خاصّةُ الرقم لا خاصّةُ المسار** (القرار 281): `purchased_bird_count`
+   * **هو `allocated_quantity` مجمَّدًا** — **فيُقاس على بياناتٍ حقيقية لا في
+   * اختبارٍ مصطنَع**.
+   */
+  it("والمشترى محجوبٌ عن المربّي في مسار الدفعات كذلك — والمالك يراه", async () => {
+    const houseId = arrival?.confirmed[0]?.houseId ?? 0;
+
+    const [farmerBatch] = await batchesOf("770000004", houseId);
+    expect(farmerBatch?.status).toBe("نشطة");
+    expect(farmerBatch?.receivedBirdCount).toBe(4988);
+    expect(Object.keys(farmerBatch ?? {})).not.toContain("purchasedBirdCount");
+    // **ولا القيمةُ نفسها في نصّ الرد كلّه** — فلا تمرّ تحت مفتاحٍ آخر
+    expect(JSON.stringify(farmerBatch)).not.toContain("5000");
+
+    const [ownerBatch] = await batchesOf("770000001", houseId);
+    expect(ownerBatch?.purchasedBirdCount).toBe(5000);
   });
 });
