@@ -99,7 +99,7 @@ function useScreenData(token: string) {
   const waiting = house === undefined ? houses.isPending : batches.isPending || products.isPending;
   return {
     house,
-    otherHouseCount: Math.max(list.length - 1, 0),
+    houseCount: list.length,
     batches: batches.data ?? [],
     products: products.data ?? [],
     waiting: houses.isPending || waiting,
@@ -155,7 +155,7 @@ function Loaded({ token }: { token: string }) {
       house={data.house}
       batches={data.batches}
       products={data.products}
-      otherHouseCount={data.otherHouseCount}
+      houseCount={data.houseCount}
     />
   );
 }
@@ -166,13 +166,13 @@ function HouseState({
   house,
   batches,
   products,
-  otherHouseCount,
+  houseCount,
 }: {
   token: string;
   house: HouseCard;
   batches: Parameters<typeof activeBatchOf>[0];
   products: React.ComponentProps<typeof FeedBlock>["products"];
-  otherHouseCount: number;
+  houseCount: number;
 }) {
   const router = useRouter();
   const active = activeBatchOf(batches);
@@ -203,7 +203,7 @@ function HouseState({
       house={house}
       batchBirds={active.receivedBirdCount}
       products={products}
-      otherHouseCount={otherHouseCount}
+      houseCount={houseCount}
     />
   );
 }
@@ -214,13 +214,13 @@ function Form({
   house,
   batchBirds,
   products,
-  otherHouseCount,
+  houseCount,
 }: {
   token: string;
   house: HouseCard;
   batchBirds: number | null;
   products: React.ComponentProps<typeof FeedBlock>["products"];
-  otherHouseCount: number;
+  houseCount: number;
 }) {
   const [draft, setDraft] = useState<DailyLogDraft>(emptyDraft);
   const logDate = useMemo(() => todayIso(new Date()), []);
@@ -244,7 +244,7 @@ function Form({
   return (
     <View style={styles.formShell}>
       <ScrollView contentContainerStyle={styles.body}>
-        <Context house={house} batchBirds={batchBirds} otherHouseCount={otherHouseCount} />
+        <Context house={house} batchBirds={batchBirds} houseCount={houseCount} />
         <Fields
           draft={draft}
           setDraft={setDraft}
@@ -339,17 +339,23 @@ function Fields({
  * **سياقُ العنبر ودفعته** — **ولا يُعرض المشترى**: المربّي أعمى عنه (القرار
  * 276)، **والخادم لا يُرسله إليه أصلًا** (280).
  *
- * **و«عنبرٌ آخر» يُذكر عددًا ولا يُبدَّل إليه:** مبدّلُ العنبر بندٌ في
- * الرئيسية (§5-أ-1) **ولم تُبنَ** — **وذكرُ العدد أصدق من السكوت**.
+ * **وعددُ العنابر يُذكر ولا يُبدَّل إليها:** مبدّلُ العنبر بندٌ في الرئيسية
+ * (§5-أ-1) **ولم تُبنَ** — **وذكرُ العدد أصدق من السكوت**.
+ *
+ * **وصيغتُه «تسمية: عدد» لا «عدد + معدود» — قصدًا لا أسلوبًا (القرار 287):**
+ * العددُ في العربية يحكم إعرابَ ما بعده وتمييزَه، **فـ«ولك 3 عنبرٌ آخر» كانت
+ * تُعرض حرفيًّا**. **والصيغةُ هنا لا يتلوها معدود** — «العنابر» تسبق العدد
+ * ولا يحكمها، **و«بينها» جمعٌ دائمًا لأن السطر لا يُعرض إلا عند `> 1`** —
+ * فلا شرطَ على العدد يُنسى في النصّ التالي.
  */
 function Context({
   house,
   batchBirds,
-  otherHouseCount,
+  houseCount,
 }: {
   house: HouseCard;
   batchBirds: number | null;
-  otherHouseCount: number;
+  houseCount: number;
 }) {
   return (
     <View style={styles.context}>
@@ -357,9 +363,9 @@ function Context({
       {batchBirds === null ? null : (
         <Text style={styles.contextLine}>{`عدد الطيور المستلم: ${String(batchBirds)}`}</Text>
       )}
-      {otherHouseCount > 0 ? (
+      {houseCount > 1 ? (
         <Text style={styles.contextLine}>
-          {`ولك ${String(otherHouseCount)} عنبرٌ آخر — التبديل بينها لم يُبنَ بعد`}
+          {`العنابر المُسندة إليك: ${String(houseCount)} — والتبديل بينها لم يُبنَ بعد`}
         </Text>
       ) : null}
     </View>
