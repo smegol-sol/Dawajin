@@ -29,6 +29,8 @@ export class SeedHttpError extends Error {
 
 export interface SeedHttpClient {
   post<T>(path: string, body: unknown, token?: string): Promise<T>;
+  /** **قراءةٌ بحساب صاحبها** — والبذر يقرأ ما يراه الدور لا ما في القاعدة. */
+  get<T>(path: string, token: string): Promise<T>;
   close(): Promise<void>;
 }
 
@@ -54,6 +56,14 @@ export async function startSeedClient(app: Express): Promise<SeedHttpClient> {
       });
       const text = await response.text();
       if (!response.ok) throw new SeedHttpError(response.status, "POST", path, text);
+      return JSON.parse(text) as T;
+    },
+    async get<T>(path: string, token: string): Promise<T> {
+      const response = await fetch(`${base}${path}`, {
+        headers: { authorization: `Bearer ${token}` },
+      });
+      const text = await response.text();
+      if (!response.ok) throw new SeedHttpError(response.status, "GET", path, text);
       return JSON.parse(text) as T;
     },
     async close(): Promise<void> {

@@ -1,9 +1,17 @@
-import { type Database, tenants, userAssignments, users, ensureSystemProducts } from "@dawajin/db";
+import {
+  carriers,
+  suppliers,
+  tenants,
+  userAssignments,
+  users,
+  ensureSystemProducts,
+  type Database,
+} from "@dawajin/db";
 import { normalizePhoneE164 } from "@dawajin/shared";
 import bcrypt from "bcryptjs";
 import { and, eq, sql } from "drizzle-orm";
 
-import { DEMO_ACCOUNTS, type DemoAccount } from "./fixtures";
+import { CHICK_ARRIVAL, DEMO_ACCOUNTS, type DemoAccount } from "./fixtures";
 
 /**
  * **تهيئة الحسابات — الموضع الوحيد في البذر الذي يكتب في القاعدة مباشرة.**
@@ -175,9 +183,54 @@ export async function assignDemoScope(
     ...farmIds
       .slice(4, 7)
       .map((farmId) => ({ userId: vetId, farmId, tenantId, startDate: sql`CURRENT_DATE` })),
+    // **أربعةُ عنابر للمربّي لا اثنان** (القرار 285): ثلاثةٌ تدخل سلسلةَ
+    // الاستقبال — **مؤكَّدتان وواحدةٌ «قيد الوصول»** — **والرابع يبقى بلا
+    // دفعة** فتُرى الحالة الفارغة في بيانات العرض ولا تُخفى (حكم المالك).
+    // **وأربعتُها في «مزرعة الجبل 1»** (مقيس: أوّلُ مزرعةٍ في `SITES` تحمل
+    // أربعة عنابر) — **وهي مُسندةٌ للمشرف**، فيصادق ويوزّع عليها.
     ...houseIds
-      .slice(0, 2)
+      .slice(0, 4)
       .map((houseId) => ({ userId: farmerId, houseId, tenantId, startDate: sql`CURRENT_DATE` })),
   ];
   await db.insert(userAssignments).values(rows).onConflictDoNothing();
+}
+
+/**
+ * **المورّد والناقل — تهيئةٌ لا بيانات ميدانية، بنفس حجّة الحسابات** (القرار
+ * #163، والتوسيع 285).
+ *
+ * **وقاعدة #27 «البذر عبر الـAPI حصرًا» لا تُنقض هنا بل يُعلَن حدُّها:**
+ * **لا مسارَ لإنشاء مورّدٍ ولا ناقل في المستودع كلِّه** — **مقيس**: لا
+ * `POST /api/suppliers` ولا `/api/carriers` في شجرة المسارات. **وبناءُ واحدٍ
+ * في دفعة بذرٍ يقرّر من يملك إنشاءهما وبأيّ صلاحية** — **وهو قرارُ نطاقٍ لا
+ * سطرُ سكربت**، ونفسُ ما منع بناء `POST /users` في #163.
+ *
+ * **وحدُّه معلن بقاعدة 268: يسقط يوم يُبنى أوّلُ مسارٍ لهما**، فتنتقل
+ * الدالّتان إلى `seedViaApi` ولا يتغيّر ما فوقهما.
+ *
+ * **والفرقُ عن بقية البذر مسمًّى:** هذان **طرفان خارج المستأجر يُشار إليهما**،
+ * كالأصناف النظامية — **والسلسلةُ نفسُها كلُّها تمرّ بالـAPI بأدوارها**.
+ *
+ * @returns معرّفا المورّد والناقل — القائمان أو المُنشآن الآن
+ */
+export async function ensureDemoPartners(
+  db: Database,
+  tenantId: number
+): Promise<{ supplierId: number; carrierId: number }> {
+  // **جدولان في معاملةٍ واحدة** (المبدأ الثاني) — **وشحنةٌ بمورّدٍ بلا ناقله
+  // نصفُ طرفٍ لا يُشار إليه**، فإمّا يُنشآن معًا أو لا يُنشأ أيّهما
+  return db.transaction(async (tx) => {
+    const [supplier] = await tx
+      .insert(suppliers)
+      .values({ tenantId, name: CHICK_ARRIVAL.supplierName })
+      .returning({ id: suppliers.id });
+    const [carrier] = await tx
+      .insert(carriers)
+      .values({ tenantId, name: CHICK_ARRIVAL.carrierName })
+      .returning({ id: carriers.id });
+    if (supplier === undefined || carrier === undefined) {
+      throw new Error("[seed:demo] تعذّر إنشاء المورّد أو الناقل");
+    }
+    return { supplierId: supplier.id, carrierId: carrier.id };
+  });
 }
