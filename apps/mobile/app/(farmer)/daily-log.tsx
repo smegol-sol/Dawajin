@@ -56,9 +56,16 @@ export default function FarmerDailyLog() {
   return (
     <View style={styles.screen}>
       <AppHeader title="السجل اليومي" variant="main" onAccountPress={account.open} />
-      <ScrollView contentContainerStyle={styles.body}>
-        {typeof token !== "string" ? <ListState state="loading" /> : <Loaded token={token} />}
-      </ScrollView>
+      {/* **الجسمُ لا يُلفّ بتمريرٍ هنا**: زرُّ الحفظ ثابتٌ أسفل الشاشة (§2)،
+          **فلا بدّ أن يكون شقيقًا للتمرير لا آخرَ عنصرٍ فيه** — وكلُّ حالةٍ
+          تملك تمريرها. */}
+      {typeof token !== "string" ? (
+        <View style={styles.body}>
+          <ListState state="loading" />
+        </View>
+      ) : (
+        <Loaded token={token} />
+      )}
       <AccountSheet
         visible={account.visible}
         onClose={account.close}
@@ -105,25 +112,40 @@ function useScreenData(token: string) {
   };
 }
 
+/** جسمُ الحالات غير النموذجية — **مبطَّنٌ وقابلٌ للتمرير على شاشةٍ قصيرة**. */
+function Centered({ children }: { children: React.ReactNode }) {
+  return <ScrollView contentContainerStyle={styles.body}>{children}</ScrollView>;
+}
+
 /** **قرارُ الحالة** — تحميلٌ · خطأٌ · فارغةٌ بلا عنبر · أو ما تقرّره الدفعة. */
 function Loaded({ token }: { token: string }) {
   const data = useScreenData(token);
 
-  if (data.waiting) return <ListState state="loading" />;
+  if (data.waiting) {
+    return (
+      <Centered>
+        <ListState state="loading" />
+      </Centered>
+    );
+  }
   if (data.failure) {
     return (
-      <ListState state="error" reason={dailyLogErrorMessage(data.failure)} onRetry={data.retry} />
+      <Centered>
+        <ListState state="error" reason={dailyLogErrorMessage(data.failure)} onRetry={data.retry} />
+      </Centered>
     );
   }
   // **ومن لا عنبر له يُقال له ذلك** — لا يُترك أمام نموذجٍ لا يعمل
   if (data.house === undefined) {
     return (
-      <ListState
-        state="empty"
-        message="لا عنبر مُسند إليك بعد — راجع مشرفك ليُسنده"
-        actionLabel="تحديث"
-        onAction={data.retry}
-      />
+      <Centered>
+        <ListState
+          state="empty"
+          message="لا عنبر مُسند إليك بعد — راجع مشرفك ليُسنده"
+          actionLabel="تحديث"
+          onAction={data.retry}
+        />
+      </Centered>
     );
   }
 
@@ -158,18 +180,20 @@ function HouseState({
   if (active === undefined) {
     const arriving = arrivingBatchOf(batches) !== undefined;
     return (
-      <ListState
-        state="empty"
-        message={
-          arriving
-            ? "شحنتك وصلت ولم تؤكّد استلامها بعد — التسجيل يبدأ بعد التأكيد"
-            : "عنبرك بلا دفعة نشطة — التسجيل يبدأ بعد أن تصل الطيور وتؤكّد استلامها"
-        }
-        actionLabel="الذهاب إلى الاستلام"
-        onAction={() => {
-          router.navigate("/(farmer)/receiving");
-        }}
-      />
+      <Centered>
+        <ListState
+          state="empty"
+          message={
+            arriving
+              ? "شحنتك وصلت ولم تؤكّد استلامها بعد — التسجيل يبدأ بعد التأكيد"
+              : "عنبرك بلا دفعة نشطة — التسجيل يبدأ بعد أن تصل الطيور وتؤكّد استلامها"
+          }
+          actionLabel="الذهاب إلى الاستلام"
+          onAction={() => {
+            router.navigate("/(farmer)/receiving");
+          }}
+        />
+      </Centered>
     );
   }
 
@@ -208,32 +232,49 @@ function Form({
   });
 
   if (submit.saved !== undefined) {
-    return <Saved feedKgTotal={submit.saved.feedKgTotal} onAgain={submit.reset} />;
+    return (
+      <Centered>
+        <Saved feedKgTotal={submit.saved.feedKgTotal} onAgain={submit.reset} />
+      </Centered>
+    );
   }
 
+  const reason = saveDisabledReason(draft, submit.pending);
+
   return (
-    <View style={styles.form}>
-      <Context house={house} batchBirds={batchBirds} otherHouseCount={otherHouseCount} />
-      <Fields
-        draft={draft}
-        setDraft={setDraft}
-        products={products}
-        house={house}
-        logDate={logDate}
-      />
-      {submit.failure === undefined ? null : <Text style={styles.failure}>{submit.failure}</Text>}
-      <Button
-        label="حفظ السجل"
-        variant="primary"
-        formSize
-        onPress={() => {
-          submit.save(draft);
-        }}
-        {...(() => {
-          const reason = saveDisabledReason(draft, submit.pending);
-          return reason === undefined ? {} : { disabledReason: reason };
-        })()}
-      />
+    <View style={styles.formShell}>
+      <ScrollView contentContainerStyle={styles.body}>
+        <Context house={house} batchBirds={batchBirds} otherHouseCount={otherHouseCount} />
+        <Fields
+          draft={draft}
+          setDraft={setDraft}
+          products={products}
+          house={house}
+          logDate={logDate}
+        />
+        {submit.failure === undefined ? null : <Text style={styles.failure}>{submit.failure}</Text>}
+      </ScrollView>
+      {/**
+       * **زرُّ الحفظ ثابتٌ أسفل الشاشة، شقيقًا للتمرير لا آخرَ عنصرٍ فيه**
+       * (§2 نصًّا). **وهو عطبُ استعمالٍ لا ملاحظةُ عرض حين يُدفَن**: الزرُّ
+       * **الفعلُ الوحيد في الشاشة**، **ومربٍّ لا يجده لا يسجّل شيئًا** —
+       * ونموذجٌ بهذا الطول يدفعه تحت شريط التبويبات على كل جهاز.
+       *
+       * **ويحرسه تأكيدُ تخطيطٍ يقيس أنه مرئيّ بلا تمرير** لا أنه موجود
+       * (`layout-tests/daily-log.layout.spec.ts`) — **و`react-test-renderer`
+       * لا يُنفّذ تخطيط Yoga فلا يراه** (القرار #80).
+       */}
+      <View style={styles.saveBar}>
+        <Button
+          label="حفظ السجل"
+          variant="primary"
+          formSize
+          onPress={() => {
+            submit.save(draft);
+          }}
+          {...(reason === undefined ? {} : { disabledReason: reason })}
+        />
+      </View>
     </View>
   );
 }
@@ -339,8 +380,20 @@ function Saved({ feedKgTotal, onAgain }: { feedKgTotal: number; onAgain: () => v
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  body: { padding: spacing.lg, gap: spacing.md },
-  form: { gap: spacing.lg },
+  body: { padding: spacing.lg, gap: spacing.lg },
+  /** الحقولُ تُمرَّر والزرُّ ثابت — **فالغلافُ عمودٌ يملأ ما بقي من الشاشة**. */
+  formShell: { flex: 1 },
+  /**
+   * **شريطُ الحفظ — فوق شريط التبويبات مباشرةً وبخلفيةٍ صمّاء**: شفافيةٌ
+   * تجعل نصّ النموذج يمرّ تحته فيصير الزرُّ غيرَ مقروء تحت الشمس، **ولا
+   * شفافية في هذا التطبيق أصلًا**. **وحدٌّ علويّ يفصله عمّا يُمرَّر تحته.**
+   */
+  saveBar: {
+    padding: spacing.lg,
+    backgroundColor: color.surfacePage,
+    borderTopWidth: 1,
+    borderTopColor: color.borderSubtle,
+  },
   context: {
     gap: spacing.sm,
     padding: spacing.md,

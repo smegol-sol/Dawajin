@@ -8,7 +8,12 @@ import { NumberStepper } from "@/components/ui/NumberStepper";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { color, font, spacing } from "@/constants/theme";
 import type { ProductCard } from "@/lib/dailyLogApi";
-import { feedComputedLine, feedProductsOf, type FeedRowDraft } from "@/lib/dailyLogForm";
+import {
+  feedComputedLine,
+  feedProductsOf,
+  sectionCount,
+  type FeedRowDraft,
+} from "@/lib/dailyLogForm";
 
 /**
  * **العلف — المرحلةُ ثم الصنفُ ثم الأكياس بخطوة ٠٫٥، وتحتها الكجم المحسوب**
@@ -35,7 +40,14 @@ export function FeedBlock({
 }) {
   return (
     <View style={styles.block}>
-      <SectionHeader title="العلف" count={rows.length} />
+      {/* **العدّاد يظهر حين يُفيد وحده** — والحكمُ في `sectionCount` فيُفحص وحده */}
+      <SectionHeader
+        title="العلف"
+        {...(() => {
+          const count = sectionCount(rows);
+          return count === undefined ? {} : { count };
+        })()}
+      />
       {rows.map((row) => (
         <FeedRow
           key={row.key}
