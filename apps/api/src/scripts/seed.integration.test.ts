@@ -150,6 +150,16 @@ describe("بذر بيانات العرض — نطاق الرؤية والعطا�
   });
 });
 
+/** أوّلُ عنبرٍ أكّده المربّي في البذر — **يُقرأ من الرد لا يُفترض**. */
+function confirmedHouseId(): number {
+  return arrival?.confirmed[0]?.houseId ?? 0;
+}
+
+/** عنبرُ «قيد الوصول» — **يسبق العنبرَ الذي بلا دفعة مباشرةً** في ترتيب البذر. */
+function arrivingHouseId(): number {
+  return (arrival?.houseWithoutBatch ?? 0) - 1;
+}
+
 /**
  * **سلسلةُ الاستقبال في البذر — برهانٌ لا تعبئة** (القرار 285).
  *
@@ -157,16 +167,6 @@ describe("بذر بيانات العرض — نطاق الرؤية والعطا�
  * كاملةً: **المالك أدخل، والمشرف صادق ووزّع، والمربّي أكّد بما عدّه**.
  */
 describe("بذر بيانات العرض — سلسلة الاستقبال", () => {
-  /** قراءةُ الشحنة بحساب — **مفلترةٌ بالإسناد ومحجوبةٌ عن المربّي** (276). */
-  async function shipmentSeenBy(phone: string): Promise<Record<string, unknown>> {
-    const id = arrival?.shipmentId ?? 0;
-    const res = await request(app)
-      .get(`/api/chick-shipments/${id.toString()}`)
-      .set("Authorization", `Bearer ${tokenFor(phone)}`);
-    expect(res.status).toBe(200);
-    return res.body as Record<string, unknown>;
-  }
-
   /** دفعاتُ عنبرٍ بحساب — بالـAPI لا باستعلام. */
   async function batchesOf(phone: string, houseId: number): Promise<Record<string, unknown>[]> {
     const res = await request(app)
@@ -195,35 +195,83 @@ describe("بذر بيانات العرض — سلسلة الاستقبال", () 
     expect(houseWithoutBatch).toEqual(expect.any(Number));
     expect(await batchesOf("770000004", houseWithoutBatch ?? 0)).toEqual([]);
   });
+});
 
-  it("والمربّي أعمى عن المخصَّص في المسارين معًا — والمالك يراه", async () => {
+/**
+ * **والحجبُ مشروطٌ بالعدّ لا بالدور** (القرار 286) — **وصفٌ مستقلّ لأن الحدَّ
+ * يُحترم بالفصل لا برفعه**.
+ */
+describe("بذر بيانات العرض — الاستلام الأعمى مشروطًا بالعدّ", () => {
+  /** قراءةُ الشحنة بحساب — مفلترةٌ بالإسناد ومحجوبةٌ عن العادّ حتى يعدّ. */
+  async function shipmentSeenBy(phone: string): Promise<Record<string, unknown>> {
+    const id = arrival?.shipmentId ?? 0;
+    const res = await request(app)
+      .get(`/api/chick-shipments/${id.toString()}`)
+      .set("Authorization", `Bearer ${tokenFor(phone)}`);
+    expect(res.status).toBe(200);
+    return res.body as Record<string, unknown>;
+  }
+
+  /** دفعاتُ عنبرٍ بحساب — بالـAPI لا باستعلام. */
+  async function batchesOf(phone: string, houseId: number): Promise<Record<string, unknown>[]> {
+    const res = await request(app)
+      .get(`/api/houses/${houseId.toString()}/batches`)
+      .set("Authorization", `Bearer ${tokenFor(phone)}`);
+    expect(res.status).toBe(200);
+    return (res.body as { batches: Record<string, unknown>[] }).batches;
+  }
+
+  /**
+   * **وانقلابُ هذا الشاهد برهانٌ لا كسر** (القرار 286): كان يؤكّد أن المربّي
+   * **أعمى دائمًا**، **فصار يفرّق بين ما عدّه وما لم يعدّه بعد** — **والفرقُ
+   * هو ما يثبت أن الحجب صار مشروطًا بالعدّ لا بالدور**.
+   *
+   * **وبيانات البذر تحمل الحالتين في ردٍّ واحد**: حصّتان مؤكَّدتان وثالثةٌ لا.
+   */
+  it("والمربّي يقرأ ما عدّه ويُحجب عنه ما لم يعدّه — لا حجبٌ مطلق", async () => {
     const farmerView = await shipmentSeenBy("770000004");
     const distributions = farmerView.distributions as Record<string, unknown>[];
+    const confirmedHouses = new Set((arrival?.confirmed ?? []).map((one) => one.houseId));
+    expect(confirmedHouses.size).toBe(2);
+
     for (const one of distributions) {
-      expect(Object.keys(one)).not.toContain("allocatedQuantity");
-      expect(Object.keys(one)).not.toContain("variance");
+      const counted = confirmedHouses.has(one.houseId as number);
+      // **المعدودةُ تُقرأ · وغيرُها تبقى محجوبة** — في نفس الرد
+      expect(Object.keys(one).includes("allocatedQuantity")).toBe(counted);
+      expect(Object.keys(one).includes("variance")).toBe(counted);
     }
+
+    // **والمشترى محجوبٌ ما بقيت حصّةٌ لم تُعدّ** — رقمُ الحاوية يحدّها بالطرح
+    expect(Object.keys(farmerView)).not.toContain("purchasedQuantity");
+    expect(JSON.stringify(farmerView)).not.toContain("15000");
+
     const ownerView = await shipmentSeenBy("770000001");
     const ownerDistributions = ownerView.distributions as Record<string, unknown>[];
     expect(ownerDistributions[0]).toEqual(expect.objectContaining({ allocatedQuantity: 5000 }));
+    expect(ownerView.purchasedQuantity).toBe(15000);
   });
 
   /**
-   * **والحجبُ خاصّةُ الرقم لا خاصّةُ المسار** (القرار 281): `purchased_bird_count`
-   * **هو `allocated_quantity` مجمَّدًا** — **فيُقاس على بياناتٍ حقيقية لا في
-   * اختبارٍ مصطنَع**.
+   * **وانقلابُه برهانٌ لا كسر** (القرار 286): **الدفعةُ المؤكَّدة يُقرأ
+   * مشتراها**، **والتي «قيد الوصول» يبقى محجوبًا** — **والعنبران في نفس
+   * البذر**، فالفرقُ يُقاس في جولةٍ واحدة لا بين ملفّين.
    */
-  it("والمشترى محجوبٌ عن المربّي في مسار الدفعات كذلك — والمالك يراه", async () => {
-    const houseId = arrival?.confirmed[0]?.houseId ?? 0;
+  it("ومشترى الدفعة يُقرأ بعد التأكيد ويُحجب قبله — على بيانات العرض", async () => {
+    const confirmedHouse = confirmedHouseId();
 
-    const [farmerBatch] = await batchesOf("770000004", houseId);
+    const [farmerBatch] = await batchesOf("770000004", confirmedHouse);
     expect(farmerBatch?.status).toBe("نشطة");
     expect(farmerBatch?.receivedBirdCount).toBe(4988);
-    expect(Object.keys(farmerBatch ?? {})).not.toContain("purchasedBirdCount");
-    // **ولا القيمةُ نفسها في نصّ الرد كلّه** — فلا تمرّ تحت مفتاحٍ آخر
-    expect(JSON.stringify(farmerBatch)).not.toContain("5000");
+    // **مؤكَّدةٌ فيُقرأ مشتراها** — الحجبُ قبل العدّ لا بعده
+    expect(farmerBatch?.purchasedBirdCount).toBe(5000);
 
-    const [ownerBatch] = await batchesOf("770000001", houseId);
+    // **وعنبرُ «قيد الوصول» يبقى محجوبًا** — وهو الثالث في البذر
+    const [arrivingBatch] = await batchesOf("770000004", arrivingHouseId());
+    expect(arrivingBatch?.status).toBe("قيد الوصول");
+    expect(Object.keys(arrivingBatch ?? {})).not.toContain("purchasedBirdCount");
+    expect(JSON.stringify(arrivingBatch)).not.toContain("4000");
+
+    const [ownerBatch] = await batchesOf("770000001", confirmedHouse);
     expect(ownerBatch?.purchasedBirdCount).toBe(5000);
   });
 });

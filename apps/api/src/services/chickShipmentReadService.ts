@@ -9,6 +9,7 @@ import { HttpError } from "@dawajin/shared";
 import { and, count, eq } from "drizzle-orm";
 
 import type { ChickShipmentSummary } from "./chickShipmentService";
+import { countingComplete, isChickCounter } from "../lib/blindCount";
 import { visibleFarmCondition, visibleHouseCondition, type Viewer } from "../lib/entityScope";
 
 /**
@@ -35,7 +36,15 @@ export interface DistributionView {
   varianceStatus?: string | null;
 }
 
-export interface ChickShipmentDetail extends ChickShipmentSummary {
+/**
+ * **والمشترى نفسُه يُحجب عن العادّ حتى يكتمل عدُّه** (القرار 286).
+ *
+ * **ورقمُ الشحنة رقمُ حاوية**: حصّتان لعادٍّ واحد، إحداهما مؤكَّدة والأخرى لا،
+ * **تجعل المشترى يحدّ المتوقَّعَ للثانية بالطرح** — **فالاستلام الأعمى ينكسر
+ * بحسابٍ لا بقراءة**.
+ */
+export interface ChickShipmentDetail extends Omit<ChickShipmentSummary, "purchasedQuantity"> {
+  purchasedQuantity?: number;
   distributions: DistributionView[];
 }
 
@@ -49,11 +58,17 @@ export interface ChickShipmentDetail extends ChickShipmentSummary {
  * **و403 لا قائمةٌ فارغة** لشحنةٍ لا يبلغ الرائي أيًّا من توزيعاتها:
  * **الفارغة تقول «لا حصص هنا» وهي كذبة عن شحنةٍ وُزّعت على عنابر ليست له.**
  *
- * ## والاستلام الأعمى يُفرض هنا — بحجب حقلين لا حقلٍ واحد
+ * ## والاستلام الأعمى يُفرض هنا — بحجب ثلاثة حقول حتى العدّ لا أبدًا
  *
  * **`allocated_quantity` هو الرقم المتوقَّع** الذي لا يراه المربّي (160
  * «ثانيًا»). **و`variance` يُحجب معه لأنه يكشفه بطرحه من المعدود** —
- * **وحجبُ أحدهما دون الآخر إخفاءٌ صوريّ**.
+ * **وحجبُ أحدهما دون الآخر إخفاءٌ صوريّ**. **و`purchasedQuantity` ثالثُهما**:
+ * **رقمُ الحاوية يحدّ حصّةً لم تُعدّ بالطرح** (القرار 286).
+ *
+ * **والحجبُ حتى العدّ لا أبدًا** (القرار 286، على §3.6): **بعد التأكيد يُقرأ
+ * كلُّ شيء** — «**بعد الحفظ فقط يظهر الفرق**» نصًّا. **وكان مطلقًا على الدور،
+ * فصار مشروطًا بالعدّ** — **والفرقُ أنّ العادّ يرى ما عدّه ولا يرى ما لم
+ * يعدّه بعد**.
  *
  * @returns الشحنة وتوزيعاتها المرئية للرائي
  * @throws HttpError 404 شحنةٌ خارج المستأجر · 403 لا يبلغ الرائي شيئًا منها
@@ -77,16 +92,20 @@ export async function readChickShipment(
   if (!shipment) throw new HttpError(404, "not_found", "شحنة الكتاكيت غير موجودة");
 
   const rows = await visibleDistributions(db, args);
-  const blind = args.viewer.role === "farmer";
+  // **الحجبُ مشروطٌ بالعدّ لا بالدور** (القرار 286): العادُّ يُحجب عنه ما لم
+  // يعدّه بعد، **ويقرأ كلَّ شيء بعد تأكيده**
+  const counter = isChickCounter(args.viewer.role);
+  const counted = countingComplete(rows);
   return {
     shipmentId: shipment.shipmentId,
     breed: shipment.breed,
     supplierId: shipment.supplierId,
     carrierId: shipment.carrierId,
-    purchasedQuantity: shipment.purchasedQuantity,
+    // **رقمُ الحاوية حتى تُعدّ كلُّ عِدادها** — لا فور أوّل تأكيد
+    ...(counter && !counted ? {} : { purchasedQuantity: shipment.purchasedQuantity }),
     approved: shipment.approvedAt !== null,
     distributionCount: rows.length,
-    distributions: rows.map((row) => toDistributionView(row, blind)),
+    distributions: rows.map((row) => toDistributionView(row, counter && row.confirmedAt === null)),
   };
 }
 
@@ -105,6 +124,8 @@ interface DistributionRow {
 /**
  * **يبني كائن الرد بيدٍ فتسقط الحقول المحجوبة** — **ولا يُنشر الصفّ بـ`...`**:
  * النشرُ يُظهر ما لم يُقصد إظهاره كلّما أُضيف عمود (قاعدة حجب الحقل).
+ *
+ * @param blind **صحيحٌ للعادّ قبل أن يعدّ هذه الحصة بعينها** — لا لدوره
  */
 function toDistributionView(row: DistributionRow, blind: boolean): DistributionView {
   return {

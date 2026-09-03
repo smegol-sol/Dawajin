@@ -2,6 +2,7 @@ import { batches, houses, type Database } from "@dawajin/db";
 import { HttpError, type BatchStatus, type Breed } from "@dawajin/shared";
 import { and, asc, desc, eq } from "drizzle-orm";
 
+import { isChickCounter } from "../lib/blindCount";
 import type { Viewer } from "../lib/entityScope";
 
 /**
@@ -21,11 +22,13 @@ import type { Viewer } from "../lib/entityScope";
  * ينقض الاستلامَ الأعمى الذي بُني في القرار 276** — **يقرأ الرقمَ المتوقَّع
  * من مسارٍ آخر ثم «يعدّ» فيجده**، **والعدُّ الذي يعرف جوابَه ليس عدًّا**.
  *
- * **والحجبُ مطلقٌ لا مشروطٌ بالحالة — مرآةً لـ`toDistributionView` لا حكمًا
- * ثانيًا بجواره**: هناك `blind = role === "farmer"` بلا شرطِ حالة، **وشرطٌ
- * يُزاد هنا وحده يجعل للسؤال «متى يرى المربّي المشترى؟» جوابين يفترقان**.
- * **وتضييقُه إلى «قبل التأكيد وحده» قرارُ مالكٍ يُطلب، لا اجتهادُ مسارٍ
- * قارئ.**
+ * **والحجبُ حتى التأكيد لا أبدًا** (القرار 286) — **وهو حكمُ المالك الذي
+ * طُلب هنا وصدر**: **الحجبُ قبل العدّ لا بعده**، **فما دامت الدفعة «قيد
+ * الوصول» فالمربّي لم يعدّها**، **وخروجُها منها تأكيدُه هو**.
+ *
+ * **ويبقى مرآةً لـ`toDistributionView` لا حكمًا ثانيًا بجواره** — الشرطُ
+ * هناك «لم تُؤكَّد هذه الحصة» وهنا «لم تخرج الدفعة من قيد الوصول»، **وهما
+ * الواقعةُ نفسُها في جدولين**.
  */
 export interface BatchView {
   id: number;
@@ -126,6 +129,8 @@ export async function listHouseBatches(
     .where(and(eq(batches.tenantId, args.tenantId), eq(batches.houseId, args.houseId)))
     .orderBy(desc(batches.createdAt), asc(batches.id));
 
-  const blind = args.viewer.role === "farmer";
-  return rows.map((row) => toBatchView(row, blind));
+  // **الحجبُ مشروطٌ بالعدّ لا بالدور** (القرار 286): الدفعةُ «قيد الوصول» هي
+  // ما لم يُؤكَّد بعد — **وخروجُها منها هو تأكيدُ المربّي نفسِه** (276)
+  const counter = isChickCounter(args.viewer.role);
+  return rows.map((row) => toBatchView(row, counter && row.status === "قيد الوصول"));
 }
