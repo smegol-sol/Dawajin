@@ -2451,6 +2451,259 @@
           }
         }
       }
+    },
+    "/api/chick-shipments/{shipmentId}": {
+      "get": {
+        "summary": "قراءة شحنة كتاكيت بتوزيعاتها — مفلترةً بما يبلغه الرائي (#129، القرار 276)",
+        "description": "المالك كل التوزيعات · والمشرف توزيعات مزارعه المُسندة · والمربّي عنابره وحدها. وشحنةٌ وُزّعت ولا يبلغ الرائي شيئًا منها ← 403 لا قائمةٌ فارغة. والمربّي لا يرى الكمية المتوقَّعة ولا الفرق — الاستلام الأعمى.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "shipmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "الشحنة وتوزيعاتها المرئية",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "shipmentId": {
+                      "type": "integer"
+                    },
+                    "breed": {
+                      "type": "string"
+                    },
+                    "supplierId": {
+                      "type": "integer"
+                    },
+                    "carrierId": {
+                      "type": "integer"
+                    },
+                    "purchasedQuantity": {
+                      "type": "integer"
+                    },
+                    "approved": {
+                      "type": "boolean"
+                    },
+                    "distributionCount": {
+                      "type": "integer"
+                    },
+                    "distributions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "description": "والمربّي لا يرى `allocatedQuantity` ولا `variance` — الاستلام الأعمى (#160 «ثانيًا»)",
+                        "properties": {
+                          "distributionId": {
+                            "type": "integer"
+                          },
+                          "houseId": {
+                            "type": "integer"
+                          },
+                          "batchId": {
+                            "type": "integer"
+                          },
+                          "confirmed": {
+                            "type": "boolean"
+                          },
+                          "countedQuantity": {
+                            "type": ["integer", "null"]
+                          },
+                          "deadOnArrival": {
+                            "type": ["integer", "null"]
+                          },
+                          "allocatedQuantity": {
+                            "type": "integer"
+                          },
+                          "variance": {
+                            "type": ["integer", "null"]
+                          },
+                          "varianceStatus": {
+                            "type": ["string", "null"]
+                          }
+                        },
+                        "required": [
+                          "distributionId",
+                          "houseId",
+                          "batchId",
+                          "confirmed",
+                          "countedQuantity",
+                          "deadOnArrival"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "shipmentId",
+                    "breed",
+                    "approved",
+                    "distributionCount",
+                    "distributions"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "description": "دورٌ لا يرى الشحنات · أو شحنةٌ لا يبلغ الرائي أيًّا من توزيعاتها (`forbidden`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/api/chick-shipments/{shipmentId}/confirm": {
+      "post": {
+        "summary": "تأكيد استلام حصة الكتاكيت — المربّي وحده، وبه تبدأ الدفعة (#160 «أولًا»)",
+        "description": "المربّي يؤكد بما عدّه ولا يرى الرقم المتوقَّع، والعدّ بالصناديق لا برقم كليّ. والنافق عند الوصول يُخصم من الكمية وهو خارج نسبة نفوق العنبر. وأربعةُ آثار في معاملةٍ واحدة: التوزيعة تُملأ · والدفعة تصير «نشطة» بتاريخ بدءٍ ومستلمٍ مؤكَّد · والعنبر ينتقل إلى «مشغول» بصفٍّ في سجلّ الحالات · و`housed_before_ready` تُسجَّل هنا لأنها واقعةُ دخولٍ وقعت.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "shipmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChickArrivalConfirmRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "ما سُجّل، ومعه المستلم المؤكَّد وحالةُ العنبر قبل الدخول",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "distributionId": {
+                      "type": "integer"
+                    },
+                    "batchId": {
+                      "type": "integer"
+                    },
+                    "houseId": {
+                      "type": "integer"
+                    },
+                    "countedQuantity": {
+                      "type": "integer"
+                    },
+                    "deadOnArrival": {
+                      "type": "integer"
+                    },
+                    "receivedBirdCount": {
+                      "type": "integer"
+                    },
+                    "startDate": {
+                      "type": "string",
+                      "format": "date"
+                    },
+                    "housedBeforeReady": {
+                      "type": "boolean"
+                    },
+                    "houseStatusBefore": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "distributionId",
+                    "batchId",
+                    "houseId",
+                    "countedQuantity",
+                    "deadOnArrival",
+                    "receivedBirdCount",
+                    "startDate",
+                    "housedBeforeReady",
+                    "houseStatusBefore"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "description": "دورٌ لا يؤكد (`forbidden`) — المالك والمشرف منهم · أو عنبرٌ لا يبلغه إسنادُ المربّي",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "شحنةٌ غير موجودة · أو لا حصة لهذا العنبر فيها (`not_found`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "الحصة مؤكَّدةٌ سلفًا (`arrival_already_confirmed`) — والسجل الميداني لا يُعدَّل",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "نافقٌ يتجاوز المعدود (`dead_on_arrival_exceeds_counted`) · عنبرٌ غير جاهز بلا سبب مكتوب (`housed_before_ready_reason_required`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -3522,6 +3775,37 @@
           }
         },
         "required": ["distributions"],
+        "additionalProperties": false
+      },
+      "ChickArrivalConfirmRequest": {
+        "type": "object",
+        "description": "العدّ بالصناديق — رقمان لا رقم كليّ. ولا حقل للكمية الكلية إطلاقًا.",
+        "properties": {
+          "houseId": {
+            "type": "integer"
+          },
+          "countedBoxes": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "birdsPerBox": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "deadOnArrival": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "housedReason": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "notesReceiver": {
+            "type": "string",
+            "maxLength": 500
+          }
+        },
+        "required": ["houseId", "countedBoxes", "birdsPerBox", "deadOnArrival"],
         "additionalProperties": false
       }
     },

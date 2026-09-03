@@ -11,7 +11,7 @@ import {
   foreignKey,
 } from "drizzle-orm/pg-core";
 
-import { breedEnum } from "./enums";
+import { breedEnum, shipmentVarianceStatusEnum } from "./enums";
 import { batches, houses } from "./farms";
 import { carriers, suppliers } from "./inventory";
 import { tenants } from "./tenants";
@@ -143,6 +143,27 @@ export const chickShipmentDistributions = pgTable(
     birdsPerBox: integer("birds_per_box"),
     countedQuantity: integer("counted_quantity"), // محسوب = الصناديق × ما بها
     deadOnArrival: integer("dead_on_arrival"),
+    /**
+     * **الفرق بين المشترى والمستلم — عجزٌ ظاهر** (160 «ثانيًا»).
+     *
+     * **ومقياسُه المعدودُ لا الحيّ:** `counted_quantity − allocated_quantity`
+     * — **والنافق عند الوصول خارجه** (القرار 208 حكم ٥): **لا يُخصم من سجل
+     * المورّد**، فطرحُه هنا يحمّل المورّدَ موتًا لم يسمّه أحدٌ عليه.
+     * **فالفرقُ يقيس ما وصل عددًا لا ما عاش.**
+     *
+     * **وسالبٌ عجز، وموجبٌ فائض، وصفرٌ تطابق** — **والاتجاهان يُسمّيان**
+     * كما في تأكيد التحويل (القرار 258).
+     */
+    variance: integer("variance"), // محسوب
+    /**
+     * **بنفس enum الشحنة لا بنوعٍ رابع** — **أوّلُ خطوةٍ نحو تعميم النمط**
+     * (160 «عاشرًا» ٧: «يُعمَّم مرة واحدة لا يُكرَّر ثلاثًا»).
+     *
+     * **و«قيد النزاع» لا كاتبَ لها هنا اليوم** — **إغلاقُ النزاع قاعدةُ
+     * الشحنة القائمة**، ونقلُها إلى هنا هو التعميمُ نفسه لا نسخةٌ ثالثة منه.
+     * **يسقط هذا الحدّ يوم يُعمَّم النمط.**
+     */
+    varianceStatus: shipmentVarianceStatusEnum("variance_status"),
     confirmedBy: integer("confirmed_by"),
     confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
     notesReceiver: text("notes_receiver"),
@@ -189,7 +210,15 @@ export const chickShipmentDistributions = pgTable(
           AND (${table.confirmedAt} IS NULL) = (${table.countedBoxes} IS NULL)
           AND (${table.confirmedAt} IS NULL) = (${table.birdsPerBox} IS NULL)
           AND (${table.confirmedAt} IS NULL) = (${table.countedQuantity} IS NULL)
-          AND (${table.confirmedAt} IS NULL) = (${table.deadOnArrival} IS NULL)`
+          AND (${table.confirmedAt} IS NULL) = (${table.deadOnArrival} IS NULL)
+          AND (${table.confirmedAt} IS NULL) = (${table.variance} IS NULL)
+          AND (${table.confirmedAt} IS NULL) = (${table.varianceStatus} IS NULL)`
+    ),
+    /** **الفرقُ محسوبٌ من طرفيه** — فلا رقمَ يُكتب بيدٍ ويخالفهما. */
+    check(
+      "chick_shipment_distributions_variance_shape_ck",
+      sql`${table.variance} IS NULL
+          OR ${table.variance} = ${table.countedQuantity} - ${table.allocatedQuantity}`
     ),
     /** **الحاصلُ محسوبٌ من رقمَيه** — فلا رقمَ كليّ يُكتب من الذاكرة. */
     check(

@@ -5,6 +5,8 @@ import { z } from "zod";
 
 import { requireTenantUser } from "../lib/authContext";
 import { requireRole } from "../middleware/requireRole";
+import { confirmChickArrival } from "../services/chickArrivalConfirmService";
+import { readChickShipment } from "../services/chickShipmentReadService";
 import {
   createChickShipment,
   distributeChickShipment,
@@ -60,6 +62,81 @@ const distributeSchema = z
       .max(200, "عدد العنابر في التوزيعة الواحدة يتجاوز الحد"),
   })
   .strict();
+
+/**
+ * **تأكيدُ المربّي — والعدّ بالصناديق رقمان لا رقم** (160 «ثانيًا»).
+ *
+ * **ولا حقلَ للكمية الكلية إطلاقًا**: «عدد الصناديق وعدد ما بها — **لا رقمًا
+ * كليًا يُكتب من الذاكرة**»، **فالحاصلُ يُحسب ولا يُرسَل**.
+ *
+ * **والنافق عند الوصول إلزاميٌّ لا اختياريّ** — **وصفرٌ واقعةٌ تُسجَّل**:
+ * غيابُه يجعل «لم يمت شيء» و«لم يُسأل» سواءً في السجل.
+ */
+const confirmSchema = z
+  .object({
+    houseId: idSchema,
+    countedBoxes: z.number().int().positive("عدد الصناديق يجب أن يكون موجبًا"),
+    birdsPerBox: z.number().int().positive("عدد ما في الصندوق يجب أن يكون موجبًا"),
+    deadOnArrival: z.number().int().nonnegative("النافق عند الوصول لا يكون سالبًا"),
+    housedReason: z.string().trim().min(1).max(500).optional(),
+    notesReceiver: z.string().trim().min(1).max(500).optional(),
+  })
+  .strict();
+
+/**
+ * **مسارا المحطة الثالثة — التأكيد والقراءة.**
+ *
+ * **مفصولان لأن الحدَّ يُحترم بالفصل لا برفعه**، **والفصلُ عند حدٍّ معنويّ**:
+ * ما قبلهما شحنةٌ تُدخَل وتُوزَّع، وهذان **ما يفعله المربّي وما يراه**.
+ */
+function arrivalRoutes(router: Router, db: Database): void {
+  // **المربّي يؤكد حصته، وبتأكيده تبدأ الدفعة** (160 «أولًا» و«عاشرًا» ٣).
+  // **والمشرف والمالك خارجه**: «مربّي كل عنبر يؤكد استلام حصته» — §12.2 صفّ
+  // «تأكيد استلام حصة الكتاكيت»: `✅ عنابره` للمربّي و`❌` لما سواه.
+  router.post(
+    "/api/chick-shipments/:shipmentId/confirm",
+    requireRole("farmer"),
+    async (req, res, next) => {
+      try {
+        const user = requireTenantUser(req);
+        const shipmentId = idSchema.parse(req.params.shipmentId);
+        const input = confirmSchema.parse(req.body);
+        res.status(201).json(
+          await confirmChickArrival(db, {
+            tenantId: user.tenantId,
+            actorId: user.id,
+            shipmentId,
+            ...input,
+          })
+        );
+      } catch (error) {
+        next(error);
+      }
+    }
+  );
+
+  // **قراءةُ شحنةٍ بتوزيعاتها — مفلترةً بما يبلغه الرائي** (#129)،
+  // **والمربّي أعمى عن الرقم المتوقَّع** (160 «ثانيًا»).
+  router.get(
+    "/api/chick-shipments/:shipmentId",
+    requireRole("owner", "supervisor", "farmer"),
+    async (req, res, next) => {
+      try {
+        const user = requireTenantUser(req);
+        const shipmentId = idSchema.parse(req.params.shipmentId);
+        res.json(
+          await readChickShipment(db, {
+            tenantId: user.tenantId,
+            shipmentId,
+            viewer: { id: user.id, role: user.role },
+          })
+        );
+      } catch (error) {
+        next(error);
+      }
+    }
+  );
+}
 
 /**
  * يبني موجّه شحنات الكتاكيت.
@@ -118,6 +195,8 @@ export function chickShipmentsRouter(db: Database): Router {
       next(error);
     }
   });
+
+  arrivalRoutes(router, db);
 
   return router;
 }

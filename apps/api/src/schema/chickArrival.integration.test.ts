@@ -268,9 +268,10 @@ describe(`chick_shipment_distributions — واقعةُ التأكيد واحد�
       await rejecterOf(
         sql`INSERT INTO chick_shipment_distributions
           (tenant_id, shipment_id, house_id, batch_id, allocated_quantity,
-           counted_boxes, birds_per_box, counted_quantity, dead_on_arrival, confirmed_by, confirmed_at)
+           counted_boxes, birds_per_box, counted_quantity, dead_on_arrival,
+           variance, variance_status, confirmed_by, confirmed_at)
         VALUES (${t.tenantId}, ${t.shipmentId}, ${t.houseId}, ${batchId}, 1000,
-                10, 100, 999, 0, ${t.userId}, now())`
+                10, 100, 999, 0, -1, 'فرق مسجّل', ${t.userId}, now())`
       )
     ).toContain("chick_shipment_distributions_counted_product_ck");
   });
@@ -284,11 +285,31 @@ describe(`chick_shipment_distributions — النافق عند الوصول (${S
       await rejecterOf(
         sql`INSERT INTO chick_shipment_distributions
           (tenant_id, shipment_id, house_id, batch_id, allocated_quantity,
-           counted_boxes, birds_per_box, counted_quantity, dead_on_arrival, confirmed_by, confirmed_at)
+           counted_boxes, birds_per_box, counted_quantity, dead_on_arrival,
+           variance, variance_status, confirmed_by, confirmed_at)
         VALUES (${t.tenantId}, ${t.shipmentId}, ${t.houseId}, ${batchId}, 1000,
-                10, 100, 1000, 1001, ${t.userId}, now())`
+                10, 100, 1000, 1001, 0, 'مطابق', ${t.userId}, now())`
       )
     ).toContain("chick_shipment_distributions_doa_within_counted_ck");
+  });
+
+  /**
+   * **الفرقُ محسوبٌ من طرفيه لا يُكتب بيد** (القرار 276) — **ورقمٌ يخالفهما
+   * يُردّ**، فلا يُسجَّل عجزٌ لا سندَ له في الأعمدة.
+   */
+  it("فرقٌ لا يساوي المعدود ناقصَ المخصَّص ← الرادُّ `chick_shipment_distributions_variance_shape_ck`", async () => {
+    const t = await seedTenant("ي٢");
+    const batchId = await arrivingBatch(t, t.houseId);
+    expect(
+      await rejecterOf(
+        sql`INSERT INTO chick_shipment_distributions
+          (tenant_id, shipment_id, house_id, batch_id, allocated_quantity,
+           counted_boxes, birds_per_box, counted_quantity, dead_on_arrival,
+           variance, variance_status, confirmed_by, confirmed_at)
+        VALUES (${t.tenantId}, ${t.shipmentId}, ${t.houseId}, ${batchId}, 1000,
+                9, 100, 900, 0, -50, 'فرق مسجّل', ${t.userId}, now())`
+      )
+    ).toContain("chick_shipment_distributions_variance_shape_ck");
   });
 
   it("مؤكَّدةٌ كاملةً بالصناديق وبنافقٍ ضمن المعدود ← تُقبل", async () => {
@@ -297,9 +318,10 @@ describe(`chick_shipment_distributions — النافق عند الوصول (${S
     const id = await insertId(
       sql`INSERT INTO chick_shipment_distributions
             (tenant_id, shipment_id, house_id, batch_id, allocated_quantity,
-             counted_boxes, birds_per_box, counted_quantity, dead_on_arrival, confirmed_by, confirmed_at)
+             counted_boxes, birds_per_box, counted_quantity, dead_on_arrival,
+             variance, variance_status, confirmed_by, confirmed_at)
           VALUES (${t.tenantId}, ${t.shipmentId}, ${t.houseId}, ${batchId}, 1000,
-                  10, 100, 1000, 7, ${t.userId}, now()) RETURNING id`
+                  10, 100, 1000, 7, 0, 'مطابق', ${t.userId}, now()) RETURNING id`
     );
     expect(id).toBeGreaterThan(0);
   });

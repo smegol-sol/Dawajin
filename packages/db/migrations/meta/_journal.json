@@ -229,8 +229,15 @@
     {
       "idx": 32,
       "version": "7",
-      "when": 1788500000000,
+      "when": 1788357854700,
       "tag": "0032_chick_arrival_chain",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1788402739133,
+      "tag": "0033_chick_arrival_variance",
       "breakpoints": true
     }
   ]
