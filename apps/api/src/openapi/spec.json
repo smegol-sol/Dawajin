@@ -2164,6 +2164,293 @@
           }
         }
       }
+    },
+    "/api/chick-shipments": {
+      "post": {
+        "summary": "إدخال شحنة كتاكيت — المالك وحده (#160 «أولًا»، القرار 275)",
+        "description": "المالك يشتري ويُدخل الشحنة ببياناتها كاملة: السلالة والمورّد والناقل والكمية المشتراة. ولا يصادق عليها — مصادقتُه على ما أدخله نقضٌ للمبدأ #155.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChickShipmentRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "الشحنة المُدخَلة",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "shipmentId": {
+                      "type": "integer"
+                    },
+                    "breed": {
+                      "type": "string"
+                    },
+                    "supplierId": {
+                      "type": "integer"
+                    },
+                    "carrierId": {
+                      "type": "integer"
+                    },
+                    "purchasedQuantity": {
+                      "type": "integer"
+                    },
+                    "approved": {
+                      "type": "boolean"
+                    },
+                    "distributionCount": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "shipmentId",
+                    "breed",
+                    "supplierId",
+                    "carrierId",
+                    "purchasedQuantity",
+                    "approved",
+                    "distributionCount"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "description": "دورٌ لا يُدخل شحنة (`forbidden`) — المشرف والطبيب والمربّي وأمين المخزن",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "description": "مورّدٌ معطَّل (`supplier_inactive`) · ناقلٌ معطَّل (`carrier_inactive`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "سرد شحنات الكتاكيت — المالك والمشرف (القرار 275)",
+        "description": "شحنات المستأجر، الأحدث أولًا، مع عدد توزيعات كلٍّ. ولا فلترةَ إسنادٍ لأن الشحنة كيانُ مستأجرٍ بلا مزرعةٍ ولا عنبر قبل توزيعها.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "قائمة الشحنات",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "shipmentId": {
+                        "type": "integer"
+                      },
+                      "breed": {
+                        "type": "string"
+                      },
+                      "supplierId": {
+                        "type": "integer"
+                      },
+                      "carrierId": {
+                        "type": "integer"
+                      },
+                      "purchasedQuantity": {
+                        "type": "integer"
+                      },
+                      "approved": {
+                        "type": "boolean"
+                      },
+                      "distributionCount": {
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "shipmentId",
+                      "breed",
+                      "supplierId",
+                      "carrierId",
+                      "purchasedQuantity",
+                      "approved",
+                      "distributionCount"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "description": "دورٌ لا يرى الشحنات (`forbidden`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/chick-shipments/{shipmentId}/distribute": {
+      "post": {
+        "summary": "المصادقة على الشحنة وتوزيعها — المشرف وحده (#160 «أولًا» و«عاشرًا» ٣)",
+        "description": "فعلٌ واحد في معاملةٍ واحدة: المصادقة تُسجَّل واقعةً، ولكل عنبرٍ توزيعةٌ ودفعةٌ تُنشأ في «قيد الوصول» بلا تاريخ بدءٍ ولا مستلمٍ مؤكَّد. وفحصُ الجاهزية هنا تنبيهٌ وقائيّ بلا علامة — والعلامة تُسجَّل عند تأكيد المربّي.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "shipmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChickDistributionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "التوزيعات بدفعاتها، ومعها العنابر غير الجاهزة تنبيهًا",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "shipmentId": {
+                      "type": "integer"
+                    },
+                    "distributions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "distributionId": {
+                            "type": "integer"
+                          },
+                          "houseId": {
+                            "type": "integer"
+                          },
+                          "batchId": {
+                            "type": "integer"
+                          },
+                          "allocatedQuantity": {
+                            "type": "integer"
+                          }
+                        },
+                        "required": ["distributionId", "houseId", "batchId", "allocatedQuantity"]
+                      }
+                    },
+                    "notReadyHouses": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "houseId": {
+                            "type": "integer"
+                          },
+                          "status": {
+                            "type": "string"
+                          }
+                        },
+                        "required": ["houseId", "status"]
+                      }
+                    }
+                  },
+                  "required": ["shipmentId", "distributions", "notReadyHouses"]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "description": "دورٌ لا يصادق (`forbidden`) — المالك منهم صراحةً · أو عنبرٌ في التوزيع لا يبلغه إسناد المشرف",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "description": "مصادَقٌ عليها سلفًا (`shipment_already_approved`) · عنبرٌ فيه دفعةٌ قائمة (`house_has_open_batch`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "مجموعُ الحصص يتجاوز المشترى (`allocation_exceeds_purchase`) · عنبرٌ مكرَّر (`duplicate_house`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -3184,6 +3471,58 @@
             "description": "اختياريّ — **وإن ذُكر فبتاريخ اليوم حصرًا**"
           }
         }
+      },
+      "ChickShipmentRequest": {
+        "type": "object",
+        "description": "بياناتُ الشحنة الأربعة إلزامية بنصّ الحكم — «ببياناتها كاملة»",
+        "properties": {
+          "breed": {
+            "type": "string"
+          },
+          "supplierId": {
+            "type": "integer"
+          },
+          "carrierId": {
+            "type": "integer"
+          },
+          "purchasedQuantity": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "notes": {
+            "type": "string",
+            "maxLength": 500
+          }
+        },
+        "required": ["breed", "supplierId", "carrierId", "purchasedQuantity"],
+        "additionalProperties": false
+      },
+      "ChickDistributionRequest": {
+        "type": "object",
+        "description": "شحنةٌ واحدة لها توزيعات — لكل عنبرٍ حصةٌ واحدة، ومجموعُها لا يتجاوز المشترى",
+        "properties": {
+          "distributions": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 200,
+            "items": {
+              "type": "object",
+              "properties": {
+                "houseId": {
+                  "type": "integer"
+                },
+                "allocatedQuantity": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              },
+              "required": ["houseId", "allocatedQuantity"],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": ["distributions"],
+        "additionalProperties": false
       }
     },
     "responses": {
