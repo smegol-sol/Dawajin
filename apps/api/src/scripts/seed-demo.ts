@@ -81,7 +81,10 @@ async function main(): Promise<void> {
 
     console.log("\n[seed:demo] حسابات الدخول (كلمة المرور من متغيّر البيئة):");
     for (const account of DEMO_ACCOUNTS) {
-      console.log(`  ${account.phone}  —  ${account.fullName}`);
+      // **والملزَمُ يُسمَّى في المخرَج** — **فمن يجرّبه يعرف قبل أن يدخل لماذا
+      // تعترضه شاشةُ التغيير** (القرار 290)
+      const forced = account.mustChangePassword === true ? "  —  كلمة مؤقتة: تغييرها إلزاميّ" : "";
+      console.log(`  ${account.phone}  —  ${account.fullName}${forced}`);
     }
   } finally {
     await pool.end();

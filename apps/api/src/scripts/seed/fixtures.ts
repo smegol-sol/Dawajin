@@ -205,14 +205,19 @@ export const SITES: readonly SiteFixture[] = [
 ];
 
 /**
- * حسابات العرض الأربعة. **الأرقام ثابتة عمدًا** كي يستطيع المالك الدخول بها
- * من جواله بلا بحث في القاعدة، **وكلمة المرور من البيئة لا من الكود**.
+ * حسابات العرض. **الأرقام ثابتة عمدًا** كي يستطيع المالك الدخول بها من جواله
+ * بلا بحث في القاعدة، **وكلمة المرور من البيئة لا من الكود**.
  */
 export interface DemoAccount {
-  readonly key: "owner" | "supervisor" | "vet" | "farmer";
+  readonly key: "owner" | "supervisor" | "vet" | "farmer" | "temporary";
   readonly role: UserRole;
   readonly fullName: string;
   readonly phone: string;
+  /**
+   * **يولد ملزَمًا بتغيير كلمته** — والافتراضي في القاعدة `false` (القرار 245
+   * «ثانيًا»). **والحقل اختياريّ فحسابٌ لا يذكره لا يُلزَم بالسكوت.**
+   */
+  readonly mustChangePassword?: true;
 }
 
 export const DEMO_ACCOUNTS: readonly DemoAccount[] = [
@@ -220,6 +225,27 @@ export const DEMO_ACCOUNTS: readonly DemoAccount[] = [
   { key: "supervisor", role: "supervisor", fullName: "مشرف العرض", phone: "770000002" },
   { key: "vet", role: "vet", fullName: "طبيب العرض", phone: "770000003" },
   { key: "farmer", role: "farmer", fullName: "مربّي العرض", phone: "770000004" },
+  /**
+   * **الخامس — بكلمةٍ مؤقتة، وشرطٌ بيانيّ لا حسابُ عرضٍ خامس** (القرار 290).
+   *
+   * **وعلّتاه مقيستان:**
+   *
+   * 1. **الاعتراضُ على زرّ الرجوع العتاديّ في شاشة تغيير كلمة المرور لم
+   *    يُجرَّب على جهاز** (القرار 171: «**ويُختبر حين يوجد مستخدم بكلمة مرور
+   *    مؤقتة**») — **والشرطُ لم يكن متوفّرًا**: الأربعةُ كلُّها بلا إلزام.
+   * 2. **ومسارُ الإلزام المبنيّ في 245 لم تره عينٌ قطّ** — **مُثبَتٌ باختبارٍ
+   *    يقيس `403 password_change_required`**، **ولا شاشةَ رآها أحد**.
+   *
+   * **وبلا إسنادٍ عمدًا:** المقصودُ **ما قبل الدخول** لا ما بعده — **وبعد
+   * التغيير يهبط على الحالة الفارغة**، وهي حالةٌ مقصودة تُرى (القرار 282).
+   */
+  {
+    key: "temporary",
+    role: "farmer",
+    fullName: "مربّي بكلمة مؤقتة",
+    phone: "770000005",
+    mustChangePassword: true,
+  },
 ];
 
 /**
