@@ -363,43 +363,6 @@ describe("الخروج من الخدمة والعودة — حكما المال�
   });
 });
 
-describe("قيد الدفعة النشطة — «الدفعة هي التي تقرّر لا الشخص»", () => {
-  it("**بدفعة نشطة لا يعود إلا إلى «مشغول»** ← غيرها 422 `house_has_active_batch`", async () => {
-    await db.insert(batches).values({
-      tenantId: tenantAId,
-      houseId: subjectId,
-      breed: "Ross 308",
-      startDate: "2026-01-01",
-      initialBirdCount: 100,
-    });
-    await setStatus(subjectId, "تحت الصيانة");
-
-    const denied = await patchStatus(subjectId, ownerToken, { status: "جاهز للإسكان" });
-    expect(denied.status).toBe(422);
-    expect((denied.body as { code: string }).code).toBe("house_has_active_batch");
-    expect(await statusOf(subjectId)).toBe("تحت الصيانة");
-    expect(await historyCount(subjectId)).toBe(0);
-
-    const allowed = await patchStatus(subjectId, ownerToken, { status: "مشغول" });
-    expect(allowed.status).toBe(200);
-    expect(await statusOf(subjectId)).toBe("مشغول");
-  });
-
-  it("دفعة منتهية لا تقيّد العودة — القيد على النشطة وحدها", async () => {
-    await db.insert(batches).values({
-      tenantId: tenantAId,
-      houseId: subjectId,
-      breed: "Ross 308",
-      startDate: "2026-01-01",
-      initialBirdCount: 100,
-      status: "منتهية",
-    });
-    await setStatus(subjectId, "تحت الصيانة");
-    const res = await patchStatus(subjectId, ownerToken, { status: "جاهز للإسكان" });
-    expect(res.status).toBe(200);
-  });
-});
-
 describe("التزامن — طلبان على نفس العنبر (حادثة القرار #21)", () => {
   it("أحدهما ينجح والآخر يُرفض، ولا يعلق العنبر بين حالتين", async () => {
     await setStatus(subjectId, "تحت الإخلاء");

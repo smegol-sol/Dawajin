@@ -3,6 +3,7 @@ export * from "./tenants";
 export * from "./users";
 export * from "./platform-admins";
 export * from "./farms";
+export * from "./chick-arrival";
 export * from "./daily-logs";
 export * from "./inventory";
 export * from "./external-issue";

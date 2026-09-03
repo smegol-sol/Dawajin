@@ -60,8 +60,10 @@ async function seedTenant(label: string): Promise<Tree> {
         VALUES (${tenantId}, ${farmId}, ${`عنبر ${label} ${S}`}, 'جاهز للإسكان') RETURNING id`
   );
   const batchId = await insertId(
-    sql`INSERT INTO batches (tenant_id, house_id, breed, start_date, initial_bird_count)
-        VALUES (${tenantId}, ${houseId}, 'Ross 308', '2026-01-01', 1000) RETURNING id`
+    sql`INSERT INTO batches
+          (tenant_id, house_id, breed, start_date, purchased_bird_count, received_bird_count, status)
+        VALUES (${tenantId}, ${houseId}, 'Ross 308', '2026-01-01', 1000, 1000, 'نشطة')
+        RETURNING id`
   );
   const productId = await insertId(
     sql`INSERT INTO products (tenant_id, category, name, stock_unit)

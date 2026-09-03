@@ -70,8 +70,10 @@ beforeAll(async () => {
         VALUES (${tenantId}, ${farmId}, ${`عنبر ${S}`}, 'جاهز للإسكان') RETURNING id`
   );
   batchId = await insertId(
-    sql`INSERT INTO batches (tenant_id, house_id, breed, start_date, initial_bird_count)
-        VALUES (${tenantId}, ${houseId}, 'Ross 308', '2026-01-01', 1000) RETURNING id`
+    sql`INSERT INTO batches
+          (tenant_id, house_id, breed, start_date, purchased_bird_count, received_bird_count, status)
+        VALUES (${tenantId}, ${houseId}, 'Ross 308', '2026-01-01', 1000, 1000, 'نشطة')
+        RETURNING id`
   );
 });
 
