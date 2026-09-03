@@ -56,6 +56,26 @@ const ALLOWED_FONT_FAMILIES = new Set([
 ]);
 // أحجام النص المسموح لها بالنزول عن الحد الأدنى — الثلاثة المصرَّح بها حرفيًا
 // في §7.2 (الشارات · تسميات التبويبات · المراجع التقنية)، مقروءة من الرمز.
+/**
+ * **كتلةُ نمطٍ بلا أقواسٍ متداخلة** — `name: { ... }` في `StyleSheet.create`.
+ * **والنمطُ لا يعبر التداخل عمدًا**: كتلٌ متداخلة نادرةٌ في أنماط هذا
+ * المستودع، **وتوسيعُه يجعل التطابقَ يبتلع كتلًا مجاورة فيُنتج إنذارًا أوسع**.
+ */
+const STYLE_BLOCK = /(\w+):\s*\{([^{}]*)\}/g;
+
+/**
+ * **كتلٌ تضبط `fontSize` بلا `fontFamily` — ومسموحٌ لها ذلك بعلّتها.**
+ *
+ * **قائمةٌ موجبةٌ باسم الملف والكتلة، واتجاهُ سكوتها صحيح** (القرار 276):
+ * **ما لا يُدرَج يُمنع** — كتلةٌ جديدة لا تُعفى بالسكوت.
+ *
+ * **والواحدةُ القائمة مقيسة:** `BottomTabBar.label` **تضبط العائلة في موضع
+ * الاستدعاء لا في الكتلة** (`fontFamily: tab.active ? familyBold : familyRegular`)
+ * — **لأنها تتغيّر بحالة التبويب فلا تثبت في نمطٍ ساكن**. **يسقط الاستثناء
+ * يوم تصير العائلةُ ثابتةً في الكتلة** (القرار 268).
+ */
+const FONT_FAMILY_EXEMPT = new Set(["components/ui/BottomTabBar.tsx:label"]);
+
 const MIN_CONTENT_SIZE = tokens.typography.$minContentSize;
 const ALLOWED_SMALL_SIZES = new Set([
   tokens.typography.size.badge,
@@ -170,6 +190,25 @@ export function checkDesignTokens(): { ok: boolean; message: string } {
       if (literal !== null && !ALLOWED_FONT_WEIGHTS.has(literal)) {
         violations.push(`${relPath}: fontWeight="${literal}" — لا وزن أخف من 500، فقط 500 أو 700`);
       }
+    }
+
+    // **الخاصّيةُ الغائبة لا القيمةُ المكتوبة** (القرار 289): كلُّ الفحوص
+    // أعلاه تقرأ ما كُتب، **فكتلةٌ تضبط `fontSize` ولا تضبط `fontFamily`
+    // تمرّ صامتةً** — **ونصُّها العربيّ يسقط على خطّ النظام**، وهو ما وقع في
+    // `PlaceholderScreen` فأصاب **ثمانَ عشرةَ شاشة**.
+    //
+    // **واتجاهُ خطئه معلَن (270): يفشل ظلمًا** حين تُضبط العائلة في موضع
+    // الاستدعاء — **مقيس: موضعٌ واحد من ثلاثةٍ يوم كُتب**، وله استثناءٌ بعلّته.
+    // **ولا يمرّ ظلمًا فيما يفحصه**، **ويفوته ما لا يُكتب في كتلةِ نمطٍ أصلًا**
+    // — **وذاك يمسكه ماسحُ الشاشات في تأكيدات التخطيط**.
+    for (const match of content.matchAll(STYLE_BLOCK)) {
+      const body = match[2] ?? "";
+      if (!body.includes("fontSize") || body.includes("fontFamily")) continue;
+      if (FONT_FAMILY_EXEMPT.has(`${relPath}:${match[1] ?? ""}`)) continue;
+      violations.push(
+        `${relPath}: كتلة «${match[1] ?? ""}» تضبط fontSize بلا fontFamily — ` +
+          `النصّ العربيّ يسقط على خطّ النظام`
+      );
     }
 
     for (const match of content.matchAll(FONT_FAMILY_ASSIGNMENT)) {
