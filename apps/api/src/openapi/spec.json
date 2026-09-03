@@ -1618,13 +1618,14 @@
                             "type": "integer"
                           },
                           "quantity": {
-                            "type": "number"
+                            "type": "number",
+                            "description": "الكمية المُصدَرة — **غائبةٌ عمّن يبلغه التحويل من جهة الوجهة وحدها** (القرار 288، على 286): هو من يُطلب منه أن يعدّ، **والرقم المتوقَّع يُحجب عن العادّ حتى يعدّ**. **ويقرؤه في ردّ التأكيد بعد أن يعدّ** (`issuedQuantity`). **ومن يبلغه المصدر يقرؤها** — فهي في دفتره أصلًا."
                           },
                           "fromWarehouseId": {
                             "type": "integer"
                           }
                         },
-                        "required": ["transferId", "productId", "quantity", "fromWarehouseId"]
+                        "required": ["transferId", "productId", "fromWarehouseId"]
                       }
                     }
                   },

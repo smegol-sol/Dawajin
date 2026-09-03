@@ -51,7 +51,7 @@ function printArrival(arrival: SeedDemoResult["arrival"]): void {
     );
   }
   console.log(
-    `  و${arrival.arrivingHouses.toString()} عنبرًا «قيد الوصول» بلا تأكيد` +
+    `  والعنابر «قيد الوصول» بلا تأكيد: ${arrival.arrivingHouses.toString()}` +
       (arrival.houseWithoutBatch === undefined
         ? ""
         : ` · وعنبرٌ بلا دفعة إطلاقًا (#${arrival.houseWithoutBatch.toString()})`)
@@ -73,8 +73,8 @@ async function main(): Promise<void> {
       const { sites, farms, houses } = result.counts ?? { sites: 0, farms: 0, houses: 0 };
 
       console.log(
-        `[seed:demo] تم: ${sites.toString()} مواقع · ${farms.toString()} مزارع · ` +
-          `${houses.toString()} عنابر — كلها عبر الـAPI بصلاحية المالك.`
+        `[seed:demo] تم — مواقع: ${sites.toString()} · مزارع: ${farms.toString()} · ` +
+          `عنابر: ${houses.toString()} — كلها عبر الـAPI بصلاحية المالك.`
       );
       printArrival(result.arrival);
     }
