@@ -1172,8 +1172,8 @@ POST /batches/:batchId/reopen
 ```
 GET/POST /chick-shipments                       (المالك يُدخل · والمشرف يرى)
 POST /chick-shipments/:shipmentId/distribute    (المشرف — يصادق ويوزّع، والدفعة «قيد الوصول»)
-GET /chick-shipments/:shipmentId                (لم يُبنَ — دفعة تأكيد المربّي)
-POST /chick-shipments/:shipmentId/confirm       (لم يُبنَ — المربّي يؤكد بالصناديق)
+GET /chick-shipments/:shipmentId                (مفلترٌ بالإسناد — والمربّي أعمى عن المتوقَّع)
+POST /chick-shipments/:shipmentId/confirm       (المربّي — يؤكد بالصناديق، وبه تبدأ الدفعة)
 ```
 
 > **ولا `POST /batches`** — **الدفعةُ أثرُ التوزيع لا فعلٌ مستقلّ** (160 «عاشرًا» ٣، والقرار 275): تُنشأ «قيد الوصول» داخل معاملة التوزيع، **ولا مسارَ في النظام يُنشئها سواه**.
