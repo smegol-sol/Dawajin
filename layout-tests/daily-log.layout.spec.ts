@@ -73,8 +73,13 @@ async function stub(page: Page, path: string, body: unknown): Promise<void> {
   });
 }
 
+/** عنبرٌ إضافيّ في نفس المزرعة — يُستعمل لإظهار سطر عدد العنابر المُسندة. */
+function extraHouse(id: number, name: string): typeof HOUSE {
+  return { ...HOUSE, id, name };
+}
+
 /** يبلغ شاشة السجل اليوميّ بدفعةٍ نشطة — فيُعرض النموذج كاملًا. */
-async function reachDailyLog(page: Page): Promise<void> {
+async function reachDailyLog(page: Page, houses: (typeof HOUSE)[] = [HOUSE]): Promise<void> {
   await page.addInitScript(() => {
     window.localStorage.setItem("dawajin.auth.token", "layout-test-token");
   });
@@ -83,7 +88,7 @@ async function reachDailyLog(page: Page): Promise<void> {
     sites: [{ id: 1, name: "الموقع", farmCount: 1, houseCount: 1 }],
   });
   await stub(page, "**/api/sites/*/farms", { farms: [FARM] });
-  await stub(page, "**/api/farms/*/houses", { houses: [HOUSE] });
+  await stub(page, "**/api/farms/*/houses", { houses });
   await stub(page, "**/api/houses/*/batches", { batches: [ACTIVE_BATCH] });
   await stub(page, "**/api/products", { products: [FEED] });
 
@@ -136,5 +141,28 @@ test.describe("شاشة السجل اليوميّ", () => {
       )
     );
     expect(scrollable).toBe(true);
+  });
+
+  /**
+   * **سطرُ عدد العنابر — نصٌّ لا يحكم إعرابَ ما بعده (القرار 287).**
+   *
+   * **وكان «ولك ${n} عنبرٌ آخر» فيُعرض «ولك 3 عنبرٌ آخر»** — عددٌ يحكم تمييزَه
+   * ولا يوافقه. **والصيغةُ اليوم «تسمية: عدد»**: لا معدودَ بعد العدد، **و«بينها»
+   * جمعٌ دائمًا لأن السطر لا يُعرض إلا عند عنبرين فأكثر**.
+   *
+   * **واتجاهُ خطئه معلَن (القرار 270): يمرّ ظلمًا على كل نصٍّ آخر** — **لا يحكم
+   * عربيّةً ولا يمسح الشاشة**، بل **يثبّت هذه الصيغة بعينها** فلا تعود إلى
+   * «عدد + معدود» بسهو. **ولا يفشل ظلمًا:** يسقط على تغيير هذا السطر وحده.
+   */
+  test("سطرُ العنابر المُسندة نصٌّ بلا معدودٍ بعد العدد", async ({ page }) => {
+    await reachDailyLog(page, [
+      HOUSE,
+      extraHouse(6, "العنبر الأوسط"),
+      extraHouse(7, "العنبر الجنوبي"),
+    ]);
+
+    await expect(
+      page.getByText("العنابر المُسندة إليك: 3 — والتبديل بينها لم يُبنَ بعد")
+    ).toBeVisible();
   });
 });
