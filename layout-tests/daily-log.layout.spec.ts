@@ -1,8 +1,11 @@
 import { expect, test, type Page } from "@playwright/test";
 
 /**
- * تأكيداتُ تخطيطِ شاشة السجل اليوميّ — **زرُّ الحفظ وتسمياتُ التبويبات**
- * (§2 و§8.9، والقرار 283).
+ * تأكيداتُ تخطيطِ شاشة السجل اليوميّ — **زرُّ الحفظ** (§2، والقرار 283).
+ *
+ * **وقطعُ تسميات التبويبات انتقل إلى `tab-labels.layout.spec.ts`** حيث
+ * يُفحص **لكل دورٍ لا للمربّي وحده** (القرار 284) — **وحارسٌ يفحص شريطًا
+ * واحدًا يترك الباقين**.
  *
  * **ولماذا هنا لا في اختبارات jest:** `react-test-renderer` **لا يُنفّذ تخطيط
  * Yoga إطلاقًا** — لا إحداثيات ولا عرضَ نصٍّ يُقاس (القرار #80). **واختبارُ
@@ -12,8 +15,6 @@ import { expect, test, type Page } from "@playwright/test";
  * **والشبكة مستبدَلةٌ بـ`page.route`** كما في بقية ملفات هذا المجلد: التأكيدات
  * على التخطيط، **فربطُها بقاعدة بيانات يجعل فشلها غامضًا بين تخطيطٍ وبيانات**.
  */
-
-const FARMER_TABS = ["الرئيسية", "التسجيل", "الصحة", "الاستلام", "سجلاتي"] as const;
 
 const ME = {
   id: 1,
@@ -135,37 +136,5 @@ test.describe("شاشة السجل اليوميّ", () => {
       )
     );
     expect(scrollable).toBe(true);
-  });
-
-  /**
-   * **ولا تسميةَ تبويبٍ مقطوعة** (§8.9).
-   *
-   * **والقطعُ يُقاس ولا يُرى:** `numberOfLines: 1` **يقصّ بـ`text-overflow`
-   * فيبقى العنصر «مرئيًّا»** — فتأكيدُ الرؤية يخضرّ على تسميةٍ مقصوصة.
-   * **والقياسُ الصحيح `scrollWidth > clientWidth`** — عرضُ النصّ مقابل المتاح.
-   *
-   * **وفاحصُ `tab-labels` يفحص المصدر لا القطع** (أن التسمية من مكوّننا)،
-   * **فهذا يسدّ ما لا يراه** — والقطعُ قابلٌ للفحص آليًّا، وهذا فحصُه.
-   */
-  test("ولا تسميةَ تبويبٍ مقطوعة", async ({ page }) => {
-    await reachDailyLog(page);
-
-    const labels = await page.evaluate(() =>
-      Array.from(document.querySelectorAll('[role="tab"]')).map((tab) => {
-        const label = Array.from(tab.querySelectorAll("div")).find(
-          (element) => element.children.length === 0 && element.textContent.trim().length > 0
-        );
-        if (label === undefined) return { text: "", overflow: 0 };
-        return {
-          text: label.textContent.trim(),
-          overflow: label.scrollWidth - label.clientWidth,
-        };
-      })
-    );
-
-    // **الخمسُ حاضرة** — فلا يخضرّ التأكيد على شريطٍ لم يُصيَّر
-    expect(labels).toHaveLength(FARMER_TABS.length);
-    // **ويُسمّى النصّ مع الرقم** — فرسالة الفشل تقول أيَّ تسميةٍ قُطعت وبكم
-    expect(labels.filter((one) => one.overflow > 0)).toEqual([]);
   });
 });
