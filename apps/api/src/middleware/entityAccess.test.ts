@@ -104,6 +104,71 @@ describe("enforceEntityAccess — فروع دفاعية", () => {
   });
 });
 
+describe("enforceEntityAccess — المسحُ العميق (القرار 275)", () => {
+  /**
+   * **حدُّ العمق يمسك فعلًا** — عنبرٌ أعمقُ من `BODY_SCAN_MAX_DEPTH` **لا
+   * يُرى**، فيمضي الطلب بلا استعلامٍ واحد (**والقاعدة الوهمية تفشل لو
+   * استُدعيت**).
+   *
+   * **وهو شاهدُ حدٍّ لا شاهدُ حراسة:** يُثبت أين يقف المسح، **ويسقط يوم
+   * يُبنى جسمٌ أعمق منه** — وعندها يُرفع الحدُّ بقرار لا بالسكوت.
+   */
+  it("عنبرٌ أعمقُ من حدّ المسح لا يُرى — والحدُّ مُعلَنٌ لا خفيّ", async () => {
+    const middleware = enforceEntityAccess(throwingDb() as never);
+    const next = vi.fn();
+    const req = {
+      user: { id: 1, tenantId: 1, role: "supervisor" },
+      params: {},
+      query: {},
+      body: { a: { b: { c: { d: { e: { houseId: 7 } } } } } },
+    } as unknown as Request;
+
+    await middleware(req, {} as Response, next);
+
+    expect(next.mock.calls[0]?.[0]).toBeUndefined();
+  });
+});
+
+describe("enforceEntityAccess — شحنةُ الكتاكيت (القرار 275)", () => {
+  it("401 عندما tenantId يساوي null على مسار **الشحنة** (مدخل سادس)", async () => {
+    const middleware = enforceEntityAccess(throwingDb() as never);
+    const next = vi.fn();
+
+    await middleware(
+      fakeRequest({ id: 1, tenantId: null, role: "supervisor" }, { shipmentId: "1" }),
+      {} as Response,
+      next
+    );
+
+    const error = next.mock.calls[0]?.[0] as HttpError;
+    expect(error).toBeInstanceOf(HttpError);
+    expect(error.status).toBe(401);
+  });
+
+  /**
+   * **معرّفٌ ليس رقمًا ← 404 بلا استعلام** — **والقاعدة الوهمية تفشل فورًا لو
+   * استُدعيت**، فهي شاهدُ أن الدائرة قُصّرت.
+   *
+   * **و404 لا 403 هنا خلافًا للمخزن:** الشحنةُ لا نطاقَ إسنادٍ لها، **وما
+   * يفحصه الحارس وجودُها** — **ومعرّفٌ لا يشير إلى صفٍّ غيرُ موجود**
+   * (المبدأ السادس).
+   */
+  it("404 لمعرّف شحنة ليس رقمًا — بلا استعلام قاعدة — الرادُّ `assertChickShipmentExists`", async () => {
+    const middleware = enforceEntityAccess(throwingDb() as never);
+    const next = vi.fn();
+
+    await middleware(
+      fakeRequest({ id: 1, tenantId: 1, role: "supervisor" }, { shipmentId: "شحنة" }),
+      {} as Response,
+      next
+    );
+
+    const error = next.mock.calls[0]?.[0] as HttpError;
+    expect(error).toBeInstanceOf(HttpError);
+    expect(error.status).toBe(404);
+  });
+});
+
 describe("enforceEntityAccess — عنونة المخزن (القراران 193 و199)", () => {
   /**
    * **الفرع الدفاعي نفسه من مدخل رابع** (القرار 193) — الفرع الدفاعي نفسه من مدخل رابع، ومصدرا

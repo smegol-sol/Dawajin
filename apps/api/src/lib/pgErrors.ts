@@ -115,6 +115,12 @@ const CONSTRAINT_MESSAGES: Record<string, string> = {
   // بالرسالة العامة «قيمة مكررة» لا بسببه.
   user_assignments_warehouse_period_ex: "للمستخدم إسناد على هذا المخزن في مدة متداخلة",
   houses_farm_name_uq: "يوجد عنبر بهذا الاسم في المزرعة بالفعل",
+  // **ثلاثةٌ وجدت كاتبَها بالقرار 275** — وكانت في القاعدة بلا رسالة منذ 274،
+  // **كما انتظرت رسالةُ إسناد المخزن كاتبَها** (القرار 247): **رسالةٌ بلا
+  // مسارٍ يرفعها لا شاهدَ لها**. **وأولُها يقابله فحصٌ مسبق تحت القفل** برمز
+  // `house_has_open_batch`، **فالرمز مخصَّصٌ ليتطابق المساران** (القرار #119).
+  chick_shipment_distributions_shipment_house_uq: "لهذا العنبر حصة من هذه الشحنة بالفعل",
+  chick_shipment_distributions_batch_uq: "لهذه الدفعة توزيعة بالفعل",
   products_system_feed_uq: "يوجد صنف علف نظامي لهذه المرحلة بالفعل",
   breed_standards_tenant_breed_day_uq: "يوجد معيار لهذه السلالة واليوم بالفعل",
   breed_standards_global_breed_day_uq: "يوجد معيار عالمي لهذه السلالة واليوم بالفعل",
@@ -136,6 +142,13 @@ const CONSTRAINT_OVERRIDES: Record<string, ConstraintResponse> = {
   farms_site_name_uq: {
     code: "duplicate_name",
     message: "توجد مزرعة بهذا الاسم في هذا الموقع",
+  },
+  // **يقابله فحصٌ مسبق تحت القفل في `chickShipmentService`** برمز
+  // `house_has_open_batch` (القرار 275) — **فالرمز مخصَّصٌ ليتطابق المساران**،
+  // **والفرق بينهما يظهر تحت التزامن وحده فلا يكشفه اختبار عادي** (#119).
+  batches_one_open_per_house_uq: {
+    code: "house_has_open_batch",
+    message: "عنبرٌ فيه دفعةٌ قائمة — لا يستقبل حصةً ثانية حتى تُغلق",
   },
 };
 

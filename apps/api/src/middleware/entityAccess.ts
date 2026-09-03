@@ -1,5 +1,6 @@
 import {
   batches,
+  chickShipments,
   farms,
   housePrepCycles,
   housePrepSteps,
@@ -35,20 +36,76 @@ function firstDefinedPrimitive(...values: unknown[]): string | undefined {
 type AuthenticatedUser = NonNullable<Request["user"]>;
 
 /**
- * يشتق houseId من houseId مباشر، أو من batchId (يُحل لعنبره)، أو من stepId
+ * **حدُّ عمق المسح** — الجسمُ يُقرأ حتى هذا العمق لا أبعد.
+ *
+ * **وأربعةٌ تكفي لكل شكلٍ قائم أو مرتقب:** `{ distributions: [ { houseId } ] }`
+ * عمقُه اثنان. **والحدُّ يمنع جسمًا مُصطنَعًا عميقًا من أن يُشغّل المسح بلا
+ * نهاية** — **ولا يُخفي شيئًا اليوم**، ويسقط يوم يُبنى شكلٌ أعمق منه.
+ */
+const BODY_SCAN_MAX_DEPTH = 4;
+
+/**
+ * **يجمع كلَّ `houseId` في الجسم لا أوّلَه** (القرار 275).
+ *
+ * **والعطب قِيس لا استُنتج:** `firstDefinedPrimitive` **يتجاهل الكائنات
+ * المتداخلة عمدًا**، **فجسمٌ يحمل `{ distributions: [{ houseId }, …] }` كان
+ * يمرّ بلا فحص إسنادٍ واحد** — **ومسارُ التوزيع يحمل عنابرَ عدّة بطبعه**،
+ * فلا يُسطَّح كما سُطّحت حقولُ المستوى في القرار 250.
+ *
+ * **ومسحٌ شامل لا قائمةٌ موجبة بأسماء الحقول** — **وهي القاعدة الوحيدة التي
+ * تنقلب فيها القائمةُ الموجبة إلى ثقب**: حقلٌ لا يُدرَج فيها **لا يُفحص**،
+ * فيمرّ صامتًا. **والقائمة الموجبة تحمي حين يكون عدمُ الإدراج منعًا** (184)،
+ * **وتضرّ حين يكون عدمُ الإدراج إعفاءً.**
+ */
+function collectHouseIdsDeep(value: unknown, depth: number, out: Set<string>): void {
+  if (depth > BODY_SCAN_MAX_DEPTH) return;
+  if (Array.isArray(value)) {
+    for (const item of value) collectHouseIdsDeep(item, depth + 1, out);
+    return;
+  }
+  if (typeof value !== "object" || value === null) return;
+  for (const [key, item] of Object.entries(value)) {
+    if (key === "houseId") {
+      const raw = firstDefinedPrimitive(item);
+      if (raw !== undefined) out.add(raw);
+      continue;
+    }
+    collectHouseIdsDeep(item, depth + 1, out);
+  }
+}
+
+/**
+ * **معرّفات العنابر المباشرة — الرابط والاستعلام والجسم كلَّه.**
+ *
+ * **وقيمةٌ حاضرةٌ غير معلومة تُرفض ولا تُمرَّر صامتة** — نفس حكم حقول المخزن
+ * (القرار 193). **وكانت تصير `NaN` فتسقط في `if (houseId)` فيمضي الطلب إلى
+ * فحص المزرعة** — **تمريرٌ صامت لا رفض**.
+ */
+function resolveDirectHouseIds(req: Request): number[] {
+  const raw = new Set<string>();
+  for (const value of [req.params.houseId, req.query.houseId]) {
+    const primitive = firstDefinedPrimitive(value);
+    if (primitive !== undefined) raw.add(primitive);
+  }
+  collectHouseIdsDeep(req.body, 0, raw);
+
+  return [...raw].map((value) => {
+    const id = Number(value);
+    if (!Number.isInteger(id) || id <= 0) {
+      throw new HttpError(403, "forbidden", "قيمة houseId غير معلومة");
+    }
+    return id;
+  });
+}
+
+/**
+ * يشتق houseId من batchId (يُحل لعنبره)، أو من stepId
  * (خطوة ← دورتها ← عنبرها، القرار 221) — القيمة الوحيدة المخوَّلة باشتقاق
  * العنبر من كيانٍ آخر في كل المشروع (راجع تعليق no-unvetted-house-id-reuse
  * أعلى eslint-rules/no-unvetted-house-id-reuse.mjs). **فالمعرّف المشتق يُحلّ
  * في الفرض المركزي لا بدالة جلب في كل خدمة** — المبدأ الأول.
  */
 async function resolveHouseId(db: Database, req: Request): Promise<number | undefined> {
-  const rawHouseId = firstDefinedPrimitive(
-    req.params.houseId,
-    req.query.houseId,
-    (req.body as Record<string, unknown> | undefined)?.houseId
-  );
-  if (rawHouseId) return Number(rawHouseId);
-
   const rawBatchId = firstDefinedPrimitive(
     req.params.batchId,
     req.query.batchId,
@@ -324,6 +381,50 @@ function isConfirmationPath(req: Request): boolean {
   return CONFIRMATION_PATH_SUFFIXES.some((suffix) => path.endsWith(suffix));
 }
 
+/**
+ * **شحنةُ الكتاكيت — وجودٌ داخل المستأجر لا إسناد** (القرار 275).
+ *
+ * **ولا نطاقَ إسنادٍ لشحنةٍ قبل توزيعها**: لا مزرعةَ لها ولا عنبر — **وهي
+ * كيانُ مستأجرٍ كالمورّد والناقل**. **و160 «أولًا» لا يقصر المصادقة على
+ * مشرفٍ بعينه**: «المشرف يصادق ويوزّعها»، **والقيدُ يقع على العنابر التي
+ * يوزّع إليها** — **ويفرضه المسحُ العميق أعلاه على كل `houseId` في الجسم**.
+ *
+ * **فما يفعله هذا الحارس الوجودُ وحده — وهو فرضٌ لا صورة:** معرّفُ شحنةِ
+ * مستأجرٍ آخر **يُردّ 404 قبل أن يبلغ الخدمة** (المبدأ السادس)، **ولولاه لكان
+ * النمطُ في `ENTITY_ID_PATH_PATTERNS` بلا محلِّلٍ يقرؤه** — **فرضًا صوريًّا**
+ * (القرار 229).
+ *
+ * **وحدٌّ معلن:** **قراءةُ شحنةٍ مُوزَّعة ليست مفلترةً بالإسناد بعدُ** —
+ * **يسقط يوم يُبنى مسارُ قراءتها في دفعة تأكيد المربّي، وعندها يُحسم أيرى
+ * المشرفُ توزيعاتِ مزارعه وحدها.**
+ *
+ * @limit no-route GET /api/chick-shipments/:shipmentId
+ *
+ * @throws HttpError 404 — شحنةٌ خارج المستأجر تبدو غير موجودة
+ */
+async function assertChickShipmentExists(
+  db: Database,
+  req: Request,
+  user: AuthenticatedUser
+): Promise<void> {
+  const raw = firstDefinedPrimitive(req.params.shipmentId);
+  if (raw === undefined) return;
+  if (user.tenantId == null) {
+    throw new HttpError(401, "unauthorized", "الحساب غير مرتبط بمستأجر");
+  }
+  const id = Number(raw);
+  if (!Number.isInteger(id) || id <= 0) {
+    throw new HttpError(404, "not_found", "شحنة الكتاكيت غير موجودة");
+  }
+
+  const [shipment] = await db
+    .select({ id: chickShipments.id })
+    .from(chickShipments)
+    .where(and(eq(chickShipments.id, id), eq(chickShipments.tenantId, user.tenantId)))
+    .limit(1);
+  if (!shipment) throw new HttpError(404, "not_found", "شحنة الكتاكيت غير موجودة");
+}
+
 /** `userId` من الرابط وحده — **لا من الجسم**: `POST /api/users` يُنشئ ولا يستهدف. */
 function resolveTargetUserId(req: Request): number | undefined {
   const raw = firstDefinedPrimitive(req.params.userId);
@@ -479,6 +580,51 @@ async function assertWarehouseRefs(
 }
 
 /**
+ * **معرّفاتُ الأدوار المقيَّدة بالإسناد — أضيقُها نطاقًا يقصر الدائرة.**
+ *
+ * **مفصولٌ عن `enforceEntityAccess` لأن الحدَّ يُحترم بالفصل لا برفعه**
+ * (`complexity`)، **والفصلُ عند حدٍّ معنويّ**: ما فوقه أحكامٌ تسري على كل دور
+ * (المخزن والشحنة)، وما هنا أحكامُ إسنادٍ لا تُقرأ إلا لمن يقيّده الإسناد.
+ */
+async function assertScopedIds(db: Database, user: AuthenticatedUser, req: Request): Promise<void> {
+  // **المستخدم المستهدَف قبل بقية المعرّفات** — `POST /api/users/:userId/…`
+  // يحمل الاثنين أحيانًا، **والأضيق نطاقًا يُفحص** كما يقصر `houseId`
+  // الدائرة قبل `farmId` أدناه.
+  const targetUserId = resolveTargetUserId(req);
+  if (targetUserId !== undefined) {
+    await assertUserAccess(db, user, targetUserId);
+  }
+
+  // **كلُّ عنبرٍ في الطلب يُفحص لا أوّلُه** (القرار 275) — ومسارُ التوزيع
+  // يحمل عنابرَ عدّة في مصفوفةٍ داخل الجسم، **فواحدٌ مفحوصٌ يعني بقيّتَها
+  // بلا فحص**.
+  const directHouseIds = resolveDirectHouseIds(req);
+  if (directHouseIds.length > 0) {
+    for (const id of directHouseIds) {
+      await assertHouseAssignment(db, user, id);
+    }
+    return;
+  }
+
+  const houseId = await resolveHouseId(db, req);
+  if (houseId) {
+    await assertHouseAssignment(db, user, houseId);
+    return;
+  }
+
+  const farmId = resolveFarmId(req);
+  if (farmId) {
+    await assertFarmAssignment(db, user, farmId);
+    return;
+  }
+
+  const siteId = resolveSiteId(req);
+  if (siteId) {
+    await assertSiteAssignment(db, user, siteId);
+  }
+}
+
+/**
  * enforceEntityAccess — الطبقة الثالثة والأخيرة في الفرض المركزي.
  * تمسح params+query+body عن معرّفات الكيانات وتطبّق قواعد الإسناد
  * (backend-technical-spec.md §12.1). الوجود يُفحص قبل التعيين دائمًا —
@@ -525,6 +671,11 @@ export function enforceEntityAccess(db: Database) {
         await assertWarehouseAccess(db, user, transferWarehouseId);
       }
 
+      // **ووجودُ شحنة الكتاكيت يُفحص لكل دور** — قبل قصر الدائرة، كما تُفحص
+      // حقولُ المخزن: **الوجودُ حكمُ مستأجرٍ لا حكمُ إسناد**، **ولو فُحص بعد
+      // الخروج المبكر لمرّ المالك بمعرّف شحنةٍ من مستأجرٍ آخر إلى الخدمة**.
+      await assertChickShipmentExists(db, req, user);
+
       // **من ليس في قائمة معلومة لا يمرّ** (القرار 194، إتمامًا للقرار 184):
       // كان الشرط «غير مقيَّد بالإسناد ← يمرّ»، **وغيرُ المقيَّد يشمل كل دور
       // غير معلوم** — فرمزٌ بدور محذوف كان يتخطّى الحارس كله. **والمالك يمرّ
@@ -537,33 +688,7 @@ export function enforceEntityAccess(db: Database) {
         throw new HttpError(403, "forbidden", "غير مخوَّل بالوصول لهذا الكيان");
       }
 
-      // **المستخدم المستهدَف قبل بقية المعرّفات** — `POST /api/users/:userId/…`
-      // يحمل الاثنين أحيانًا، **والأضيق نطاقًا يُفحص** كما يقصر `houseId`
-      // الدائرة قبل `farmId` أدناه.
-      const targetUserId = resolveTargetUserId(req);
-      if (targetUserId !== undefined) {
-        await assertUserAccess(db, user, targetUserId);
-      }
-
-      const houseId = await resolveHouseId(db, req);
-      if (houseId) {
-        await assertHouseAssignment(db, user, houseId);
-        next();
-        return;
-      }
-
-      const farmId = resolveFarmId(req);
-      if (farmId) {
-        await assertFarmAssignment(db, user, farmId);
-        next();
-        return;
-      }
-
-      const siteId = resolveSiteId(req);
-      if (siteId) {
-        await assertSiteAssignment(db, user, siteId);
-      }
-
+      await assertScopedIds(db, user, req);
       next();
     } catch (error) {
       next(error);

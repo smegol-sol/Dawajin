@@ -18,6 +18,7 @@ import { requestId } from "./middleware/requestId";
 import { requireTenant } from "./middleware/tenant";
 import { authProtectedRouter } from "./routes/authProtected";
 import { authPublicRouter } from "./routes/authPublic";
+import { chickShipmentsRouter } from "./routes/chickShipments";
 import { farmsRouter } from "./routes/farms";
 import { healthRouter } from "./routes/health";
 import { housesRouter } from "./routes/houses";
@@ -63,6 +64,12 @@ export const ENTITY_ID_PATH_PATTERNS = [
   // المستخدم المستهدَف — `assertUserAccess` يحلّه بـ`visibleUserCondition`
   // (القرار 251). **ونمطٌ بلا محلِّل فرضٌ صوريّ** (القرار 229)، فأُضيفا معًا.
   "/api/users/:userId",
+  // **شحنةُ الكتاكيت — وجودٌ داخل المستأجر لا إسناد** (القرار 275).
+  // **ولا نطاقَ إسنادٍ لها قبل توزيعها** (لا مزرعة ولا عنبر)، **والقيد يقع
+  // على العنابر في الجسم** — يفرضه المسحُ العميق في `enforceEntityAccess`.
+  // **ومحلِّلُه `assertChickShipmentExists` أُضيف معه** فلا نمطَ بلا محلِّل
+  // (القرار 229).
+  "/api/chick-shipments/:shipmentId",
 ] as const;
 
 export function createApp(db: Database, env: Env, logger: Logger): Express {
@@ -158,6 +165,7 @@ export function createApp(db: Database, env: Env, logger: Logger): Express {
   api.use(prepCycleRouter(db));
   api.use(inventoryRouter(db));
   api.use(inventoryTransferRouter(db));
+  api.use(chickShipmentsRouter(db));
   app.use(api);
 
   app.use(errorHandler(logger));
