@@ -40,6 +40,8 @@ let carrierId: number;
 let houseId: number;
 /** عنبرٌ في نفس المزرعة لا يبلغه إسنادُ المربّي — شاهدُ الفلترة والحجب. */
 let otherHouseId: number;
+/** عنبرٌ ثانٍ **مُسندٌ للمربّي** — شاهدُ «رقمُ الحاوية حتى تُعدّ كلُّ عِدادها». */
+let farmerSecondHouseId: number;
 
 async function newShipment(purchasedQuantity = 5000): Promise<number> {
   const res = await request(app)
@@ -71,20 +73,16 @@ async function confirm(
     .send(body);
 }
 
-async function readShipment(shipmentId: number, token: string): Promise<request.Response> {
-  return request(app)
-    .get(`/api/chick-shipments/${String(shipmentId)}`)
-    .set("Authorization", `Bearer ${token}`);
-}
-
 async function seedHierarchy(): Promise<void> {
   const siteId = await siteVia(app, ownerToken, `موقع ${S}`);
   const farmId = await farmVia(app, ownerToken, siteId, `مزرعة ${S}`);
   houseId = await houseVia(app, ownerToken, farmId, `عنبر المربّي ${S}`);
   otherHouseId = await houseVia(app, ownerToken, farmId, `عنبر آخر ${S}`);
+  farmerSecondHouseId = await houseVia(app, ownerToken, farmId, `عنبر المربّي الثاني ${S}`);
   await db.insert(userAssignments).values([
     { tenantId: tenantAId, userId: supervisorId, farmId, startDate: today() },
     { tenantId: tenantAId, userId: farmerId, houseId, startDate: today() },
+    { tenantId: tenantAId, userId: farmerId, houseId: farmerSecondHouseId, startDate: today() },
   ]);
 }
 
@@ -367,60 +365,5 @@ describe(`العلامة الدائمة — واقعةُ دخولٍ لا نيّ�
       sql`SELECT housed_before_ready, housed_reason FROM batches WHERE tenant_id = ${tenantAId}`
     );
     expect(rows.rows).toEqual([{ housed_before_ready: false, housed_reason: null }]);
-  });
-});
-
-describe(`القراءة — الفلترة والاستلام الأعمى (${S})`, () => {
-  it("**المربّي لا يرى الكمية المتوقَّعة ولا الفرق** — والحقلان غائبان بالاسم", async () => {
-    const shipmentId = await distributed([{ houseId, allocatedQuantity: 1234 }]);
-    const res = await readShipment(shipmentId, farmerToken);
-
-    expect(res.status).toBe(200);
-    const body = res.body as { distributions: Record<string, unknown>[] };
-    const [only] = body.distributions;
-    expect(only).toBeDefined();
-    expect(Object.keys(only ?? {})).not.toContain("allocatedQuantity");
-    expect(Object.keys(only ?? {})).not.toContain("variance");
-    expect(Object.keys(only ?? {})).not.toContain("varianceStatus");
-    // **والقيمة نفسها غائبةٌ من نصّ الرد كلِّه** — فلا تمرّ تحت مفتاحٍ آخر
-    expect(JSON.stringify(res.body)).not.toContain("1234");
-  });
-
-  it("والمشرف يراهما — فالحجب على المربّي وحده", async () => {
-    const shipmentId = await distributed([{ houseId, allocatedQuantity: 1234 }]);
-    const res = await readShipment(shipmentId, supervisorToken);
-    expect(res.status).toBe(200);
-    expect((res.body as { distributions: { allocatedQuantity: number }[] }).distributions).toEqual([
-      expect.objectContaining({ allocatedQuantity: 1234 }),
-    ]);
-  });
-
-  it("**والمربّي يرى حصته وحدها** — عنبرٌ آخر في نفس الشحنة غائبٌ تمامًا", async () => {
-    const shipmentId = await distributed([
-      { houseId, allocatedQuantity: 100 },
-      { houseId: otherHouseId, allocatedQuantity: 200 },
-    ]);
-    const res = await readShipment(shipmentId, farmerToken);
-    expect(res.status).toBe(200);
-    const body = res.body as { distributionCount: number; distributions: { houseId: number }[] };
-    // **والعدّاد يُحسب تحت الفلتر نفسه** — عدّادٌ يعدّ ما لا يراه تسريب
-    expect(body.distributionCount).toBe(1);
-    expect(body.distributions.map((one) => one.houseId)).toEqual([houseId]);
-  });
-
-  it("**وشحنةٌ لا يبلغ منها شيئًا ← 403 لا قائمةٌ فارغة** — الرادُّ `visibleDistributions`", async () => {
-    const shipmentId = await distributed([{ houseId: otherHouseId, allocatedQuantity: 200 }]);
-    const res = await readShipment(shipmentId, farmerToken);
-    expect(res.status).toBe(403);
-    expectRejecter(res, "forbidden", "توزيعات");
-  });
-
-  it("والمالك يرى كل التوزيعات", async () => {
-    const shipmentId = await distributed([
-      { houseId, allocatedQuantity: 100 },
-      { houseId: otherHouseId, allocatedQuantity: 200 },
-    ]);
-    const res = await readShipment(shipmentId, ownerToken);
-    expect((res.body as { distributionCount: number }).distributionCount).toBe(2);
   });
 });

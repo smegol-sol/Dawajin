@@ -2477,81 +2477,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "shipmentId": {
-                      "type": "integer"
-                    },
-                    "breed": {
-                      "type": "string"
-                    },
-                    "supplierId": {
-                      "type": "integer"
-                    },
-                    "carrierId": {
-                      "type": "integer"
-                    },
-                    "purchasedQuantity": {
-                      "type": "integer"
-                    },
-                    "approved": {
-                      "type": "boolean"
-                    },
-                    "distributionCount": {
-                      "type": "integer"
-                    },
-                    "distributions": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "description": "والمربّي لا يرى `allocatedQuantity` ولا `variance` — الاستلام الأعمى (#160 «ثانيًا»)",
-                        "properties": {
-                          "distributionId": {
-                            "type": "integer"
-                          },
-                          "houseId": {
-                            "type": "integer"
-                          },
-                          "batchId": {
-                            "type": "integer"
-                          },
-                          "confirmed": {
-                            "type": "boolean"
-                          },
-                          "countedQuantity": {
-                            "type": ["integer", "null"]
-                          },
-                          "deadOnArrival": {
-                            "type": ["integer", "null"]
-                          },
-                          "allocatedQuantity": {
-                            "type": "integer"
-                          },
-                          "variance": {
-                            "type": ["integer", "null"]
-                          },
-                          "varianceStatus": {
-                            "type": ["string", "null"]
-                          }
-                        },
-                        "required": [
-                          "distributionId",
-                          "houseId",
-                          "batchId",
-                          "confirmed",
-                          "countedQuantity",
-                          "deadOnArrival"
-                        ]
-                      }
-                    }
-                  },
-                  "required": [
-                    "shipmentId",
-                    "breed",
-                    "approved",
-                    "distributionCount",
-                    "distributions"
-                  ]
+                  "$ref": "#/components/schemas/ChickShipmentDetail"
                 }
               }
             }
@@ -4254,7 +4180,7 @@
           },
           "purchasedBirdCount": {
             "type": "integer",
-            "description": "**غائب في رد المربّي** — هو allocated_quantity مجمَّدًا، والاستلام الأعمى يمنع رؤيته (القرار 276)"
+            "description": "**غائب في رد العادّ حتى يعدّ** — يُحجب عن المربّي ما دامت الدفعة «قيد الوصول»، ويُقرأ بعد تأكيده (القرار 286؛ وهو allocated_quantity مجمَّدًا)"
           }
         }
       },
@@ -4267,6 +4193,92 @@
             "items": {
               "$ref": "#/components/schemas/Batch"
             }
+          }
+        }
+      },
+      "ChickShipmentDetail": {
+        "type": "object",
+        "required": [
+          "shipmentId",
+          "breed",
+          "supplierId",
+          "carrierId",
+          "approved",
+          "distributionCount",
+          "distributions"
+        ],
+        "properties": {
+          "shipmentId": {
+            "type": "integer"
+          },
+          "breed": {
+            "type": "string"
+          },
+          "supplierId": {
+            "type": "integer"
+          },
+          "carrierId": {
+            "type": "integer"
+          },
+          "purchasedQuantity": {
+            "type": "integer",
+            "description": "**غائب عن العادّ حتى تكتمل حصصُه المرئية** — رقمُ الحاوية يحدّ حصّةً لم تُعدّ بالطرح (القرار 286)"
+          },
+          "approved": {
+            "type": "boolean"
+          },
+          "distributionCount": {
+            "type": "integer",
+            "description": "يُحسب تحت فلتر الرؤية نفسه (#129)"
+          },
+          "distributions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChickDistribution"
+            }
+          }
+        }
+      },
+      "ChickDistribution": {
+        "type": "object",
+        "required": [
+          "distributionId",
+          "houseId",
+          "batchId",
+          "confirmed",
+          "countedQuantity",
+          "deadOnArrival"
+        ],
+        "properties": {
+          "distributionId": {
+            "type": "integer"
+          },
+          "houseId": {
+            "type": "integer"
+          },
+          "batchId": {
+            "type": "integer"
+          },
+          "confirmed": {
+            "type": "boolean"
+          },
+          "countedQuantity": {
+            "type": ["integer", "null"]
+          },
+          "deadOnArrival": {
+            "type": ["integer", "null"]
+          },
+          "allocatedQuantity": {
+            "type": "integer",
+            "description": "**غائب عن العادّ قبل تأكيد هذه الحصة** — ويُقرأ بعده (القرار 286)"
+          },
+          "variance": {
+            "type": ["integer", "null"],
+            "description": "**يُحجب مع المخصَّص** — يكشفه بالطرح"
+          },
+          "varianceStatus": {
+            "type": ["string", "null"],
+            "enum": ["مطابق", "فرق مسجّل", null]
           }
         }
       }

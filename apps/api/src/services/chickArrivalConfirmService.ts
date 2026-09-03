@@ -49,6 +49,15 @@ export interface ConfirmArrivalResult {
   deadOnArrival: number;
   /** **المستلم المؤكَّد — مقامُ كل نسبة** (160 «عاشرًا» ١). */
   receivedBirdCount: number;
+  /**
+   * **الفرقُ يظهر بعد الحفظ لا قبله** — §3.6 نصًّا: «**بعد الحفظ فقط** يظهر
+   * الفرق»، **والقرار 286 يجعلها قاعدةً عامّة**: الحجبُ قبل العدّ لا بعده.
+   *
+   * **وكان غائبًا عن الرد** — فالعادُّ يعدّ ولا يُقال له ماذا وجد، **ويلزمه
+   * طلبٌ ثانٍ يقرأ الشحنة**. **وهذا ما يكسبه الحكم لا ما يفقده.**
+   */
+  variance: number;
+  varianceStatus: ShipmentVarianceStatus;
   startDate: string;
   housedBeforeReady: boolean;
   houseStatusBefore: string;
@@ -211,6 +220,10 @@ async function writeArrival(tx: Tx, args: WriteArrivalArgs): Promise<ConfirmArri
     countedQuantity,
     deadOnArrival: input.deadOnArrival,
     receivedBirdCount,
+    // **بعد الحفظ فقط يظهر الفرق** (§3.6 نصًّا، والقاعدة العامّة في 286) —
+    // **والعادُّ قد عدّ، فلا شيء يُحجب عنه بعدها**
+    variance,
+    varianceStatus: varianceStatusOf(variance),
     startDate: batch.startDate,
     housedBeforeReady: args.housedBeforeReady,
     houseStatusBefore: args.statusBefore,

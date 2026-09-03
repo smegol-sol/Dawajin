@@ -47,6 +47,16 @@ let houseId: number;
 let otherHouseId: number;
 /** عنبرُ مستأجرٍ آخر — شاهدُ الردّ 404 للمالك. */
 let foreignHouseId: number;
+/**
+ * **عنبرٌ ثانٍ مُسندٌ للمربّي، مفصولٌ لشواهد «بعد التأكيد»** — **فلا يعتمد
+ * شاهدٌ على ترتيب تشغيل غيره**: التأكيد يقع مرةً واحدة على العنبر، **وشاهدُ
+ * «قبل التأكيد» يبقى على عنبرٍ لم يُمَسّ**.
+ */
+let confirmHouseId: number;
+/** الشحنةُ التي وُزّعت على `confirmHouseId` — يؤكّدها المربّي في شاهديها. */
+let confirmShipmentId = 0;
+/** الحصةُ المخصَّصة لذلك العنبر — أصغرُ من `ALLOCATED` وبرقمٍ مميَّز. */
+const CONFIRM_ALLOCATED = 1200;
 
 async function listBatches(house: number, token: string): Promise<request.Response> {
   return request(app)
@@ -70,9 +80,11 @@ async function seedTenantA(secret: string): Promise<void> {
   const farmId = await farmVia(app, ownerToken, siteId, `مزرعة ${S}`);
   houseId = await houseVia(app, ownerToken, farmId, `عنبر المربّي ${S}`);
   otherHouseId = await houseVia(app, ownerToken, farmId, `عنبر آخر ${S}`);
+  confirmHouseId = await houseVia(app, ownerToken, farmId, `عنبر التأكيد ${S}`);
   await db.insert(userAssignments).values([
     { tenantId: tenantAId, userId: supervisor.id, farmId, startDate: today() },
     { tenantId: tenantAId, userId: farmer.id, houseId, startDate: today() },
+    { tenantId: tenantAId, userId: farmer.id, houseId: confirmHouseId, startDate: today() },
   ]);
 
   const supplierId = firstRow(
@@ -102,6 +114,29 @@ async function seedTenantA(secret: string): Promise<void> {
     .send({ distributions: [{ houseId, allocatedQuantity: ALLOCATED }] });
   if (distributed.status !== 201) {
     throw new Error(`تعذّر توزيع الشحنة: ${JSON.stringify(distributed.body)}`);
+  }
+
+  await seedConfirmShipment(supplierId, carrierId);
+}
+
+/**
+ * **شحنةٌ ثانيةٌ لعنبر التأكيد** — **مفصولةٌ لأن الحدَّ يُحترم بالفصل لا
+ * برفعه**، وشواهدُ «بعد التأكيد» لا تمسّ الأولى.
+ */
+async function seedConfirmShipment(supplierId: number, carrierId: number): Promise<void> {
+  const second = (
+    await request(app)
+      .post("/api/chick-shipments")
+      .set("Authorization", `Bearer ${ownerToken}`)
+      .send({ breed: "Ross 308", supplierId, carrierId, purchasedQuantity: 9000 })
+  ).body as { shipmentId: number };
+  confirmShipmentId = second.shipmentId;
+  const secondDistributed = await request(app)
+    .post(`/api/chick-shipments/${String(confirmShipmentId)}/distribute`)
+    .set("Authorization", `Bearer ${supervisorToken}`)
+    .send({ distributions: [{ houseId: confirmHouseId, allocatedQuantity: CONFIRM_ALLOCATED }] });
+  if (secondDistributed.status !== 201) {
+    throw new Error(`تعذّر توزيع الشحنة الثانية: ${JSON.stringify(secondDistributed.body)}`);
   }
 }
 
@@ -149,7 +184,7 @@ describe("GET /api/houses/:houseId/batches", () => {
     expect(list[0]?.purchasedBirdCount).toBe(ALLOCATED);
   });
 
-  it("يحجب المشترى عن المربّي — الاسمُ غائبٌ والقيمةُ غائبةٌ من نصّ الرد كلّه (القرار 276)", async () => {
+  it("يحجب المشترى عن المربّي **قبل التأكيد** — الاسمُ غائبٌ والقيمةُ غائبةٌ من نصّ الرد", async () => {
     const res = await listBatches(houseId, farmerToken);
     expect(res.status).toBe(200);
     const list = (res.body as { batches: Record<string, unknown>[] }).batches;
@@ -158,6 +193,51 @@ describe("GET /api/houses/:houseId/batches", () => {
     expect(Object.keys(list[0] ?? {})).not.toContain("purchasedBirdCount");
     // …ولا القيمةُ نفسها تحت مفتاحٍ آخر ولا متداخلة
     expect(JSON.stringify(res.body)).not.toContain(String(ALLOCATED));
+  });
+});
+
+/**
+ * **الحجبُ مشروطٌ بالعدّ لا بالدور** (القرار 286) — **وصفٌ مستقلّ لأن الحدَّ
+ * يُحترم بالفصل لا برفعه**.
+ */
+describe("مشترى الدفعة — قبل التأكيد وبعده", () => {
+  /**
+   * **والشرطُ يُثبَت بالفرق بين شاهدين** (القرار 286، حكم المالك): الشاهدُ
+   * أعلاه يحجب **قبل العدّ**، وهذا يقرأ **بعده** — **ولو بقي الحجب مطلقًا على
+   * الدور لخضرّ الأول وحده وسقط هذا**.
+   *
+   * **وخروجُ الدفعة من «قيد الوصول» هو تأكيدُ المربّي نفسِه** (276).
+   *
+   * **وردُّ التأكيد يحمل الفرق في نفس الواقعة** — §3.6 نصًّا: «**بعد الحفظ
+   * فقط** يظهر الفرق»، **وكان غائبًا عن الرد** فالعادُّ يعدّ ولا يُقال له
+   * ماذا وجد. **والتأكيد يقع مرةً واحدة، فيُقاس الوجهان في شاهدٍ واحد.**
+   */
+  it("**وبعد تأكيده يقرأ المشترى، وردُّ التأكيد يحمل الفرق** (§3.6)", async () => {
+    // **قبلَه محجوبٌ على هذا العنبر بعينه** — فلا يُقاس الفرقُ بعنبرٍ آخر
+    const before = await listBatches(confirmHouseId, farmerToken);
+    expect(Object.keys((before.body as { batches: object[] }).batches[0] ?? {})).not.toContain(
+      "purchasedBirdCount"
+    );
+    expect(JSON.stringify(before.body)).not.toContain(String(CONFIRM_ALLOCATED));
+
+    const confirmed = await request(app)
+      .post(`/api/chick-shipments/${String(confirmShipmentId)}/confirm`)
+      .set("Authorization", `Bearer ${farmerToken}`)
+      .send({ houseId: confirmHouseId, countedBoxes: 10, birdsPerBox: 100, deadOnArrival: 3 });
+    expect(confirmed.status).toBe(201);
+
+    // **ردُّ التأكيد يحمل الفرق بعد الحفظ**
+    const body = confirmed.body as Record<string, unknown>;
+    expect(body.countedQuantity).toBe(1000);
+    expect(body.receivedBirdCount).toBe(997);
+    expect(body.variance).toBe(1000 - CONFIRM_ALLOCATED);
+    expect(body.varianceStatus).toBe("فرق مسجّل");
+
+    // **وبعدَه يُقرأ المشترى** — والحجبُ مشروطٌ بالعدّ لا بالدور
+    const after = await listBatches(confirmHouseId, farmerToken);
+    const [batch] = (after.body as { batches: Record<string, unknown>[] }).batches;
+    expect(batch?.status).toBe("نشطة");
+    expect(batch?.purchasedBirdCount).toBe(CONFIRM_ALLOCATED);
   });
 
   it("يردّ المربّي عن عنبرٍ لا يبلغه إسنادُه بـ403 لا بقائمة فارغة (#129)", async () => {
