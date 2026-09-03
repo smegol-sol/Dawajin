@@ -12,6 +12,7 @@ import { HttpError, type StockUnit, type UserRole } from "@dawajin/shared";
 import { and, eq, isNotNull, sql, type SQL } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 
+import { hidesIssuedQuantity } from "../lib/blindCount";
 import {
   assignmentActiveToday,
   hasFullVisibility,
@@ -449,13 +450,21 @@ export async function listInTransit(
   db: Database,
   tenantId: number,
   viewer: { id: number; role: Role }
-): Promise<{ transferId: number; productId: number; quantity: number; fromWarehouseId: number }[]> {
+): Promise<InTransitView[]> {
+  const viaSource = endpointVisible(viewer, inventoryTransfers.fromWarehouseId);
+  const viaDestination = endpointVisible(viewer, inventoryTransfers.toWarehouseId);
   const rows = await db
     .select({
       transferId: inventoryTransfers.id,
       productId: inventoryTransfers.productId,
       quantity: inventoryTransfers.quantity,
       fromWarehouseId: inventoryTransfers.fromWarehouseId,
+      // **الطرفُ الذي أوصل الرائي إلى هذا الصفّ — محسوبًا لا مستنتَجًا**
+      // (القرار 288): الشرطُ كان `OR` واحدًا **لا يقول أيَّ الطرفين طابق**،
+      // **فالفصلُ بناءٌ لا قراءة**. **ولا يُعاد كتابةُ الحكم**: نفسُ الشرط
+      // يُبنى مرةً لكل طرف ويُجمع في `WHERE` بـ`OR` كما كان.
+      viaSource: sql<boolean>`${viaSource}`.mapWith(Boolean),
+      viaDestination: sql<boolean>`${viaDestination}`.mapWith(Boolean),
     })
     .from(inventoryTransfers)
     .where(
@@ -474,24 +483,62 @@ export async function listInTransit(
         //
         // **ويسري على كل دور لا على أمين المخزن وحده** — حكمُ رؤيةٍ في بيتٍ
         // واحد، **وقصرُه على دور يجعل السرد يعني معنيين بحسب من يسأل**.
-        visibleTransferEndpoint(viewer)
+        sql`(${viaSource} OR ${viaDestination})`
       )
     );
-  return rows.map((row) => ({ ...row, quantity: Number(row.quantity) }));
+  return rows.map(toInTransitView);
 }
 
 /**
- * **طرفا التحويل معًا — مرسِلًا أو مستقبِلًا** (القرار 254).
+ * **صفُّ ما في الطريق — والكميةُ محجوبةٌ عن مستقبِلِه حتى يعدّ** (القرار 288).
+ *
+ * **والحقل اختياريٌّ في النوع لا صفرٌ ولا `null`**: **غيابُه هو الرسالة** —
+ * **ورقمٌ بديلٌ يُقرأ رقمًا**.
+ */
+export interface InTransitView {
+  transferId: number;
+  productId: number;
+  fromWarehouseId: number;
+  /** **غائبٌ عمّن يبلغه التحويل من جهة الوجهة وحدها** — `hidesIssuedQuantity`. */
+  quantity?: number;
+}
+
+/**
+ * **يُبنى كائنُ الرد بيدٍ فتسقط الكمية** — **ولا يُنشر الصفُّ بـ`...`**:
+ * النشرُ يُعيد كلَّ ما قُرئ، **وهو عطبُ «قاعدة حجب الحقل» بعينه**.
+ */
+function toInTransitView(row: {
+  transferId: number;
+  productId: number;
+  fromWarehouseId: number;
+  quantity: string;
+  viaSource: boolean;
+  viaDestination: boolean;
+}): InTransitView {
+  return {
+    transferId: row.transferId,
+    productId: row.productId,
+    fromWarehouseId: row.fromWarehouseId,
+    ...(hidesIssuedQuantity(row) ? {} : { quantity: Number(row.quantity) }),
+  };
+}
+
+/**
+ * **هل يبلغ الرائي هذا الطرفَ من التحويل؟** (القراران 254 و288).
  *
  * **ولا يُعاد كتابة حكم الرؤية**: `visibleWarehouseCondition` هو البيت الوحيد،
  * **ويُطبَّق على كل طرفٍ على حدة** بـ`EXISTS` مستقلّة — فلا شرطٌ يوسّع الآخر.
+ *
+ * **وكانت الدالّة تُرجع الطرفين مجموعَين بـ`OR`** — **فلا يقول الشرطُ أيَّهما
+ * طابق**، وهو ما جعل حجبَ الكمية عن المستقبِل **بناءً لا قراءة** (القرار 281).
+ * **فصارت تُسأل عن طرفٍ واحد، والجمعُ عند مُستدعيها** — **وحكمُ الرؤية لم
+ * يتغيّر حرفًا: نفسُ الشرطين ونفسُ الـ`OR`.**
  */
-function visibleTransferEndpoint(viewer: { id: number; role: Role }): SQL {
-  const visible = (column: AnyPgColumn): SQL => sql`EXISTS (
+function endpointVisible(viewer: { id: number; role: Role }, column: AnyPgColumn): SQL {
+  return sql`EXISTS (
     SELECT 1 FROM ${warehouses}
     WHERE ${warehouses.id} = ${column}
       AND ${warehouses.tenantId} = ${inventoryTransfers.tenantId}
       AND ${visibleWarehouseCondition(viewer)}
   )`;
-  return sql`(${visible(inventoryTransfers.fromWarehouseId)} OR ${visible(inventoryTransfers.toWarehouseId)})`;
 }

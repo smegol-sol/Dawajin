@@ -159,7 +159,9 @@ async function confirmRestUnderLock(
     throw new HttpError(
       422,
       "rest_not_elapsed",
-      `لم تنقضِ مدة الراحة المثبَّتة على الدورة (${String(cycle.restTargetDays)} أيام)`,
+      // **«المدة بالأيام: ن» لا «ن أيام» (القرار 287):** `restTargetDays` يضبطه
+      // المالك بلا سقف، **و«11 أيام» خطأٌ صريح** — والصيغةُ هنا لا يتلوها معدود.
+      `لم تنقضِ مدة الراحة المثبَّتة على الدورة (المدة بالأيام: ${String(cycle.restTargetDays)})`,
       {
         cycleId: cycle.id,
         restTargetDays: cycle.restTargetDays,

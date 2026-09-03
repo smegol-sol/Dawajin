@@ -296,6 +296,30 @@ describe("حارس الراحة — المدة من الدورة لا من ال�
     expect(await historyCount(subjectId)).toBe(0);
   });
 
+  /**
+   * **مدةٌ فوق العشرة — والرسالة لا تركّب عددًا بمعدود (القرار 287).**
+   *
+   * **و«11 أيام» كانت تُعرض حرفيًّا:** العددُ من 11 فصاعدًا يقتضي **مفردًا
+   * منصوبًا** («11 يومًا») لا جمعًا. **والرقم يضبطه المالك بلا سقف** — فالعطب
+   * ليس فرضيًّا: **يقع عند أول من يقرّر راحةً أطول من عشرة أيام**.
+   *
+   * **واختيارُ 11 لا 10 هو ما يفرّق:** العشرةُ كانت تخضرّ على الصيغة القديمة
+   * أيضًا — **فالشاهدُ عند الحدّ لا داخله** (القرار 277).
+   *
+   * **واتجاهُ خطئه معلَن (270): يمرّ ظلمًا على كل رسالةٍ أخرى** — يثبّت هذه
+   * الصيغة وحدها ولا يحكم عربيّةً. **ولا يفشل ظلمًا.**
+   */
+  it("**مدةٌ فوق العشرة**: الرسالة «المدة بالأيام: 11» لا «11 أيام»", async () => {
+    await setStatus(subjectId, "في فترة الراحة");
+    await openCycle(subjectId, 1, 11);
+    const res = await patchStatus(subjectId, ownerToken, { status: "جاهز للإسكان" });
+    expect(res.status).toBe(422);
+    const body = res.body as { code: string; message: string };
+    expect(body.code).toBe("rest_not_elapsed");
+    expect(body.message).toContain("المدة بالأيام: 11");
+    expect(body.message).not.toContain("11 أيام");
+  });
+
   it("**المدة تُقرأ من الدورة لا من سياسة المستأجر**: سياسة 3 ودورة 10 ← يُرفض", async () => {
     await db.execute(sql`UPDATE tenants SET min_rest_days = 3 WHERE id = ${tenantAId}`);
     await setStatus(subjectId, "في فترة الراحة");
