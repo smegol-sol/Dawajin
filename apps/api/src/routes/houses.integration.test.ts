@@ -36,14 +36,22 @@ let vetToken: string;
 let ownerBToken: string;
 let houseInTenantBId: number;
 
-/** يُسكن دفعة — لا مسار API للدفعات بعد (المرحلة 2)، فتجهيزة مباشرة. */
+/**
+ * يُسكن دفعة — **لا مسار إسكانٍ بعد** (القرار 160: السلسلة الثلاثية مقرَّرة
+ * ولم تُبنَ) **يسقط يوم يُبنى مسار تأكيد المربّي**، فتجهيزة مباشرة.
+ *
+ * **والحالة تُسمّى صراحةً** — الافتراضيّ صار «قيد الوصول» (160 «عاشرًا» ٣)،
+ * **وما يلزم هنا دفعةٌ بدأت فعلًا**.
+ */
 async function addBatch(tenantId: number, houseId: number): Promise<void> {
   await db.insert(batches).values({
     tenantId,
     houseId,
     breed: "Ross 308",
     startDate: "2026-01-01",
-    initialBirdCount: 100,
+    purchasedBirdCount: 100,
+    receivedBirdCount: 100,
+    status: "نشطة",
   });
 }
 

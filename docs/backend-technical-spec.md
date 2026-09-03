@@ -393,15 +393,58 @@ workspace/
 |---|---|---|
 | id · tenant_id · house_id | FK | |
 | breed | enum NOT NULL | |
-| start_date | date NOT NULL | |
-| initial_bird_count | integer NOT NULL | |
-| status | enum NOT NULL DEFAULT 'نشطة' | |
+| start_date | date | **`NULL` قيدَ الوصول** — الدفعة تبدأ بتأكيد المربّي (#160 «عاشرًا» ٣) |
+| purchased_bird_count | integer NOT NULL | **المشترى** — المستهدَف لهذا العنبر، مُجمَّدًا من التوزيعة |
+| received_bird_count | integer | **المستلم المؤكَّد — مقامُ كل نسبة** (#160 «عاشرًا» ١ و٢). `NULL` قيدَ الوصول |
+| status | enum NOT NULL DEFAULT 'قيد الوصول' | ثلاثٌ: قيد الوصول · نشطة · منتهية |
 | closed_at | timestamptz | |
 | sold_bird_count | integer | **يُستبدل بمجموع الحمولات — مقرَّر ولم يُنفَّذ** (#160 «عاشرًا» ٦، والقراران 204 و208؛ §7-ب البند 51). **رقمٌ واحد يُكتب عند الإغلاق لا يُطابق ثلاث شاحنات**، **وكتابته `UPDATE` على صفّ الدفعة تتقاطع مع المبدأ الرابع** |
 | market_avg_weight_g | integer | **يصير متوسطًا مرجّحًا بالعدد على الحمولات** (#160 «عاشرًا» ١٢) — **والمتوسط البسيط يساوي بين حمولة من مئة طير وأخرى من خمسة آلاف** |
-| housed_before_ready | boolean NOT NULL DEFAULT false | علامة دائمة |
+| housed_before_ready | boolean NOT NULL DEFAULT false | علامة دائمة — **تُسجَّل عند تأكيد المربّي لا عند التوزيع** (#160 «عاشرًا» ٤) |
 | housed_reason | text | |
 | created_at | timestamptz | |
+
+**وقيودٌ على القاعدة لا في الخدمة:**
+
+- `batches_arrival_shape_ck` — **«قيد الوصول» بلا مستلمٍ ولا تاريخ بدء، وغيرُها بهما معًا**. حالةٌ بلا مقامها تجعل كل نسبة قسمةً على العدم صامتة.
+- `batches_one_open_per_house_uq` — **دفعةٌ مفتوحةٌ واحدة لكل عنبر** (فهرسٌ جزئيّ على `house_id` حيث الحالة في «قيد الوصول · نشطة»). **وحارسُ الخدمة يُعيد الثقبَ لأيّ مسارِ كتابةٍ لا يمرّ به.**
+- `batches_purchased_positive_ck` · `batches_received_nonnegative_ck`.
+
+### `chick_shipments`
+**شحنة الكتاكيت — رأسُ سلسلة الاستقبال الثلاثية** (#160 «أولًا»). **و`shipments` للمنتجات حصرًا** (`product_id NOT NULL`) **والكتاكيت ليست فئة منتج**.
+
+| العمود | النوع | ملاحظات |
+|---|---|---|
+| id · uuid · tenant_id | | |
+| breed | enum NOT NULL | |
+| supplier_id | FK NOT NULL | المورّد أو الفقاسة — **إلزاميّ**: «ببياناتها كاملة» |
+| carrier_id | FK NOT NULL | الناقل — **إلزاميّ هنا واختياريّ في `shipments`** |
+| purchased_quantity | integer NOT NULL | **المشترى** — ومرجعُ العجز الظاهر |
+| entered_by · entered_at | FK · timestamptz NOT NULL | المالك |
+| approved_by · approved_at | FK · timestamptz | **المشرف** — `NULL` قبل المصادقة |
+| notes · created_at | | |
+
+**ولا عمود حالة** — **المصادقة تُقرأ من واقعتها** (`approved_at`): عمودٌ ثانٍ يحملها يفتح صفًّا حالتُه تكذّب أحداثه، وهو ما احتاج `inventory_transfers` قيدًا كاملًا لسدّه (القرار 229). **والمالك لا يصادق على شحنته** (#160 «عاشرًا» ٩ — نقضُ #155) **والفرضُ في المسار لا في القاعدة**.
+
+**قيدٌ:** `chick_shipments_approval_pair_ck` — المصادِق ووقتُها معًا أو لا شيء.
+
+### `chick_shipment_distributions`
+**حصةُ عنبرٍ واحد** (#160 «أولًا»): شحنةٌ واحدة لها **توزيعات**، **كلٌّ يؤكدها مربّي عنبرها بمعزل عن غيره**.
+
+| العمود | النوع | ملاحظات |
+|---|---|---|
+| id · uuid · tenant_id | | |
+| shipment_id · house_id · batch_id | FK NOT NULL | **سجلّ الدفعة يُنشأ مع التوزيعة** — «قيد الوصول» |
+| allocated_quantity | integer NOT NULL | المستهدَف — **يُحجب عن ردّ المربّي** (استلامٌ أعمى، §3.6) |
+| counted_boxes · birds_per_box | integer | **العدّ بالصناديق — رقمان لا رقم** |
+| counted_quantity | integer | محسوب = الصناديق × ما بها |
+| dead_on_arrival | integer | **النافق عند الوصول — هنا لا في `daily_logs`** |
+| confirmed_by · confirmed_at | FK · timestamptz | المربّي — واقعةُ بدء الدفعة |
+| notes_receiver · created_at | | |
+
+**والنافق عند الوصول خارج عهدة المربّي وخارج نسبة نفوقه، ولا يُخصم من سجل المورّد** (القرار 208 حكم ٥): **شرطُ بداية للدفعة لا حكمٌ على أحد**. **وموضعُه هنا لأن أسباب `mortality_cause` الستّ كلها أسبابُ موتٍ داخل العنبر** — فكتابتُه فيها تجعله نفوقَ اليوم الأول على المربّي.
+
+**وقيودٌ:** `..._confirmation_shape_ck` (حقول التأكيد الستة معًا أو لا شيء) · `..._counted_product_ck` (الحاصلُ من رقمَيه) · `..._doa_within_counted_ck` · `..._shipment_house_uq` · `..._batch_uq`.
 
 ### `user_assignments`
 id · user_id FK · house_id FK (nullable) · **farm_id FK (nullable)** · **warehouse_id FK (nullable)** · tenant_id FK · **start_date (مطلوب، بلا افتراضي)** · **end_date (nullable)** · created_at
@@ -1058,16 +1101,22 @@ avg_weight_g       = sampled_weight_kg / sampled_birds × 1000
 feed_kg            = bags × bag_weight_kg   (وزن الكيس يُقرأ من products.package_size
                                             ويُجمَّد في الصفّ وقت الإدخال — القرار 201)
 water_liters       = tanks × tank_capacity_l
-current_birds      = initial_bird_count − Σ mortality
-mortality_pct      = Σ mortality / initial_bird_count × 100
+current_birds      = received_bird_count − Σ (الخروجات المصنَّفة الخمسة)
+                     [لا النفوق وحده — #160 «ثالثًا» و«عاشرًا» ١؛ وأربعةٌ منها
+                      لم تُبنَ بعد، فالمحسوب اليوم بالنفوق وحده حدٌّ معلن
+                      يسقط يوم تُبنى حركةُ الطيور]
+mortality_pct      = Σ mortality / received_bird_count × 100
+                     [المستلم المؤكَّد لا المشترى — والنافق عند الوصول خارج
+                      البسط والمقام معًا: لم يكن يومًا في عهدة المربّي]
 
-FCR = Σ feed_kg / ((current_birds × avg_weight_g/1000) − (initial_count × chick_weight_kg))
+FCR = Σ feed_kg / ((current_birds × avg_weight_g/1000) − (received_bird_count × chick_weight_kg))
       chick_weight من breed_standards — لا ثابت في الكود
 
 daily_consumption  = متوسط آخر 3 أيام
 coverage_days      = balance / daily_consumption          (مقرَّب لأسفل)
 water_feed_ratio   = water_liters / feed_kg
 EPEF               = (الوزن كجم × % البقاء) / (FCR × العمر) × 100
+                     [% البقاء مقامها received_bird_count — #160 «عاشرًا» ١]
 ```
 
 **العرض:** الأكياس والخزانات منزلة واحدة · الأعداد صحيحة بفاصل آلاف · النسب والـ FCR منزلتان · أيام التغطية صحيحة · لا شرطة صامتة · كل مؤشر بجانبه المعياري ليوم الدفعة.

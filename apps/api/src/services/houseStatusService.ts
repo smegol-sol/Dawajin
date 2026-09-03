@@ -1,5 +1,6 @@
 import { batches, houseStatusHistory, housePrepCycles, houses, type Database } from "@dawajin/db";
 import {
+  BATCH_STATUSES_WITH_BIRDS,
   HttpError,
   classifyHouseTransition,
   transitionKey,
@@ -7,7 +8,7 @@ import {
   type HouseStatus,
   type HouseTransitionRule,
 } from "@dawajin/shared";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 
 /**
  * تغيير حالة العنبر — `PATCH /api/houses/:houseId/status` (القرار 220).
@@ -60,6 +61,15 @@ function rejectTransition(from: HouseStatus, to: HouseStatus): never {
  *
  * عنبرٌ فيه دفعة نشطة **لا يعود إلا إلى «مشغول»**: طيورُه فيه، **وعودةٌ إلى
  * «جاهز للإسكان» تدّعي فراغًا كاذبًا**.
+ *
+ * **و«قيد الوصول» تُقرأ هنا كما تُقرأ «نشطة»** (القرار 160 «عاشرًا» ٥:
+ * «التنبيهات تتبع الوجود الفعلي للطيور لا حالة السجل»). **وعنبرٌ وصلته طيورٌ
+ * ولم يؤكّدها المربّي بعدُ ليس فارغًا** — **وقراءةُ «نشطة» وحدها كانت تجعله
+ * كذلك**، فيُقبل إرجاعُه إلى «جاهز للإسكان» وفيه طير. **وهذا أثرٌ لم يسمّه
+ * 160**: الحكمُ نصّ على التنبيهات، **والحارس هنا يقرأ نفس السؤال**.
+ *
+ * **والقائمة من `BATCH_STATUSES_WITH_BIRDS` لا شرطٌ سالب هنا** — فقيمةٌ
+ * رابعة تُضاف غدًا لا تدخل بالسكوت.
  */
 async function assertReturnTargetAllowed(
   tx: Tx,
@@ -79,7 +89,7 @@ async function assertReturnTargetAllowed(
         // eslint-disable-next-line dawajin/no-unvetted-house-id-reuse
         eq(batches.houseId, houseId),
         eq(batches.tenantId, tenantId),
-        eq(batches.status, "نشطة")
+        inArray(batches.status, BATCH_STATUSES_WITH_BIRDS)
       )
     );
 
@@ -87,7 +97,7 @@ async function assertReturnTargetAllowed(
     throw new HttpError(
       422,
       "house_has_active_batch",
-      `العنبر فيه دفعة نشطة، فلا يعود من «${from}» إلا إلى «مشغول» — لا إلى «${to}»`,
+      `العنبر فيه دفعة قائمة، فلا يعود من «${from}» إلا إلى «مشغول» — لا إلى «${to}»`,
       { fromStatus: from, toStatus: to, activeBatches: count }
     );
   }

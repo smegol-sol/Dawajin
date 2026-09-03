@@ -147,6 +147,21 @@ export const houses = pgTable(
 );
 
 /** الدفعة — قطيع كامل من الإسكان إلى التسويق. */
+/**
+ * الدفعة — **والمشترى والمستلم رقمان مستقلان لا عمود واحد** (القرار 160
+ * «عاشرًا» ٢).
+ *
+ * **و`initial_bird_count` كان يخلطهما، وهو مقام كل نسبة في النظام** — نسبةِ
+ * النفوق ونسبةِ البقاء في EPEF (§15). **فخلطهما ليس اختصارًا في التسمية بل
+ * خطأ يسري إلى كل تقرير**: نسبةُ نفوقٍ تُقسم على عددٍ لم يصل، ونسبةُ بقاءٍ
+ * تُحسب على طيورٍ لم تُسلَّم. **وطيرٌ وصل ميتًا لم يكن يومًا في عهدة
+ * المربّي** — فحسابُه في أيٍّ من طرفي النسبة يحمّله ما ليس له.
+ *
+ * **والصفّ يُخلق «قيد الوصول» عند التوزيع بلا مستلمٍ ولا تاريخ بدء**، **ثم
+ * يبدأ بتأكيد المربّي** فيُملأ الاثنان معًا. **ويفرض ذلك
+ * `batches_arrival_shape_ck` على القاعدة**: حالةٌ بلا مقامها **تجعل كل نسبة
+ * قسمةً على العدم صامتة**.
+ */
 export const batches = pgTable(
   "batches",
   {
@@ -156,9 +171,16 @@ export const batches = pgTable(
       .references(() => tenants.id),
     houseId: integer("house_id").notNull(),
     breed: breedEnum("breed").notNull(),
-    startDate: date("start_date").notNull(),
-    initialBirdCount: integer("initial_bird_count").notNull(),
-    status: batchStatusEnum("status").notNull().default("نشطة"),
+    /** **يوم بدء الدفعة — تأكيدُ المربّي** (160 «عاشرًا» ٣): `NULL` قيدَ الوصول. */
+    startDate: date("start_date"),
+    /** **المشترى** — الكميةُ المستهدَفة لهذا العنبر، تُجمَّد من التوزيعة وقت الإنشاء. */
+    purchasedBirdCount: integer("purchased_bird_count").notNull(),
+    /**
+     * **المستلم المؤكَّد** — ما عدّه المربّي ناقصَ النافق عند الوصول، **وهو
+     * مقامُ كل نسبة** (160 «عاشرًا» ١). `NULL` قيدَ الوصول.
+     */
+    receivedBirdCount: integer("received_bird_count"),
+    status: batchStatusEnum("status").notNull().default("قيد الوصول"),
     closedAt: timestamp("closed_at", { withTimezone: true }),
     soldBirdCount: integer("sold_bird_count"),
     marketAvgWeightG: integer("market_avg_weight_g"),
@@ -174,6 +196,36 @@ export const batches = pgTable(
       foreignColumns: [houses.id, houses.tenantId],
       name: "batches_house_id_tenant_fk",
     }),
+    /**
+     * **الحالةُ ومقامُها معًا أو لا شيء** — **ثلاثةُ حقولٍ لا اثنان**: بدءُ
+     * الدفعة وتاريخُه ومستلمُها واقعةٌ واحدة (تأكيد المربّي)، **فتقسيمُها
+     * يسمح بدفعةٍ نشطةٍ بلا مقام**.
+     */
+    check(
+      "batches_arrival_shape_ck",
+      sql`(${table.status} = 'قيد الوصول'
+           AND ${table.receivedBirdCount} IS NULL AND ${table.startDate} IS NULL)
+          OR (${table.status} <> 'قيد الوصول'
+           AND ${table.receivedBirdCount} IS NOT NULL AND ${table.startDate} IS NOT NULL)`
+    ),
+    check("batches_purchased_positive_ck", sql`${table.purchasedBirdCount} > 0`),
+    check(
+      "batches_received_nonnegative_ck",
+      sql`${table.receivedBirdCount} IS NULL OR ${table.receivedBirdCount} >= 0`
+    ),
+    /**
+     * **دفعةٌ مفتوحةٌ واحدة لكل عنبر — في القاعدة لا في الخدمة وحدها.**
+     *
+     * **والحارس الإجرائيّ يُعيد الثقبَ أيُّ مسارِ كتابةٍ جديد لا يمرّ به**
+     * (نفسُ حجّة قاعدة المفتاح المركَّب في `CLAUDE.md`) — **ومسارُ الإسكان
+     * مسارُ كتابةٍ جديد**، فبناؤه فوق حارسِ خدمةٍ وحده يفتح ما أُغلق.
+     *
+     * **والقائمة موجبة لا `<> 'منتهية'`**: قيمةٌ رابعة تُضاف غدًا **تدخل
+     * بالسكوت** في الشرط السالب.
+     */
+    uniqueIndex("batches_one_open_per_house_uq")
+      .on(table.houseId)
+      .where(sql`${table.status} IN ('قيد الوصول', 'نشطة')`),
   ]
 );
 

@@ -213,7 +213,9 @@ async function seedBatches(): Promise<void> {
         houseId: assignedHouseInTenantAId,
         breed: "Ross 308",
         startDate: "2026-01-01",
-        initialBirdCount: 1000,
+        purchasedBirdCount: 1000,
+        receivedBirdCount: 1000,
+        status: "نشطة",
       })
       .returning({ id: batches.id })
   );
@@ -227,7 +229,9 @@ async function seedBatches(): Promise<void> {
         houseId: houseInTenantBId,
         breed: "Cobb 500",
         startDate: "2026-01-01",
-        initialBirdCount: 1000,
+        purchasedBirdCount: 1000,
+        receivedBirdCount: 1000,
+        status: "نشطة",
       })
       .returning({ id: batches.id })
   );
