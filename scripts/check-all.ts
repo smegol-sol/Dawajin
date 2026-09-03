@@ -14,6 +14,7 @@
  */
 import { checkCompositeFk } from "./checks/composite-fk";
 import { checkCoverage } from "./checks/coverage";
+import { checkDeclaredLimits } from "./checks/declared-limits";
 import { checkDesignTokens } from "./checks/design-tokens";
 import { checkDuplicateRoutes } from "./checks/duplicate-routes";
 import { checkEntityPatterns } from "./checks/entity-patterns";
@@ -21,12 +22,12 @@ import { checkEnumUsage } from "./checks/enum-usage";
 import { checkEslint } from "./checks/eslint";
 import { checkLayoutRtl } from "./checks/layout-rtl";
 import { checkLogoSingleSource } from "./checks/logo-single-source";
-import { checkRoleGuardOwner } from "./checks/role-guard-owner";
 import { checkMigrationChain } from "./checks/migration-chain";
-import { checkDeclaredLimits } from "./checks/declared-limits";
+import { checkMigrationJournal } from "./checks/migration-journal";
 import { checkNavCoverage } from "./checks/nav-coverage";
 import { checkOpenApiCoverage } from "./checks/openapi-coverage";
 import { checkPrettier } from "./checks/prettier";
+import { checkRoleGuardOwner } from "./checks/role-guard-owner";
 import { checkTypecheck } from "./checks/typecheck";
 
 interface CheckResult {
@@ -44,6 +45,7 @@ const checks: { name: string; run: CheckFn }[] = [
   { name: "تغطية أنماط الكيانات", run: checkEntityPatterns },
   { name: "المفتاح المركَّب", run: checkCompositeFk },
   { name: "سلسلة الترحيلات", run: checkMigrationChain },
+  { name: "طوابع الترحيلات", run: checkMigrationJournal },
   { name: "الشعار مصدر واحد", run: checkLogoSingleSource },
   { name: "حارس الدور يذكر المالك", run: checkRoleGuardOwner },
   { name: "الحدود المعلنة", run: checkDeclaredLimits },

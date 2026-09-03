@@ -2704,6 +2704,189 @@
           }
         }
       }
+    },
+    "/api/daily-logs": {
+      "post": {
+        "summary": "إنشاء السجل اليومي — المربّي وحده (§14.1، القرار 278)",
+        "description": "السجلّ وصفوفُ العلف وحركاتُ المخزون في معاملةٍ واحدة. والدفعة تُشتقّ من العنبر تحت القفل لا تُرسَل. والاستهلاك لا يُمنع على رصيدٍ غير كافٍ — يُعرض في `negativeBalances` ولا يمنع (§13.4، المبدأ الخامس). والمكرَّر بنفس `clientId` يُعاد بـ200 لا بخطأ. ولا حقلَ محسوبًا يُقبل من العميل: اللترات ومتوسط الوزن والكيلوغرامات ووزن الكيس تُحسب وتُجمَّد في الخادم.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DailyLogRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "سجلٌّ سابق بنفس `clientId` — عطالةُ إعادة الإرسال",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "dailyLogId": {
+                      "type": "integer"
+                    },
+                    "batchId": {
+                      "type": "integer"
+                    },
+                    "logDate": {
+                      "type": "string",
+                      "format": "date"
+                    },
+                    "duplicate": {
+                      "type": "boolean"
+                    },
+                    "waterLiters": {
+                      "type": ["number", "null"]
+                    },
+                    "avgWeightG": {
+                      "type": ["number", "null"]
+                    },
+                    "feedKgTotal": {
+                      "type": "number"
+                    },
+                    "negativeBalances": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "productId": {
+                            "type": "integer"
+                          },
+                          "balance": {
+                            "type": "number"
+                          }
+                        },
+                        "required": ["productId", "balance"]
+                      }
+                    }
+                  },
+                  "required": [
+                    "dailyLogId",
+                    "batchId",
+                    "logDate",
+                    "duplicate",
+                    "feedKgTotal",
+                    "negativeBalances"
+                  ]
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "السجلّ ومحسوباتُه",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "dailyLogId": {
+                      "type": "integer"
+                    },
+                    "batchId": {
+                      "type": "integer"
+                    },
+                    "logDate": {
+                      "type": "string",
+                      "format": "date"
+                    },
+                    "duplicate": {
+                      "type": "boolean"
+                    },
+                    "waterLiters": {
+                      "type": ["number", "null"]
+                    },
+                    "avgWeightG": {
+                      "type": ["number", "null"]
+                    },
+                    "feedKgTotal": {
+                      "type": "number"
+                    },
+                    "negativeBalances": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "productId": {
+                            "type": "integer"
+                          },
+                          "balance": {
+                            "type": "number"
+                          }
+                        },
+                        "required": ["productId", "balance"]
+                      }
+                    }
+                  },
+                  "required": [
+                    "dailyLogId",
+                    "batchId",
+                    "logDate",
+                    "duplicate",
+                    "feedKgTotal",
+                    "negativeBalances"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "description": "دورٌ لا يُنشئ سجلًّا (`forbidden`) — المالك والمشرف والطبيب منهم · أو عنبرٌ لا يبلغه إسنادُ المربّي",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "عنبرٌ أو صنفٌ غير موجود (`not_found`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "يوجد سجل محفوظ لهذا اليوم بالفعل (`duplicate`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "لا دفعة نشطة (`no_active_batch`) · صنفٌ ليس علفًا بالكيس (`product_not_feed`) · عيّنةُ وزنٍ ناقصة (`sample_pair_required`) · عنبرٌ بلا سعة خزان (`house_without_tank_capacity`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -3806,6 +3989,79 @@
           }
         },
         "required": ["houseId", "countedBoxes", "birdsPerBox", "deadOnArrival"],
+        "additionalProperties": false
+      },
+      "DailyLogRequest": {
+        "type": "object",
+        "description": "ولا حقلَ محسوبًا فيه — اللترات ومتوسط الوزن والكيلوغرامات تُحسب في الخادم",
+        "properties": {
+          "houseId": {
+            "type": "integer"
+          },
+          "logDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "mortalityCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "mortalityCause": {
+            "type": "string"
+          },
+          "mortalityCauseNote": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "waterTanks": {
+            "type": "number",
+            "minimum": 0
+          },
+          "sampledBirds": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "sampledWeightKg": {
+            "type": "number"
+          },
+          "temperatureC": {
+            "type": "number"
+          },
+          "humidityPct": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "notes": {
+            "type": "string",
+            "maxLength": 1000
+          },
+          "clientId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "feedRows": {
+            "type": "array",
+            "maxItems": 10,
+            "items": {
+              "type": "object",
+              "properties": {
+                "productId": {
+                  "type": "integer"
+                },
+                "feedStage": {
+                  "type": "string"
+                },
+                "bags": {
+                  "type": "number"
+                }
+              },
+              "required": ["productId", "feedStage", "bags"],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": ["houseId", "logDate", "mortalityCount"],
         "additionalProperties": false
       }
     },
