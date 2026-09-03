@@ -2887,6 +2887,79 @@
           }
         }
       }
+    },
+    "/api/products": {
+      "get": {
+        "summary": "سرد أصناف مخزن العنبر — كل الأدوار",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "الأصناف النشطة التي تدخل مخزن العنبر، مرتّبة بالفئة ثم الاسم",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/api/houses/{houseId}/batches": {
+      "get": {
+        "summary": "سرد دفعات عنبر — كل الأدوار، والمربّي أعمى عن المشترى",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "houseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "دفعات العنبر — الأحدث أولًا",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -4063,6 +4136,139 @@
         },
         "required": ["houseId", "logDate", "mortalityCount"],
         "additionalProperties": false
+      },
+      "Product": {
+        "type": "object",
+        "required": [
+          "id",
+          "category",
+          "name",
+          "feedStage",
+          "stockUnit",
+          "packageSize",
+          "packageUnit",
+          "isSystem",
+          "emptyBagCondition"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "category": {
+            "type": "string",
+            "enum": ["علف", "دواء", "لقاح", "فيتامين", "معقمات ومطهرات", "مستلزمات تشغيل"],
+            "description": "ستٌّ لا سابعة — «معدات ومستلزمات إنشائية» لا تدخل مخزن العنبر (القرار 231)"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 160
+          },
+          "feedStage": {
+            "type": ["string", "null"],
+            "enum": ["بادئ", "نامي", "ناهي", null]
+          },
+          "stockUnit": {
+            "type": "string",
+            "enum": ["عبوة", "زجاجة", "كيس", "لتر", "كجم", "قطعة"]
+          },
+          "packageSize": {
+            "type": ["number", "null"],
+            "description": "وزن العبوة — **لا يُقرأ بمعزل عن packageUnit** (القرار 201)"
+          },
+          "packageUnit": {
+            "type": ["string", "null"],
+            "maxLength": 16
+          },
+          "isSystem": {
+            "type": "boolean",
+            "description": "صنفٌ نظاميّ يُنشأ مع المستأجر (القرار 213)"
+          },
+          "emptyBagCondition": {
+            "type": ["string", "null"],
+            "enum": ["صالح", "تالف", null],
+            "description": "غير معدوم ⇔ الصنف كيسٌ فارغ (القرار 212)"
+          }
+        }
+      },
+      "ProductListResponse": {
+        "type": "object",
+        "required": ["products"],
+        "properties": {
+          "products": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Product"
+            }
+          }
+        }
+      },
+      "Batch": {
+        "type": "object",
+        "required": [
+          "id",
+          "houseId",
+          "breed",
+          "status",
+          "startDate",
+          "receivedBirdCount",
+          "closedAt",
+          "soldBirdCount",
+          "marketAvgWeightG",
+          "housedBeforeReady"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "houseId": {
+            "type": "integer"
+          },
+          "breed": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["قيد الوصول", "نشطة", "منتهية"]
+          },
+          "startDate": {
+            "type": ["string", "null"],
+            "format": "date",
+            "description": "يوم تأكيد المربّي — NULL قيدَ الوصول (160 «عاشرًا» ٣)"
+          },
+          "receivedBirdCount": {
+            "type": ["integer", "null"],
+            "description": "المقام المؤكَّد — NULL قيدَ الوصول (160 «عاشرًا» ١)"
+          },
+          "closedAt": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "soldBirdCount": {
+            "type": ["integer", "null"]
+          },
+          "marketAvgWeightG": {
+            "type": ["integer", "null"]
+          },
+          "housedBeforeReady": {
+            "type": "boolean"
+          },
+          "purchasedBirdCount": {
+            "type": "integer",
+            "description": "**غائب في رد المربّي** — هو allocated_quantity مجمَّدًا، والاستلام الأعمى يمنع رؤيته (القرار 276)"
+          }
+        }
+      },
+      "BatchListResponse": {
+        "type": "object",
+        "required": ["batches"],
+        "properties": {
+          "batches": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Batch"
+            }
+          }
+        }
       }
     },
     "responses": {
