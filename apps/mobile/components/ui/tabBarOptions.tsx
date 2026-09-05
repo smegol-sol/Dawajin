@@ -83,7 +83,11 @@ export function tabLabel(label: string): (props: { focused: boolean; color: stri
 const styles = StyleSheet.create({
   label: {
     fontSize: font.size.tabLabel,
-    // **مُسقَطٌ للقياس** (القرار 296)
+    lineHeight: font.lineHeight.tabLabel,
+    // **مقياسُ الجولة الثانية** (القرار 296): الارتفاع عاد كما كان،
+    // **والمتغيّرُ الوحيد هذا** — حشوُ الخطّ في أندرويد. **ولا أثر له على iOS
+    // ولا على الويب**، فالفرقُ الذي يظهر فرقُ أندرويد وحده.
+    includeFontPadding: false,
     fontFamily: font.familyRegular,
     textAlign: "center",
     writingDirection: "rtl",

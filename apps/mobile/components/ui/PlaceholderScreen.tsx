@@ -70,14 +70,17 @@ const styles = StyleSheet.create({
    */
   title: {
     fontSize: font.size.screenTitle,
-    // **مُسقَطٌ للقياس** (القرار 296) — انظر ترويسة `LINE_HEIGHT_PROBE` في الفاحص
+    // **مقياسُ الجولة الثانية** (القرار 296): 33.60 ← 34 — **اختبارُ أن الكسر
+    // العشريّ هو المُشغِّل**، والارتفاعُ عاد وحده هو المتغيّر هنا.
+    lineHeight: Math.ceil(font.lineHeight.screenTitle),
     fontFamily: font.familyBold,
     color: color.brandPrimary,
     writingDirection: "rtl",
   },
   note: {
     fontSize: font.size.content,
-    // **مُسقَطٌ للقياس** (القرار 296)
+    // **مقياسُ الجولة الثانية** (القرار 296): 25.50 ← 26
+    lineHeight: Math.ceil(font.lineHeight.content),
     fontFamily: font.familyRegular,
     color: color.textBody,
     writingDirection: "rtl",
