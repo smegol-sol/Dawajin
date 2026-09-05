@@ -1,9 +1,9 @@
-import { StyleSheet, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 
 import { FormField } from "@/components/ui/FormField";
 import { NumberStepper } from "@/components/ui/NumberStepper";
 import { SectionHeader } from "@/components/ui/SectionHeader";
-import { spacing } from "@/constants/theme";
+import { color, font, spacing } from "@/constants/theme";
 import { avgWeightLine, waterComputedLine, type DailyLogDraft } from "@/lib/dailyLogForm";
 
 /**
@@ -23,16 +23,19 @@ import { avgWeightLine, waterComputedLine, type DailyLogDraft } from "@/lib/dail
 export function MeasurementsBlock({
   draft,
   tankCapacityL,
+  sampleError,
   onChange,
 }: {
   draft: DailyLogDraft;
   tankCapacityL: number | null;
+  /** **نصُّ نقص العيّنة — يُعرض عند حقلها لا في ذيل الشاشة** (§8.11، والقرار 292). */
+  sampleError?: string | undefined;
   onChange: (patch: Partial<DailyLogDraft>) => void;
 }) {
   return (
     <View style={styles.block}>
       <WaterField draft={draft} tankCapacityL={tankCapacityL} onChange={onChange} />
-      <SampleFields draft={draft} onChange={onChange} />
+      <SampleFields draft={draft} error={sampleError} onChange={onChange} />
       <ClimateFields draft={draft} onChange={onChange} />
     </View>
   );
@@ -69,9 +72,11 @@ function WaterField({
 /** **معاينة الوزن — رقمان معًا أو لا شيء**، والمتوسطُ يُعرض ولا يُرسَل. */
 function SampleFields({
   draft,
+  error,
   onChange,
 }: {
   draft: DailyLogDraft;
+  error?: string | undefined;
   onChange: (patch: Partial<DailyLogDraft>) => void;
 }) {
   const average = avgWeightLine(draft.sampledBirds, draft.sampledWeightKg);
@@ -95,6 +100,8 @@ function SampleFields({
         }}
         {...(average === undefined ? {} : { computedLine: average })}
       />
+      {/* **لونٌ ونصٌّ معًا لا لونٌ وحده** (§488) — والنصُّ هو الحامل */}
+      {error === undefined ? null : <Text style={styles.fieldError}>{error}</Text>}
     </>
   );
 }
@@ -141,5 +148,12 @@ function ClimateFields({
 }
 
 const styles = StyleSheet.create({
+  fieldError: {
+    fontSize: font.size.content,
+    fontFamily: font.familyBold,
+    color: color.statusCritical,
+    writingDirection: "rtl",
+    textAlign: "right",
+  },
   block: { gap: spacing.md },
 });

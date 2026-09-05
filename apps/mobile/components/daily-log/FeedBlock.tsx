@@ -12,12 +12,20 @@ import {
   feedComputedLine,
   feedProductsOf,
   sectionCount,
+  stageOfProduct,
   type FeedRowDraft,
+  type RowErrors,
 } from "@/lib/dailyLogForm";
 
 /**
- * **العلف — المرحلةُ ثم الصنفُ ثم الأكياس بخطوة ٠٫٥، وتحتها الكجم المحسوب**
- * (§2).
+ * **العلف — الصنفُ ثم الأكياس بخطوة ٠٫٥، وتحتها الكجم المحسوب** (§2).
+ *
+ * **والمرحلةُ تُعرض ولا تُسأل** (القرار 292): كانت سؤالًا أوّلَ يُتبَع بسؤال
+ * الصنف — **وجوابُهما واحدٌ في الغالب**، فيومَ الخلط أربعُ لمساتٍ لصفّين.
+ * **واليوم لمسةٌ لكل صفّ، والمرحلةُ تتبع ما اختير.**
+ *
+ * **والمرونةُ باقية:** خلطُ مرحلتين في يومٍ واحد **صفّان بصنفين**، وكلٌّ
+ * يحمل مرحلته — **وهو ما بُني له «إضافة نوع علف» أصلًا** (حكم المالك).
  *
  * **والكجم يُعرض ولا يُرسَل** (§15، والقرار 201): الخادم يحسبه من وزن الكيس
  * المجمَّد على الصنف — **وقبولُه من العميل يجعل الحساب دعوى**.
@@ -28,12 +36,15 @@ import {
 export function FeedBlock({
   rows,
   products,
+  errorsOf,
   onChange,
   onAdd,
   onRemove,
 }: {
   rows: readonly FeedRowDraft[];
   products: readonly ProductCard[];
+  /** **يُسأل لكل صفّ** — والشاشةُ تملك قائمة الأخطاء فلا تُعاد قسمتها هنا. */
+  errorsOf: (rowKey: string) => RowErrors;
   onChange: (key: string, patch: Partial<FeedRowDraft>) => void;
   onAdd: () => void;
   onRemove: (key: string) => void;
@@ -53,6 +64,7 @@ export function FeedBlock({
           key={row.key}
           row={row}
           products={products}
+          errors={errorsOf(row.key)}
           onChange={onChange}
           onRemove={onRemove}
         />
@@ -66,25 +78,36 @@ export function FeedBlock({
 function FeedRow({
   row,
   products,
+  errors,
   onChange,
   onRemove,
 }: {
   row: FeedRowDraft;
   products: readonly ProductCard[];
+  errors: RowErrors;
   onChange: (key: string, patch: Partial<FeedRowDraft>) => void;
   onRemove: (key: string) => void;
 }) {
-  const candidates = feedProductsOf(products, row.stage);
+  const candidates = feedProductsOf(products);
   const selected = candidates.find((product) => product.id === row.productId);
   const line = feedComputedLine(selected, row.bags);
 
   return (
     <View style={styles.row}>
-      <Text style={styles.rowLabel}>المرحلة</Text>
-      <StagePicker row={row} onChange={onChange} />
-
-      <Text style={styles.rowLabel}>الصنف</Text>
+      <Text style={styles.rowLabel}>العلف</Text>
       <ProductPicker row={row} candidates={candidates} onChange={onChange} />
+      <FieldNote message={errors.product} />
+
+      {/* **المرحلةُ تُعرض لا تُسأل** — و«تسمية: قيمة» صيغةٌ ثابتة (القرار 287) */}
+      {row.stage === null ? null : <Text style={styles.derived}>{`المرحلة: ${row.stage}`}</Text>}
+      {/* **وتُسأل وحدها حين يكون الصنفُ بلا مرحلة** — ولا صنفَ كذلك اليوم */}
+      {row.productId !== null && row.stage === null ? (
+        <>
+          <Text style={styles.rowLabel}>المرحلة</Text>
+          <StagePicker row={row} onChange={onChange} />
+          <FieldNote message={errors.stage} />
+        </>
+      ) : null}
 
       <NumberStepper
         label="الأكياس"
@@ -95,6 +118,7 @@ function FeedRow({
         }}
         {...(line === undefined ? {} : { computedLine: line })}
       />
+      <FieldNote message={errors.bags} />
       <Button
         label="حذف هذا الصفّ"
         variant="secondary"
@@ -107,8 +131,22 @@ function FeedRow({
 }
 
 /**
- * **المرحلة — وتغييرُها يُسقط الصنف**: صنفُ مرحلةٍ أخرى لا يبقى مختارًا
- * صامتًا فيُرسَل بمرحلةٍ لا تطابقه.
+ * **علامةُ الحقل الناقص — لونٌ ونصٌّ معًا لا لونٌ وحده** (§488: «ممنوع
+ * الاعتماد على اللون وحده — عمى الألوان شائع»).
+ *
+ * **وموضعُها تحت حقلها مباشرة** (§8.11) — **لا في ذيل الشاشة تحت الزرّ**،
+ * وهو ما جعل المالك يقرأ الزرَّ معطَّلًا لا منتظِرًا (القرار 292).
+ */
+function FieldNote({ message }: { message?: string | undefined }) {
+  if (message === undefined) return null;
+  return <Text style={styles.fieldError}>{message}</Text>;
+}
+
+/**
+ * **المرحلة — تُسأل وحدها حين يكون الصنفُ بلا مرحلة** (القرار 292).
+ *
+ * **ولا تُسقط الصنف بعد اليوم**: كانت تُسقطه لأن صنفَ مرحلةٍ أخرى لا يبقى
+ * مختارًا صامتًا — **واليوم المرحلةُ تتبع الصنف لا تحكمه**، فلا شيءَ يسقط.
  */
 function StagePicker({
   row,
@@ -125,7 +163,7 @@ function StagePicker({
           label={stage}
           selected={row.stage === stage}
           onPress={() => {
-            onChange(row.key, { stage, productId: null });
+            onChange(row.key, { stage });
           }}
         />
       ))}
@@ -133,7 +171,11 @@ function StagePicker({
   );
 }
 
-/** **الصنف — ومخزنٌ بلا صنفٍ لهذه المرحلة يُقال صراحةً لا يُترك فارغًا.** */
+/**
+ * **الصنف — واختيارُه يضبط مرحلتَه معه** (القرار 292): سؤالٌ واحد لا اثنان.
+ *
+ * **ومخزنٌ بلا صنفِ علفٍ يُقال صراحةً لا يُترك فارغًا.**
+ */
 function ProductPicker({
   row,
   candidates,
@@ -144,7 +186,7 @@ function ProductPicker({
   onChange: (key: string, patch: Partial<FeedRowDraft>) => void;
 }) {
   if (candidates.length === 0) {
-    return <Text style={styles.note}>لا صنف علفٍ لهذه المرحلة في مخزن العنبر</Text>;
+    return <Text style={styles.note}>لا صنف علفٍ في مخزن العنبر</Text>;
   }
   return (
     <View style={styles.chips}>
@@ -154,7 +196,9 @@ function ProductPicker({
           label={product.name}
           selected={row.productId === product.id}
           onPress={() => {
-            onChange(row.key, { productId: product.id });
+            // **الصنفُ ومرحلتُه معًا** — والمرحلةُ تُشتقّ في `stageOfProduct`
+            // فتُقرأ في موضعٍ واحد ويُفحص وحده
+            onChange(row.key, { productId: product.id, stage: stageOfProduct(product) });
           }}
         />
       ))}
@@ -185,4 +229,20 @@ const styles = StyleSheet.create({
     textAlign: "right",
   },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
+  /** **المرحلة المشتقّة — تُقرأ ولا تُلمَس**، فبوزن النصّ العاديّ لا العنوان. */
+  derived: {
+    fontSize: font.size.content,
+    fontFamily: font.familyRegular,
+    color: color.textBody,
+    writingDirection: "rtl",
+    textAlign: "right",
+  },
+  /** **لونٌ ونصٌّ معًا** (§488) — والنصُّ هو الحامل، واللونُ تأكيدٌ له. */
+  fieldError: {
+    fontSize: font.size.content,
+    fontFamily: font.familyBold,
+    color: color.statusCritical,
+    writingDirection: "rtl",
+    textAlign: "right",
+  },
 });

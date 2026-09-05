@@ -70,6 +70,14 @@ const starterFeed: dailyLogApi.ProductCard = {
   packageUnit: "كجم",
 };
 
+/** **صنفٌ ثانٍ بمرحلةٍ أخرى** — **يُثبت أن السؤال واحدٌ يجمع المراحل** (292). */
+const finisherFeed: dailyLogApi.ProductCard = {
+  ...starterFeed,
+  id: 12,
+  name: "علف ناهي",
+  feedStage: "ناهي",
+};
+
 const clients: QueryClient[] = [];
 
 /** نتيجةُ حفظٍ ناجح — **تُكتب مرة واحدة** ويُعاد استعمالها. */
@@ -120,7 +128,7 @@ beforeEach(() => {
     },
   ]);
   housesSpy.mockResolvedValue([house()]);
-  productsSpy.mockResolvedValue([starterFeed]);
+  productsSpy.mockResolvedValue([starterFeed, finisherFeed]);
 });
 
 afterEach(() => {
@@ -235,6 +243,78 @@ describe("الحالة العادية — النموذج", () => {
     const [, body] = submitSpy.mock.calls[0] ?? [];
     expect(body?.houseId).toBe(5);
     expect(body?.mortalityCount).toBe(0);
+  });
+});
+
+/**
+ * **الزرُّ يعمل، والضغطُ يكشف ما ينقص عند حقله** (القرار 292، حكم المالك).
+ *
+ * **وكان الزرُّ يُعطَّل ويُكتب سببُه تحته في ذيل الشاشة** — **فقرأه المالك
+ * على جهازه «لا يعمل» وهو ينتظر اختيار صنف**. **وزرٌّ لا يُضغط لا يجد لحظةً
+ * يشرح فيها نفسَه.**
+ */
+describe("النقص يُكشف عند الضغط لا قبله", () => {
+  /** **ولا حمرةَ قبل الضغط** — فصفٌّ يُضاف للتوّ لا يُستقبَل بها. */
+  it("صفُّ علفٍ جديد بلا علامةٍ حمراء حتى يُضغط الحفظ", async () => {
+    await renderWithActiveBatch();
+    fireEvent.press(screen.getByText("إضافة نوع علف آخر"));
+
+    expect(screen.queryByText("اختر العلف")).toBeNull();
+    expect(screen.queryByText("الكمية أكبر من صفر")).toBeNull();
+  });
+
+  /**
+   * **والضغطُ يكشف ولا يُرسل** — **وهذا ما يفرّق**: لو أُرسل الطلبُ ناقصًا
+   * لردّه الخادم، **ولو بقي الزرُّ معطَّلًا لما ظهر شيءٌ إطلاقًا**.
+   */
+  it("والضغطُ يُظهر العلامة عند حقلها ولا يُرسل شيئًا", async () => {
+    await renderWithActiveBatch();
+    fireEvent.press(screen.getByText("إضافة نوع علف آخر"));
+    fireEvent.press(screen.getByText("حفظ السجل"));
+
+    await waitFor(() => {
+      expect(screen.getByText("اختر العلف")).toBeTruthy();
+    });
+    expect(screen.getByText("الكمية أكبر من صفر")).toBeTruthy();
+    expect(submitSpy).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * **المرحلةُ تُشتقّ من الصنف ولا تُسأل** (القرار 292).
+ *
+ * **والمرونةُ باقية:** خلطُ مرحلتين صفَّان بصنفين، وكلٌّ يحمل مرحلته.
+ */
+describe("العلف سؤالٌ واحد — والمرحلة تتبعه", () => {
+  it("لا مُنتقيَ مرحلةٍ في الصفّ — والأصنافُ الثلاثة معروضةٌ معًا", async () => {
+    await renderWithActiveBatch();
+    fireEvent.press(screen.getByText("إضافة نوع علف آخر"));
+
+    // **الأصناف كلُّها في سؤالٍ واحد** — ولا سؤالَ مرحلةٍ يسبقها
+    expect(screen.getByText("علف بادئ")).toBeTruthy();
+    expect(screen.getByText("علف ناهي")).toBeTruthy();
+    expect(screen.queryByText("المرحلة")).toBeNull();
+  });
+
+  it("واختيارُ الصنف يعرض مرحلتَه ويُرسلها في الطلب", async () => {
+    submitSpy.mockResolvedValue(SAVED);
+    await renderWithActiveBatch();
+    fireEvent.press(screen.getByText("إضافة نوع علف آخر"));
+    fireEvent.press(screen.getByText("علف ناهي"));
+
+    // **تُعرض ولا تُسأل** — و«تسمية: قيمة» صيغةٌ ثابتة (القرار 287)
+    await waitFor(() => {
+      expect(screen.getByText("المرحلة: ناهي")).toBeTruthy();
+    });
+
+    // **الأكياس بخطوة ٠٫٥** — والزرُّ يُبلَغ بتسميته لا بنصّه
+    fireEvent.press(screen.getAllByLabelText("زيادة")[1] as never);
+    fireEvent.press(screen.getByText("حفظ السجل"));
+    await waitFor(() => {
+      expect(screen.getByText("حُفظ سجل اليوم")).toBeTruthy();
+    });
+    const [, body] = submitSpy.mock.calls[0] ?? [];
+    expect(body?.feedRows).toEqual([{ productId: 12, feedStage: "ناهي", bags: 0.5 }]);
   });
 });
 
