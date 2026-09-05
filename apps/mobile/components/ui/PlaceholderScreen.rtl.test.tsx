@@ -4,7 +4,6 @@ import { PlaceholderScreen } from "./PlaceholderScreen";
 
 import { renderWithSafeArea } from "@/test-utils/rtl";
 
-
 jest.mock("@/lib/account", () => ({
   roleLabel: (role: string) => role,
   useAccountSheet: () => ({

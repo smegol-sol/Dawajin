@@ -43,7 +43,9 @@ export function FarmsLevel({
         error={query.isError ? infrastructureErrorMessage(query.error) : null}
         onRetry={() => void query.refetch()}
         emptyMessage="لا مزارع مُسندة إليك في هذا الموقع"
-        {...(capabilities.canCreate ? { createLabel: "إضافة مزرعة جديدة", onCreate: startCreate } : {})}
+        {...(capabilities.canCreate
+          ? { createLabel: "إضافة مزرعة جديدة", onCreate: startCreate }
+          : {})}
         keyOf={(farm) => farm.id}
         renderItem={(farm) => (
           <FarmRow

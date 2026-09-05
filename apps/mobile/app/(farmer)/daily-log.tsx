@@ -3,13 +3,11 @@ import { useRouter } from "expo-router";
 import { useMemo, useState } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 
+import { Fields } from "@/components/daily-log/DailyLogFields";
 import { FeedBlock } from "@/components/daily-log/FeedBlock";
-import { MeasurementsBlock } from "@/components/daily-log/MeasurementsBlock";
-import { MortalityBlock } from "@/components/daily-log/MortalityBlock";
 import { AccountSheet } from "@/components/ui/AccountSheet";
 import { AppHeader } from "@/components/ui/AppHeader";
 import { Button } from "@/components/ui/Button";
-import { FormField } from "@/components/ui/FormField";
 import { ListState } from "@/components/ui/ListState";
 import { color, font, spacing } from "@/constants/theme";
 import { useAccountSheet } from "@/lib/account";
@@ -17,20 +15,16 @@ import { fetchAssignedHouses, fetchHouseBatches, fetchProducts } from "@/lib/dai
 import { dailyLogErrorMessage } from "@/lib/dailyLogErrors";
 import {
   activeBatchOf,
-  addFeedRow,
   arrivingBatchOf,
   emptyDraft,
-  newClientId,
-  patchFeedRow,
-  removeFeedRow,
   draftErrors,
   errorSummary,
-  rowErrors,
-  sampleError,
+  fieldErrorKey,
   type FieldError,
   todayIso,
   type DailyLogDraft,
 } from "@/lib/dailyLogForm";
+import { useFieldErrors } from "@/lib/fieldErrors";
 import type { HouseCard } from "@/lib/infrastructureApi";
 import { useAuthToken } from "@/lib/useAuthToken";
 import { useDailyLogSubmit } from "@/lib/useDailyLogSubmit";
@@ -227,8 +221,12 @@ function Form({
   houseCount: number;
 }) {
   const [draft, setDraft] = useState<DailyLogDraft>(emptyDraft);
-  /** **ما ظهر للمستخدم من نقص** — فارغٌ حتى أول ضغطة (القرار 292). */
-  const [shown, setShown] = useState<FieldError[]>([]);
+  /**
+   * **ما ظهر للمستخدم من نقص** — **فارغٌ حتى أول ضغطة** (القرار 292)،
+   * **ويُمحى منه ما أُصلح حقلُه وحده** (القرار 294).
+   */
+  const errors = useFieldErrors<FieldError>(fieldErrorKey);
+  const shown = errors.shown;
   const logDate = useMemo(() => todayIso(new Date()), []);
   const submit = useDailyLogSubmit({
     token,
@@ -246,7 +244,7 @@ function Form({
   }
 
   const press = (): void => {
-    revealOrSave({ draft, setShown, save: submit.save });
+    revealOrSave({ draft, setShown: errors.show, save: submit.save });
   };
   const summary = errorSummary(shown);
 
@@ -261,6 +259,7 @@ function Form({
           house={house}
           logDate={logDate}
           shown={shown}
+          clearErrors={errors.clear}
         />
         {submit.failure === undefined ? null : <Text style={styles.failure}>{submit.failure}</Text>}
       </ScrollView>
@@ -318,75 +317,12 @@ function SaveBar({
  */
 function revealOrSave(args: {
   draft: DailyLogDraft;
-  setShown: (errors: FieldError[]) => void;
+  setShown: (errors: readonly FieldError[]) => void;
   save: (draft: DailyLogDraft) => void;
 }): void {
   const found = draftErrors(args.draft);
   args.setShown(found);
   if (found.length === 0) args.save(args.draft);
-}
-
-/** **حقولُ النموذج — تدفّقٌ رأسيّ واحد متصل** (§2)، مفصولةٌ عن حالة الحفظ. */
-function Fields({
-  draft,
-  setDraft,
-  products,
-  house,
-  logDate,
-  shown,
-}: {
-  draft: DailyLogDraft;
-  setDraft: React.Dispatch<React.SetStateAction<DailyLogDraft>>;
-  products: React.ComponentProps<typeof FeedBlock>["products"];
-  house: HouseCard;
-  logDate: string;
-  shown: readonly FieldError[];
-}) {
-  const patch = (next: Partial<DailyLogDraft>): void => {
-    setDraft((current) => ({ ...current, ...next }));
-  };
-
-  return (
-    <>
-      {/* **التاريخ معطَّل، وحدُّه معلن (قاعدة 268): لا منتقيَ تاريخٍ في
-          المستودع اليوم — فالتسجيل على تاريخ الجهاز وحده، ويسقط الحدّ يوم
-          يُبنى أوّلُ منتقٍ.** */}
-      <FormField label="تاريخ السجل" type="date" value={logDate} disabled />
-      <MortalityBlock
-        count={draft.mortalityCount}
-        cause={draft.mortalityCause}
-        onCountChange={(mortalityCount) => {
-          patch({ mortalityCount });
-        }}
-        onCauseChange={(mortalityCause) => {
-          patch({ mortalityCause });
-        }}
-      />
-      <FeedBlock
-        rows={draft.feedRows}
-        products={products}
-        errorsOf={(rowKey) => rowErrors(shown, rowKey)}
-        onChange={(key, rowPatch) => {
-          setDraft((current) => patchFeedRow(current, key, rowPatch));
-        }}
-        onAdd={() => {
-          setDraft((current) => addFeedRow(current, newClientId()));
-        }}
-        onRemove={(key) => {
-          setDraft((current) => removeFeedRow(current, key));
-        }}
-      />
-      <MeasurementsBlock
-        draft={draft}
-        {...(() => {
-          const message = sampleError(shown);
-          return message === undefined ? {} : { sampleError: message };
-        })()}
-        tankCapacityL={house.waterTankCapacityL === null ? null : Number(house.waterTankCapacityL)}
-        onChange={patch}
-      />
-    </>
-  );
 }
 
 /**

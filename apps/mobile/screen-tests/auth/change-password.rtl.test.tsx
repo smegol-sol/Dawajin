@@ -92,6 +92,47 @@ describe("تغيير كلمة المرور — رسائل التحقق تحت ح
   });
 });
 
+/**
+ * **الوجه الثاني لحكم 292** (القرار 294): «لا حمرةَ قبل الضغط» **و«لا حمرةَ
+ * بعد أن يزول موجبُها»** — قاعدةٌ واحدة بطرفين.
+ *
+ * **ورآه المالك على جهازه:** حقلُ «كلمة المرور الحالية» **مملوءٌ** وتحته
+ * «أدخل كلمة المرور الحالية».
+ */
+describe("تغيير كلمة المرور — الرسالة تُمحى عند إصلاح حقلها وحده (294)", () => {
+  /** **الطرف الأول: يكتب فيُمحى.** */
+  it("**الكتابة في الحقل الناقص تمحو رسالته**", async () => {
+    renderWithSafeArea(<ChangePasswordScreen />);
+    fireEvent.press(screen.getByText("حفظ كلمة المرور"));
+    await waitFor(() => {
+      expect(screen.getByTestId("change-current-error")).toBeTruthy();
+    });
+
+    fireEvent.changeText(screen.getByTestId("change-current"), "kalima-mu2aqata");
+
+    expect(screen.queryByTestId("change-current-error")).toBeNull();
+  });
+
+  /**
+   * **الطرف الثاني — وهو ما يفرّق** (حكم المالك): **بلا هذا الشاهد يمرّ علاجٌ
+   * يمحو كلَّ شيء عند أيّ كتابة**، **ويخضرّ الطرفُ الأول وحده**.
+   */
+  it("**الكتابة في حقلٍ آخر لا تمحو رسالة الأول**", async () => {
+    renderWithSafeArea(<ChangePasswordScreen />);
+    fireEvent.press(screen.getByText("حفظ كلمة المرور"));
+    await waitFor(() => {
+      expect(screen.getByTestId("change-current-error")).toBeTruthy();
+    });
+
+    fireEvent.changeText(screen.getByTestId("change-next"), "kalima-jadida");
+    fireEvent.changeText(screen.getByTestId("change-confirm"), "kalima-jadida");
+
+    expect(screen.getByTestId("change-current-error")).toHaveTextContent(
+      "أدخل كلمة المرور الحالية"
+    );
+  });
+});
+
 describe("تغيير كلمة المرور — الإتمام ومنع التجاوز", () => {
   it("بعد النجاح: must_change_password صار false، والتوجيه لتبويبات الدور", async () => {
     changeSpy.mockResolvedValueOnce(undefined);

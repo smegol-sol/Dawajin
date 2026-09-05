@@ -69,9 +69,7 @@ describe("بطاقة الكيان — التنقّل والخيارات", () => 
   });
 
   it("⋮ يحمل اسم الكيان في تسميته — لا «خيارات» مجرّدة", () => {
-    const view = render(
-      <Card title="مزرعة الجبل 1" onMorePress={() => undefined} testID="card" />
-    );
+    const view = render(<Card title="مزرعة الجبل 1" onMorePress={() => undefined} testID="card" />);
 
     expect(view.getByTestId("card-more").props.accessibilityLabel).toBe("خيارات مزرعة الجبل 1");
   });
