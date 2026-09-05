@@ -13,7 +13,11 @@ import {
   newClientId,
   patchFeedRow,
   removeFeedRow,
-  saveDisabledReason,
+  draftErrors,
+  errorSummary,
+  rowErrors,
+  sampleError,
+  stageOfProduct,
   todayIso,
   waterComputedLine,
   type DailyLogDraft,
@@ -66,16 +70,33 @@ describe("أصناف العلف المعروضة", () => {
       packageUnit: null,
     };
     const bagged: ProductCard = { ...feed(8, null, 25), category: "مستلزمات تشغيل" };
-    const names = feedProductsOf([feed(1, "بادئ", 50), medicine, bagged], "بادئ").map(
-      (p) => p.name
-    );
+    const names = feedProductsOf([feed(1, "بادئ", 50), medicine, bagged]).map((p) => p.name);
     expect(names).toEqual(["علف بادئ"]);
   });
 
-  it("وصنفُ مرحلةٍ أخرى غائب — والصنفُ بلا مرحلة يظهر في كلّها", () => {
+  /**
+   * **ولا تُفلتر بمرحلة بعد اليوم** (القرار 292) — **المرحلةُ تتبع الصنف**،
+   * فكلُّ أصناف العلف معروضةٌ في سؤالٍ واحد.
+   */
+  it("وكلُّ مراحل العلف معروضةٌ معًا — فالسؤال واحد لا اثنان", () => {
     const products = [feed(1, "بادئ", 50), feed(2, "ناهي", 50), feed(3, null, 50)];
-    expect(feedProductsOf(products, "بادئ").map((p) => p.id)).toEqual([1, 3]);
-    expect(feedProductsOf(products, "ناهي").map((p) => p.id)).toEqual([2, 3]);
+    expect(feedProductsOf(products).map((p) => p.id)).toEqual([1, 2, 3]);
+  });
+});
+
+/**
+ * **المرحلةُ تُشتقّ من الصنف** (القرار 292) — **وتضييقٌ لا ادّعاء**: حقلُ
+ * الرد `string | null`، **ومرحلةٌ لا تعرفها القائمة تُعامَل كغياب**.
+ */
+describe("اشتقاق المرحلة من الصنف", () => {
+  it("صنفٌ بمرحلة يُعطيها، وبلا صنفٍ لا شيء", () => {
+    expect(stageOfProduct(feed(1, "نامي", 50))).toBe("نامي");
+    expect(stageOfProduct(undefined)).toBeNull();
+  });
+
+  it("وصنفٌ بلا مرحلة — أو بمرحلةٍ لا تعرفها القائمة — يُعامَل كغياب فتُسأل", () => {
+    expect(stageOfProduct(feed(2, null, 50))).toBeNull();
+    expect(stageOfProduct({ ...feed(3, null, 50), feedStage: "مرحلةٌ غريبة" })).toBeNull();
   });
 });
 
@@ -124,43 +145,78 @@ describe("الأسطر المحسوبة — تُعرض ولا تُرسَل", () 
   });
 });
 
-describe("سبب تعطيل الحفظ — يظهر قبل الضغط لا بعده", () => {
+/**
+ * **ما ينقص النموذج — مسمًّى بحقله لا بسطرٍ في ذيل الشاشة** (القرار 292).
+ *
+ * **وكان سببًا واحدًا تحت زرٍّ معطَّل — فقرأه المالك «الزرّ لا يعمل».**
+ */
+describe("الحقول الناقصة — مسمّاةٌ بصفّها", () => {
   const withRow = (patch: Partial<DailyLogDraft["feedRows"][number]>): DailyLogDraft => ({
     ...emptyDraft,
     feedRows: [{ key: "k", productId: 1, stage: "بادئ", bags: 1, ...patch }],
   });
 
-  it("لا سبب لنموذجٍ سليم", () => {
-    expect(saveDisabledReason(emptyDraft, false)).toBeUndefined();
-    expect(saveDisabledReason(withRow({}), false)).toBeUndefined();
+  it("لا نقصَ في نموذجٍ سليم — ولا في فارغ", () => {
+    expect(draftErrors(emptyDraft)).toEqual([]);
+    expect(draftErrors(withRow({}))).toEqual([]);
+    expect(errorSummary([])).toBeUndefined();
   });
 
-  it("صفُّ علفٍ بلا صنف يُسمّى — ولا يُرسَل فيُردّ", () => {
-    expect(saveDisabledReason(withRow({ productId: null }), false)).toBe(
-      "اختر صنف العلف في كل صفّ"
+  it("صفٌّ بلا صنفٍ يُسمّى بمفتاح صفّه — والخادم يردّه بـ400", () => {
+    expect(draftErrors(withRow({ productId: null, stage: null }))).toEqual([
+      { kind: "feed-product", rowKey: "k" },
+    ]);
+    expect(rowErrors(draftErrors(withRow({ productId: null, stage: null })), "k").product).toBe(
+      "اختر العلف"
+    );
+  });
+
+  /** **حالةٌ لا تقع اليوم ومحروسة** — صنفٌ مختارٌ بلا مرحلة (لا صنفَ كذلك، 268). */
+  it("وصنفٌ بلا مرحلة يُسمّى مرحلةً لا صنفًا — فتُسأل وحدها", () => {
+    expect(draftErrors(withRow({ stage: null }))).toEqual([{ kind: "feed-stage", rowKey: "k" }]);
+    expect(rowErrors(draftErrors(withRow({ stage: null })), "k").stage).toBe(
+      "اختر المرحلة — هذا الصنف بلا مرحلة"
     );
   });
 
   it("وصفرُ أكياسٍ يُسمّى — والخادم يردّه", () => {
-    expect(saveDisabledReason(withRow({ bags: 0 }), false)).toBe(
-      "كمية العلف في كل صفّ أكبر من صفر"
-    );
+    expect(draftErrors(withRow({ bags: 0 }))).toEqual([{ kind: "feed-bags", rowKey: "k" }]);
+    expect(rowErrors(draftErrors(withRow({ bags: 0 })), "k").bags).toBe("الكمية أكبر من صفر");
   });
 
-  it("وعيّنةٌ بنصفها تُسمّى — والخادم يردّها بـsample_pair_required", () => {
-    expect(saveDisabledReason({ ...emptyDraft, sampledBirds: 5 }, false)).toBe(
-      "عيّنة الوزن رقمان معًا: عدد الطيور ووزنها"
-    );
-    expect(saveDisabledReason({ ...emptyDraft, sampledWeightKg: 5 }, false)).toBe(
-      "عيّنة الوزن رقمان معًا: عدد الطيور ووزنها"
-    );
-    expect(
-      saveDisabledReason({ ...emptyDraft, sampledBirds: 5, sampledWeightKg: 5 }, false)
-    ).toBeUndefined();
+  it("وعيّنةٌ بنصفها تُسمّى عند حقلها — والخادم يردّها بـsample_pair_required", () => {
+    const half = { ...emptyDraft, sampledBirds: 5 };
+    expect(draftErrors(half)).toEqual([{ kind: "sample" }]);
+    expect(sampleError(draftErrors(half))).toBe("عيّنة الوزن رقمان معًا: عدد الطيور ووزنها");
+    expect(draftErrors({ ...emptyDraft, sampledWeightKg: 5 })).toEqual([{ kind: "sample" }]);
+    expect(draftErrors({ ...emptyDraft, sampledBirds: 5, sampledWeightKg: 5 })).toEqual([]);
+    expect(sampleError([])).toBeUndefined();
   });
 
-  it("وأثناء الحفظ يُعطَّل الزرّ", () => {
-    expect(saveDisabledReason(emptyDraft, true)).toBe("جارٍ الحفظ");
+  /** **وأخطاءُ صفٍّ لا تُعرض على صفٍّ آخر** — والمفتاحُ هو ما يفرّق. */
+  it("والقسمةُ بالمفتاح — فلا يُعلَّم صفٌّ بنقص جاره", () => {
+    const two: DailyLogDraft = {
+      ...emptyDraft,
+      feedRows: [
+        { key: "a", productId: null, stage: null, bags: 1 },
+        { key: "b", productId: 1, stage: "بادئ", bags: 1 },
+      ],
+    };
+    expect(rowErrors(draftErrors(two), "a").product).toBe("اختر العلف");
+    expect(rowErrors(draftErrors(two), "b")).toEqual({});
+  });
+
+  /**
+   * **والسطرُ فوق الزرّ يقول كم ينقص** — **لأن الحقل قد يكون خارج الشاشة**.
+   * **و«تسمية: عدد» لا «عدد + معدود»** (القرار 287).
+   */
+  it("وسطرُ الملخّص يسمّي الأول ويعدّ الباقي", () => {
+    expect(errorSummary(draftErrors(withRow({ bags: 0 })))).toBe("الكمية أكبر من صفر");
+    const many = draftErrors({
+      ...withRow({ productId: null, stage: null, bags: 0 }),
+      sampledBirds: 5,
+    });
+    expect(errorSummary(many)).toBe("اختر العلف — وحقولٌ ناقصة أخرى: 2");
   });
 });
 

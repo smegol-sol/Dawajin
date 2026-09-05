@@ -23,7 +23,11 @@ import {
   newClientId,
   patchFeedRow,
   removeFeedRow,
-  saveDisabledReason,
+  draftErrors,
+  errorSummary,
+  rowErrors,
+  sampleError,
+  type FieldError,
   todayIso,
   type DailyLogDraft,
 } from "@/lib/dailyLogForm";
@@ -223,6 +227,8 @@ function Form({
   houseCount: number;
 }) {
   const [draft, setDraft] = useState<DailyLogDraft>(emptyDraft);
+  /** **ما ظهر للمستخدم من نقص** — فارغٌ حتى أول ضغطة (القرار 292). */
+  const [shown, setShown] = useState<FieldError[]>([]);
   const logDate = useMemo(() => todayIso(new Date()), []);
   const submit = useDailyLogSubmit({
     token,
@@ -239,7 +245,10 @@ function Form({
     );
   }
 
-  const reason = saveDisabledReason(draft, submit.pending);
+  const press = (): void => {
+    revealOrSave({ draft, setShown, save: submit.save });
+  };
+  const summary = errorSummary(shown);
 
   return (
     <View style={styles.formShell}>
@@ -251,32 +260,70 @@ function Form({
           products={products}
           house={house}
           logDate={logDate}
+          shown={shown}
         />
         {submit.failure === undefined ? null : <Text style={styles.failure}>{submit.failure}</Text>}
       </ScrollView>
-      {/**
-       * **زرُّ الحفظ ثابتٌ أسفل الشاشة، شقيقًا للتمرير لا آخرَ عنصرٍ فيه**
-       * (§2 نصًّا). **وهو عطبُ استعمالٍ لا ملاحظةُ عرض حين يُدفَن**: الزرُّ
-       * **الفعلُ الوحيد في الشاشة**، **ومربٍّ لا يجده لا يسجّل شيئًا** —
-       * ونموذجٌ بهذا الطول يدفعه تحت شريط التبويبات على كل جهاز.
-       *
-       * **ويحرسه تأكيدُ تخطيطٍ يقيس أنه مرئيّ بلا تمرير** لا أنه موجود
-       * (`layout-tests/daily-log.layout.spec.ts`) — **و`react-test-renderer`
-       * لا يُنفّذ تخطيط Yoga فلا يراه** (القرار #80).
-       */}
-      <View style={styles.saveBar}>
-        <Button
-          label="حفظ السجل"
-          variant="primary"
-          formSize
-          onPress={() => {
-            submit.save(draft);
-          }}
-          {...(reason === undefined ? {} : { disabledReason: reason })}
-        />
-      </View>
+      <SaveBar summary={summary} pending={submit.pending} onPress={press} />
     </View>
   );
+}
+
+/**
+ * **زرُّ الحفظ ثابتٌ أسفل الشاشة، شقيقًا للتمرير لا آخرَ عنصرٍ فيه** (§2 نصًّا).
+ * **وهو عطبُ استعمالٍ لا ملاحظةُ عرض حين يُدفَن**: الزرُّ **الفعلُ الوحيد في
+ * الشاشة**، **ومربٍّ لا يجده لا يسجّل شيئًا** — ونموذجٌ بهذا الطول يدفعه تحت
+ * شريط التبويبات على كل جهاز.
+ *
+ * **ويحرسه تأكيدُ تخطيطٍ يقيس أنه مرئيّ بلا تمرير** لا أنه موجود
+ * (`layout-tests/daily-log.layout.spec.ts`) — **و`react-test-renderer` لا
+ * يُنفّذ تخطيط Yoga فلا يراه** (القرار #80).
+ *
+ * **والسطرُ فوقه يقول كم ينقص** (القرار 292) — **لأن الحقل الناقص قد يكون
+ * خارج الشاشة لحظةَ الضغط**، فالعلامةُ عنده وحدها لا تُرى.
+ */
+function SaveBar({
+  summary,
+  pending,
+  onPress,
+}: {
+  summary: string | undefined;
+  pending: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <View style={styles.saveBar}>
+      {summary === undefined ? null : <Text style={styles.failure}>{summary}</Text>}
+      <Button
+        label="حفظ السجل"
+        variant="primary"
+        formSize
+        onPress={onPress}
+        {...(pending ? { disabledReason: "جارٍ الحفظ" } : {})}
+      />
+    </View>
+  );
+}
+
+/**
+ * **الزرُّ يعمل دائمًا، والضغطُ يكشف ما ينقص** (القرار 292، حكم المالك).
+ *
+ * **وزرٌّ معطَّلٌ لا يُضغط لا يجد لحظةً يشرح فيها نفسَه** — **فقرأه المالك على
+ * جهازه «لا يعمل» وهو ينتظر اختيار صنف**. **وهذا نمطُ شاشات الدخول وتغيير
+ * كلمة المرور في المستودع، فصار واحدًا لا اثنين.**
+ *
+ * **ولا تظهر العلامةُ قبل الضغط** — فصفٌّ يُضاف للتوّ لا يُستقبَل بالحمرة.
+ *
+ * **ومفصولٌ عن `Form` لأن الحدّ يُحترم بالفصل لا برفعه.**
+ */
+function revealOrSave(args: {
+  draft: DailyLogDraft;
+  setShown: (errors: FieldError[]) => void;
+  save: (draft: DailyLogDraft) => void;
+}): void {
+  const found = draftErrors(args.draft);
+  args.setShown(found);
+  if (found.length === 0) args.save(args.draft);
 }
 
 /** **حقولُ النموذج — تدفّقٌ رأسيّ واحد متصل** (§2)، مفصولةٌ عن حالة الحفظ. */
@@ -286,12 +333,14 @@ function Fields({
   products,
   house,
   logDate,
+  shown,
 }: {
   draft: DailyLogDraft;
   setDraft: React.Dispatch<React.SetStateAction<DailyLogDraft>>;
   products: React.ComponentProps<typeof FeedBlock>["products"];
   house: HouseCard;
   logDate: string;
+  shown: readonly FieldError[];
 }) {
   const patch = (next: Partial<DailyLogDraft>): void => {
     setDraft((current) => ({ ...current, ...next }));
@@ -316,6 +365,7 @@ function Fields({
       <FeedBlock
         rows={draft.feedRows}
         products={products}
+        errorsOf={(rowKey) => rowErrors(shown, rowKey)}
         onChange={(key, rowPatch) => {
           setDraft((current) => patchFeedRow(current, key, rowPatch));
         }}
@@ -328,6 +378,10 @@ function Fields({
       />
       <MeasurementsBlock
         draft={draft}
+        {...(() => {
+          const message = sampleError(shown);
+          return message === undefined ? {} : { sampleError: message };
+        })()}
         tankCapacityL={house.waterTankCapacityL === null ? null : Number(house.waterTankCapacityL)}
         onChange={patch}
       />
