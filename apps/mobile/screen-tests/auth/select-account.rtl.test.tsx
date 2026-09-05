@@ -1,7 +1,8 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
+import { fireEvent, screen, waitFor } from "@testing-library/react-native";
 
 import SelectAccountScreen from "@/app/auth/select-account";
 import { clearPendingLogin, getPendingLogin, setPendingLogin } from "@/lib/pendingLogin";
+import { renderWithSafeArea } from "@/test-utils/rtl";
 
 /**
  * اختيار الحساب — **الخطوة الوسطى** في الشكل الرابع (القرار #106): تأتي
@@ -29,7 +30,7 @@ beforeEach(() => {
 describe("شاشة اختيار الحساب", () => {
   it("تعرض اسم المستأجر لكل حساب", () => {
     setPendingLogin({ phone: "770123456", accounts: ACCOUNTS, selectedTenantId: null });
-    render(<SelectAccountScreen />);
+    renderWithSafeArea(<SelectAccountScreen />);
 
     expect(screen.getByText("مزارع الوادي")).toBeTruthy();
     expect(screen.getByText("شركة الأمانة")).toBeTruthy();
@@ -37,7 +38,7 @@ describe("شاشة اختيار الحساب", () => {
 
   it("لا اسم شخص ولا دور معروض — الخادم لا يُرجعهما قبل التحقق (القيد ب)", () => {
     setPendingLogin({ phone: "770123456", accounts: ACCOUNTS, selectedTenantId: null });
-    render(<SelectAccountScreen />);
+    renderWithSafeArea(<SelectAccountScreen />);
 
     expect(screen.queryByText(/د\. سالم/)).toBeNull();
     expect(screen.queryByText(/طبيب/)).toBeNull();
@@ -45,7 +46,7 @@ describe("شاشة اختيار الحساب", () => {
 
   it("لا معرّف داخلي على الشاشة (§12)", () => {
     setPendingLogin({ phone: "770123456", accounts: ACCOUNTS, selectedTenantId: null });
-    render(<SelectAccountScreen />);
+    renderWithSafeArea(<SelectAccountScreen />);
 
     expect(screen.queryByText(/\b3\b/)).toBeNull();
     expect(screen.queryByText(/\b9\b/)).toBeNull();
@@ -53,7 +54,7 @@ describe("شاشة اختيار الحساب", () => {
 
   it("الاختيار يثبّت الحساب وينتقل لكلمة المرور بلا طلب شبكة", async () => {
     setPendingLogin({ phone: "770123456", accounts: ACCOUNTS, selectedTenantId: null });
-    render(<SelectAccountScreen />);
+    renderWithSafeArea(<SelectAccountScreen />);
 
     const [, secondAccountAction] = screen.getAllByText("متابعة بهذا الحساب");
     if (secondAccountAction === undefined) throw new Error("بطاقة الحساب الثاني غائبة");
@@ -66,7 +67,7 @@ describe("شاشة اختيار الحساب", () => {
   });
 
   it("بلا حالة وسيطة ← سبب صريح لا شاشة بيضاء (§8.17)", () => {
-    render(<SelectAccountScreen />);
+    renderWithSafeArea(<SelectAccountScreen />);
     expect(screen.getByTestId("select-account-expired")).toBeTruthy();
   });
 });
