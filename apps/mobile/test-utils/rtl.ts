@@ -47,3 +47,25 @@ export function renderWithSafeArea(ui: ReactElement, options?: RenderOptions): R
     options
   );
 }
+
+/**
+ * `render` بمناطق آمنة **غير صفرية** — **لقياس أن الحشو يُضاف فعلًا** (القرار 291).
+ *
+ * **والصفرُ لا يفرّق:** `renderWithSafeArea` أعلاه يُبقي كل تأكيدٍ قائم كما هو
+ * **فيخضرّ ولو أُسقط الحشو كلُّه** — **وهو ما جعل عطب شاشات المصادقة يمرّ**.
+ * **وهذه تفرّق لأن القيمة تظهر في النمط المحسوب.**
+ *
+ * **والأرقام من جهاز المالك لا مخترَعة** (القرار 171): شريطُ الحالة 135px
+ * وشريطُ التنقّل 136px على كثافة 560 — **‏‎≈38.6‎‏ و‎≈38.9‎‏ نقطة**.
+ */
+export const DEVICE_INSET_METRICS: Metrics = {
+  frame: { x: 0, y: 0, width: 361, height: 779 },
+  insets: { top: 38, left: 0, right: 0, bottom: 39 },
+};
+
+export function renderWithDeviceInsets(ui: ReactElement, options?: RenderOptions): RenderResult {
+  return render(
+    createElement(SafeAreaProvider, { initialMetrics: DEVICE_INSET_METRICS }, ui),
+    options
+  );
+}

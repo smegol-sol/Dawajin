@@ -1,9 +1,10 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
+import { fireEvent, screen, waitFor } from "@testing-library/react-native";
 import { BackHandler } from "react-native";
 
 import ChangePasswordScreen from "@/app/auth/change-password";
 import * as api from "@/lib/api";
 import * as session from "@/lib/session";
+import { renderWithSafeArea } from "@/test-utils/rtl";
 
 /**
  * تغيير كلمة المرور الإجباري — المسار الافتراضي لكل مستخدم جديد.
@@ -41,7 +42,7 @@ beforeEach(() => {
 
 describe("تغيير كلمة المرور — رسائل التحقق تحت حقلها", () => {
   it("كلمة المرور الحالية فارغة ← رسالة تحت حقلها", async () => {
-    render(<ChangePasswordScreen />);
+    renderWithSafeArea(<ChangePasswordScreen />);
     fireEvent.press(screen.getByText("حفظ كلمة المرور"));
 
     await waitFor(() => {
@@ -53,7 +54,7 @@ describe("تغيير كلمة المرور — رسائل التحقق تحت ح
   });
 
   it("كلمة جديدة قصيرة ← رسالة تذكر الحد الأدنى", async () => {
-    render(<ChangePasswordScreen />);
+    renderWithSafeArea(<ChangePasswordScreen />);
     fill("Temp1234", "abc", "abc");
 
     await waitFor(() => {
@@ -65,7 +66,7 @@ describe("تغيير كلمة المرور — رسائل التحقق تحت ح
   });
 
   it("التأكيد لا يطابق ← رسالة تحت حقل التأكيد", async () => {
-    render(<ChangePasswordScreen />);
+    renderWithSafeArea(<ChangePasswordScreen />);
     fill("Temp1234", "NewPassw0rd", "NewPassw0rdX");
 
     await waitFor(() => {
@@ -80,7 +81,7 @@ describe("تغيير كلمة المرور — رسائل التحقق تحت ح
     changeSpy.mockRejectedValueOnce(
       new api.LoginRequestError({ status: 401, code: "invalid_credentials" })
     );
-    render(<ChangePasswordScreen />);
+    renderWithSafeArea(<ChangePasswordScreen />);
     fill("WrongCurrent", "NewPassw0rd", "NewPassw0rd");
 
     await waitFor(() => {
@@ -104,7 +105,7 @@ describe("تغيير كلمة المرور — الإتمام ومنع التج�
       mustChangePassword: false,
     });
 
-    render(<ChangePasswordScreen />);
+    renderWithSafeArea(<ChangePasswordScreen />);
     fill("Temp1234", "NewPassw0rd", "NewPassw0rd");
 
     await waitFor(() => {
@@ -126,7 +127,7 @@ describe("تغيير كلمة المرور — الإتمام ومنع التج�
       mustChangePassword: true,
     });
 
-    render(<ChangePasswordScreen />);
+    renderWithSafeArea(<ChangePasswordScreen />);
     fill("Temp1234", "NewPassw0rd", "NewPassw0rd");
 
     await waitFor(() => {
@@ -137,7 +138,7 @@ describe("تغيير كلمة المرور — الإتمام ومنع التج�
 
   it("زر الرجوع في أندرويد لا يتجاوز الشاشة — الحدث يُبتلع", () => {
     const addSpy = jest.spyOn(BackHandler, "addEventListener");
-    render(<ChangePasswordScreen />);
+    renderWithSafeArea(<ChangePasswordScreen />);
 
     expect(addSpy).toHaveBeenCalledWith("hardwareBackPress", expect.any(Function));
     const handler = addSpy.mock.calls[0]?.[1] as () => boolean;

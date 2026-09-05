@@ -1,10 +1,10 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
+import { fireEvent, screen, waitFor } from "@testing-library/react-native";
 
 import LoginScreen from "@/app/auth/login";
 import * as api from "@/lib/api";
 import { getPendingLogin } from "@/lib/pendingLogin";
 import * as session from "@/lib/session";
-import { textStyleOf } from "@/test-utils/rtl";
+import { renderWithSafeArea, textStyleOf } from "@/test-utils/rtl";
 
 /**
  * شاشة الدخول — **الخطوة الأولى** في الشكل الرابع (القرار #106): الرقم وحده،
@@ -40,12 +40,12 @@ beforeEach(() => {
 
 describe("شاشة الدخول — الرقم وحده لا كلمة مرور (القرار #106)", () => {
   it("لا حقل كلمة مرور على هذه الشاشة إطلاقًا", () => {
-    render(<LoginScreen />);
+    renderWithSafeArea(<LoginScreen />);
     expect(screen.queryByTestId("login-password")).toBeNull();
   });
 
   it("رقم فارغ ← رسالة تحت الحقل بلا أي طلب شبكة", async () => {
-    render(<LoginScreen />);
+    renderWithSafeArea(<LoginScreen />);
     fireEvent.press(screen.getByText("متابعة"));
 
     await waitFor(() => {
@@ -56,7 +56,7 @@ describe("شاشة الدخول — الرقم وحده لا كلمة مرور (
 
   it("لا حساب بهذا الرقم ← رسالة صريحة تحت الحقل", async () => {
     accountsSpy.mockResolvedValueOnce([]);
-    render(<LoginScreen />);
+    renderWithSafeArea(<LoginScreen />);
     submit();
 
     await waitFor(() => {
@@ -69,7 +69,7 @@ describe("شاشة الدخول — الرقم وحده لا كلمة مرور (
 
   it("حساب واحد ← شاشة كلمة المرور مباشرة (تُتخطّى شاشة الاختيار)", async () => {
     accountsSpy.mockResolvedValueOnce([{ tenantId: 3, tenantName: "مزارع الوادي" }]);
-    render(<LoginScreen />);
+    renderWithSafeArea(<LoginScreen />);
     submit();
 
     await waitFor(() => {
@@ -84,7 +84,7 @@ describe("شاشة الدخول — الرقم وحده لا كلمة مرور (
       { tenantId: 3, tenantName: "مزارع الوادي" },
       { tenantId: 9, tenantName: "شركة الأمانة" },
     ]);
-    render(<LoginScreen />);
+    renderWithSafeArea(<LoginScreen />);
     submit();
 
     await waitFor(() => {
@@ -98,7 +98,7 @@ describe("شاشة الدخول — الرقم وحده لا كلمة مرور (
 describe("شاشة الدخول — الفشل يقول سببه (§8.17)", () => {
   it("انقطاع الشبكة ← رسالة سببها لا شاشة معلّقة", async () => {
     accountsSpy.mockRejectedValueOnce(new api.LoginRequestError({ status: null, code: null }));
-    render(<LoginScreen />);
+    renderWithSafeArea(<LoginScreen />);
     submit();
 
     await waitFor(() => {
@@ -110,7 +110,7 @@ describe("شاشة الدخول — الفشل يقول سببه (§8.17)", () =
 
   it("رسالة الخطأ محاذاة يمينًا باتجاه rtl (§10 قاعدة 4)", async () => {
     accountsSpy.mockResolvedValueOnce([]);
-    render(<LoginScreen />);
+    renderWithSafeArea(<LoginScreen />);
     submit();
 
     const message = await screen.findByTestId("login-phone-error");

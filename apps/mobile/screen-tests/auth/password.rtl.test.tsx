@@ -1,10 +1,10 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
+import { fireEvent, screen, waitFor } from "@testing-library/react-native";
 
 import PasswordScreen from "@/app/auth/password";
 import * as api from "@/lib/api";
 import { clearPendingLogin, setPendingLogin } from "@/lib/pendingLogin";
 import * as session from "@/lib/session";
-import { textStyleOf } from "@/test-utils/rtl";
+import { renderWithSafeArea, textStyleOf } from "@/test-utils/rtl";
 
 /**
  * شاشة كلمة المرور — **الخطوة الأخيرة** في الشكل الرابع (القرار #106):
@@ -79,7 +79,7 @@ describe("شاشة كلمة المرور — رسائل الفشل الأربع"
   ])("حالة %s/%s تعرض الرسالة في %s", async (status, code, testId, message) => {
     loginSpy.mockRejectedValueOnce(new api.LoginRequestError({ status, code }));
     primed();
-    render(<PasswordScreen />);
+    renderWithSafeArea(<PasswordScreen />);
     submit();
 
     await waitFor(() => {
@@ -89,7 +89,7 @@ describe("شاشة كلمة المرور — رسائل الفشل الأربع"
 
   it("كلمة فارغة ← رسالة تحت الحقل بلا طلب شبكة", async () => {
     primed();
-    render(<PasswordScreen />);
+    renderWithSafeArea(<PasswordScreen />);
     fireEvent.press(screen.getByText("تسجيل الدخول"));
 
     await waitFor(() => {
@@ -103,7 +103,7 @@ describe("شاشة كلمة المرور — رسائل الفشل الأربع"
       new api.LoginRequestError({ status: 401, code: "invalid_credentials" })
     );
     primed();
-    render(<PasswordScreen />);
+    renderWithSafeArea(<PasswordScreen />);
     submit();
 
     const style = textStyleOf(await screen.findByTestId("password-field-error"));
@@ -116,7 +116,7 @@ describe("شاشة كلمة المرور — النجاح والتوجيه", () 
   it("ترسل tenantId المختار مع الكلمة (جوهر القرار #106)", async () => {
     loginSpy.mockResolvedValueOnce({ token: "jwt", user: userWith() });
     primed();
-    render(<PasswordScreen />);
+    renderWithSafeArea(<PasswordScreen />);
     submit("Passw0rd!23");
 
     await waitFor(() => {
@@ -136,7 +136,7 @@ describe("شاشة كلمة المرور — النجاح والتوجيه", () 
   ])("الدور %s ← %s، والرمز محفوظ في المخزن الآمن", async (role, expected) => {
     loginSpy.mockResolvedValueOnce({ token: "jwt-token", user: userWith({ role }) });
     primed();
-    render(<PasswordScreen />);
+    renderWithSafeArea(<PasswordScreen />);
     submit();
 
     await waitFor(() => {
@@ -151,7 +151,7 @@ describe("شاشة كلمة المرور — النجاح والتوجيه", () 
       user: userWith({ mustChangePassword: true }),
     });
     primed();
-    render(<PasswordScreen />);
+    renderWithSafeArea(<PasswordScreen />);
     submit();
 
     await waitFor(() => {
@@ -162,12 +162,12 @@ describe("شاشة كلمة المرور — النجاح والتوجيه", () 
 
   it("اسم المزرعة معروض ليعرف المستخدم لأي حساب يُدخل كلمته", () => {
     primed();
-    render(<PasswordScreen />);
+    renderWithSafeArea(<PasswordScreen />);
     expect(screen.getByTestId("password-tenant-name")).toHaveTextContent("مزارع الوادي");
   });
 
   it("بلا حالة وسيطة ← عودة لشاشة الدخول لا شاشة معلّقة", async () => {
-    render(<PasswordScreen />);
+    renderWithSafeArea(<PasswordScreen />);
     fireEvent.press(screen.getByText("تسجيل الدخول"));
 
     await waitFor(() => {
