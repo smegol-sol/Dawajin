@@ -137,6 +137,7 @@ const styles = StyleSheet.create({
   tileName: {
     flexShrink: 1,
     fontSize: font.size.content,
+    lineHeight: font.lineHeight.content,
     fontFamily: font.familyBold,
     color: color.textOnDark,
     writingDirection: "rtl",
@@ -144,6 +145,7 @@ const styles = StyleSheet.create({
   },
   tileType: {
     fontSize: font.size.content,
+    lineHeight: font.lineHeight.content,
     fontFamily: font.familyRegular,
     color: color.textOnDark,
     writingDirection: "rtl",
@@ -156,6 +158,7 @@ const styles = StyleSheet.create({
   },
   tileStatusLabel: {
     fontSize: font.size.content,
+    lineHeight: font.lineHeight.content,
     fontFamily: font.familyBold,
     color: color.textOnDark,
     writingDirection: "rtl",

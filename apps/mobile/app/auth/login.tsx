@@ -167,6 +167,7 @@ const styles = StyleSheet.create({
   },
   tagline: {
     fontSize: font.size.content,
+    lineHeight: font.lineHeight.content,
     fontFamily: font.familyRegular,
     color: color.textBody,
     textAlign: "center",
@@ -187,6 +188,7 @@ const styles = StyleSheet.create({
     // حجم المحتوى لا technicalRef (11px): هذا نص يقرؤه المربي تحت شمس
     // مباشرة، و§7.2 تحصر ما دون 15px في الشارات والتبويبات والمراجع التقنية
     fontSize: font.size.content,
+    lineHeight: font.lineHeight.content,
     fontFamily: font.familyRegular,
     color: color.textBody,
     writingDirection: "rtl",
@@ -194,6 +196,7 @@ const styles = StyleSheet.create({
   },
   formError: {
     fontSize: font.size.content,
+    lineHeight: font.lineHeight.content,
     fontFamily: font.familyRegular,
     color: color.statusCritical,
     writingDirection: "rtl",

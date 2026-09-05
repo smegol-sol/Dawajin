@@ -286,6 +286,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: font.size.screenTitle,
+    lineHeight: font.lineHeight.screenTitle,
     fontFamily: font.familyBold,
     color: color.brandPrimary,
     writingDirection: "rtl",
@@ -293,6 +294,7 @@ const styles = StyleSheet.create({
   },
   explain: {
     fontSize: font.size.content,
+    lineHeight: font.lineHeight.content,
     fontFamily: font.familyRegular,
     color: color.textBody,
     writingDirection: "rtl",
@@ -311,6 +313,7 @@ const styles = StyleSheet.create({
   },
   hint: {
     fontSize: font.size.content,
+    lineHeight: font.lineHeight.content,
     fontFamily: font.familyRegular,
     color: color.textBody,
     writingDirection: "rtl",
@@ -318,6 +321,7 @@ const styles = StyleSheet.create({
   },
   formError: {
     fontSize: font.size.content,
+    lineHeight: font.lineHeight.content,
     fontFamily: font.familyRegular,
     color: color.statusCritical,
     writingDirection: "rtl",

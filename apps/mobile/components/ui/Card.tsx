@@ -254,6 +254,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: font.size.subtitle,
+    lineHeight: font.lineHeight.subtitle,
     fontFamily: font.familyBold,
     color: color.brandPrimary,
     writingDirection: "rtl",
@@ -263,6 +264,7 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: font.size.content,
+    lineHeight: font.lineHeight.content,
     fontFamily: font.familyRegular,
     color: color.textBody,
     writingDirection: "rtl",
@@ -300,6 +302,7 @@ const styles = StyleSheet.create({
   },
   primaryAction: {
     fontSize: font.size.content,
+    lineHeight: font.lineHeight.content,
     fontFamily: font.familyBold,
     color: color.accentSuccess,
     writingDirection: "rtl",

@@ -216,6 +216,7 @@ const styles = StyleSheet.create({
   },
   rowLabel: {
     fontSize: font.size.content,
+    lineHeight: font.lineHeight.content,
     fontFamily: font.familyBold,
     color: color.textBody,
     writingDirection: "rtl",
@@ -223,6 +224,7 @@ const styles = StyleSheet.create({
   },
   note: {
     fontSize: font.size.content,
+    lineHeight: font.lineHeight.content,
     fontFamily: font.familyRegular,
     color: color.textBody,
     writingDirection: "rtl",
@@ -232,6 +234,7 @@ const styles = StyleSheet.create({
   /** **المرحلة المشتقّة — تُقرأ ولا تُلمَس**، فبوزن النصّ العاديّ لا العنوان. */
   derived: {
     fontSize: font.size.content,
+    lineHeight: font.lineHeight.content,
     fontFamily: font.familyRegular,
     color: color.textBody,
     writingDirection: "rtl",
@@ -240,6 +243,7 @@ const styles = StyleSheet.create({
   /** **لونٌ ونصٌّ معًا** (§488) — والنصُّ هو الحامل، واللونُ تأكيدٌ له. */
   fieldError: {
     fontSize: font.size.content,
+    lineHeight: font.lineHeight.content,
     fontFamily: font.familyBold,
     color: color.statusCritical,
     writingDirection: "rtl",

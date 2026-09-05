@@ -101,6 +101,7 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: font.size.content,
+    lineHeight: font.lineHeight.content,
     fontFamily: font.familyRegular,
     color: color.brandPrimary,
     writingDirection: "rtl",
@@ -131,12 +132,14 @@ const styles = StyleSheet.create({
   },
   value: {
     fontSize: font.size.numberStepperValue,
+    lineHeight: font.lineHeight.numberStepperValue,
     fontFamily: font.familyBold,
     color: color.brandPrimary,
     writingDirection: "ltr",
   },
   computed: {
     fontSize: font.size.technicalRef,
+    lineHeight: font.lineHeight.technicalRef,
     fontFamily: font.familyRegular,
     color: color.textBody,
     writingDirection: "rtl",

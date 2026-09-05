@@ -68,6 +68,7 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: font.size.content,
+    lineHeight: font.lineHeight.content,
     fontFamily: font.familyRegular,
     color: color.textBody,
     writingDirection: "rtl",
@@ -78,6 +79,7 @@ const styles = StyleSheet.create({
   },
   count: {
     fontSize: font.size.technicalRef,
+    lineHeight: font.lineHeight.technicalRef,
     fontFamily: font.familyNumber,
     color: color.textBody,
     writingDirection: "ltr",

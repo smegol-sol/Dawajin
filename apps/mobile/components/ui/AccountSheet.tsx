@@ -52,6 +52,7 @@ const styles = StyleSheet.create({
   },
   name: {
     fontSize: font.size.content,
+    lineHeight: font.lineHeight.content,
     fontFamily: font.familyBold,
     color: color.brandPrimary,
     writingDirection: "rtl",
@@ -59,6 +60,7 @@ const styles = StyleSheet.create({
   },
   role: {
     fontSize: font.size.content,
+    lineHeight: font.lineHeight.content,
     fontFamily: font.familyRegular,
     color: color.textBody,
     writingDirection: "rtl",

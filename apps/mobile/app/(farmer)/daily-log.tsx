@@ -461,6 +461,7 @@ const styles = StyleSheet.create({
   },
   contextTitle: {
     fontSize: font.size.subtitle,
+    lineHeight: font.lineHeight.subtitle,
     fontFamily: font.familyBold,
     color: color.textBody,
     writingDirection: "rtl",
@@ -468,6 +469,7 @@ const styles = StyleSheet.create({
   },
   contextLine: {
     fontSize: font.size.content,
+    lineHeight: font.lineHeight.content,
     fontFamily: font.familyRegular,
     color: color.textBody,
     writingDirection: "rtl",
@@ -475,6 +477,7 @@ const styles = StyleSheet.create({
   },
   failure: {
     fontSize: font.size.content,
+    lineHeight: font.lineHeight.content,
     fontFamily: font.familyBold,
     color: color.statusCritical,
     writingDirection: "rtl",

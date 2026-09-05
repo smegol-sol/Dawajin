@@ -270,6 +270,7 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: font.size.content,
+    lineHeight: font.lineHeight.content,
     fontFamily: font.familyRegular,
     color: color.brandPrimary,
     writingDirection: "rtl",
@@ -285,6 +286,7 @@ const styles = StyleSheet.create({
   },
   textInput: {
     fontSize: font.size.content,
+    lineHeight: font.lineHeight.content,
     fontFamily: font.familyRegular,
     color: color.brandPrimary,
     paddingVertical: spacing.sm,
@@ -309,6 +311,7 @@ const styles = StyleSheet.create({
   },
   value: {
     fontSize: font.size.content,
+    lineHeight: font.lineHeight.content,
     fontFamily: font.familyRegular,
     color: color.brandPrimary,
     writingDirection: "rtl",
@@ -318,6 +321,7 @@ const styles = StyleSheet.create({
   },
   error: {
     fontSize: font.size.technicalRef,
+    lineHeight: font.lineHeight.technicalRef,
     fontFamily: font.familyRegular,
     color: color.statusCritical,
     writingDirection: "rtl",

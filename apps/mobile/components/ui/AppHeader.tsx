@@ -129,6 +129,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: font.size.screenTitle,
+    lineHeight: font.lineHeight.screenTitle,
     fontFamily: font.familyBold,
     color: color.textOnDark,
     writingDirection: "rtl",
@@ -136,6 +137,7 @@ const styles = StyleSheet.create({
   },
   contextLine: {
     fontSize: font.size.content,
+    lineHeight: font.lineHeight.content,
     fontFamily: font.familyRegular,
     color: withAlpha(color.textOnDark, 0.72),
     writingDirection: "rtl",

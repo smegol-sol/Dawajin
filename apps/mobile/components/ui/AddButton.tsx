@@ -64,6 +64,7 @@ const styles = StyleSheet.create({
   label: {
     flexShrink: 1,
     fontSize: font.size.content,
+    lineHeight: font.lineHeight.content,
     fontFamily: font.familyBold,
     color: color.accentSuccess,
     writingDirection: "rtl",
