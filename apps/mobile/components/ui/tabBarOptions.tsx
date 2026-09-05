@@ -83,7 +83,7 @@ export function tabLabel(label: string): (props: { focused: boolean; color: stri
 const styles = StyleSheet.create({
   label: {
     fontSize: font.size.tabLabel,
-    lineHeight: font.lineHeight.tabLabel,
+    // **مُسقَطٌ للقياس** (القرار 296)
     fontFamily: font.familyRegular,
     textAlign: "center",
     writingDirection: "rtl",

@@ -70,14 +70,14 @@ const styles = StyleSheet.create({
    */
   title: {
     fontSize: font.size.screenTitle,
-    lineHeight: font.lineHeight.screenTitle,
+    // **مُسقَطٌ للقياس** (القرار 296) — انظر ترويسة `LINE_HEIGHT_PROBE` في الفاحص
     fontFamily: font.familyBold,
     color: color.brandPrimary,
     writingDirection: "rtl",
   },
   note: {
     fontSize: font.size.content,
-    lineHeight: font.lineHeight.content,
+    // **مُسقَطٌ للقياس** (القرار 296)
     fontFamily: font.familyRegular,
     color: color.textBody,
     writingDirection: "rtl",

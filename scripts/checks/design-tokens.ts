@@ -85,6 +85,27 @@ const FONT_FAMILY_EXEMPT = new Set(["components/ui/BottomTabBar.tsx:label"]);
  * في موضع الاستدعاء. **وأيُّ استثناءٍ قادم يُكتب بعلّته كأخيه أعلاه.**
  */
 
+/**
+ * **استثناءُ قياسٍ مؤقّت — يسقط بحكم المالك وحده** (القرار 296).
+ *
+ * **رأى المالك على جهازه بعد 293:** تسمياتُ التبويبات الخمس مقتطعةً بـ«…»،
+ * **وعنوانَ الشاشة النائبة مقصوصًا بلا «…»** («الرئيسية – المربي» صارت
+ * «الرئيسية – المر»). **والرابطُ الوحيد بين المواضع أنها نالت `lineHeight`
+ * في 293** — **ولقطتُه قبله (9:59) تُظهر التسميات كاملة**.
+ *
+ * **فأُسقط الارتفاع عن هذه الثلاثة وحدها ليفرّق جهازُه** — **وبقي في الباقي
+ * كلِّه**. **ولا جهازَ أندرويد في الحاوية ولا المتصفّح يقصّ، فلا شيءَ هنا
+ * يفرّق** (وسمُ 257: «غير مصدَّق»).
+ *
+ * **ويسقط الاستثناء في الحالين:** ثبتت العلّةُ فيُبنى العلاجُ الدائم، **أو**
+ * لم تثبت فيعود الارتفاع كما كان. **ولا يبقى بحالٍ ثالثة.**
+ */
+const LINE_HEIGHT_PROBE = new Set([
+  "components/ui/tabBarOptions.tsx:label",
+  "components/ui/PlaceholderScreen.tsx:title",
+  "components/ui/PlaceholderScreen.tsx:note",
+]);
+
 const MIN_CONTENT_SIZE = tokens.typography.$minContentSize;
 const ALLOWED_SMALL_SIZES = new Set([
   tokens.typography.size.badge,
@@ -198,7 +219,7 @@ function styleBlockViolations(relPath: string, content: string): string[] {
           `النصّ العربيّ يسقط على خطّ النظام`
       );
     }
-    if (!body.includes("lineHeight")) {
+    if (!body.includes("lineHeight") && !LINE_HEIGHT_PROBE.has(`${relPath}:${name}`)) {
       found.push(
         `${relPath}: كتلة «${name}» تضبط fontSize بلا lineHeight — ` +
           `النصّ العربيّ يُقصّ رأسيًّا على أندرويد؛ استخدم font.lineHeight بنفس اسم الحجم`
