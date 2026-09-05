@@ -79,6 +79,7 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: font.size.technicalRef,
+    lineHeight: font.lineHeight.technicalRef,
     fontFamily: font.familyRegular,
     writingDirection: "rtl",
   },
@@ -89,21 +90,25 @@ const styles = StyleSheet.create({
   },
   value: {
     fontSize: font.size.indicatorValue,
+    lineHeight: font.lineHeight.indicatorValue,
     fontFamily: font.familyNumber,
     writingDirection: "ltr",
   },
   unit: {
     fontSize: font.size.technicalRef,
+    lineHeight: font.lineHeight.technicalRef,
     fontFamily: font.familyRegular,
     writingDirection: "rtl",
   },
   unavailable: {
     fontSize: font.size.technicalRef,
+    lineHeight: font.lineHeight.technicalRef,
     fontFamily: font.familyRegular,
     writingDirection: "rtl",
   },
   standard: {
     fontSize: font.size.technicalRef,
+    lineHeight: font.lineHeight.technicalRef,
     fontFamily: font.familyRegular,
     writingDirection: "rtl",
   },

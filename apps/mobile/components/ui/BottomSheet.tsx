@@ -62,6 +62,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: font.size.subtitle,
+    lineHeight: font.lineHeight.subtitle,
     fontFamily: font.familyBold,
     color: color.brandPrimary,
     writingDirection: "rtl",

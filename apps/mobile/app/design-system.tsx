@@ -404,6 +404,7 @@ const styles = StyleSheet.create({
   },
   groupLabel: {
     fontSize: font.size.technicalRef,
+    lineHeight: font.lineHeight.technicalRef,
     fontFamily: font.familyRegular,
     color: color.textBody,
     writingDirection: "rtl",

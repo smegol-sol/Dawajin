@@ -85,6 +85,7 @@ export function tabLabel(
 const styles = StyleSheet.create({
   label: {
     fontSize: font.size.tabLabel,
+    lineHeight: font.lineHeight.tabLabel,
     fontFamily: font.familyRegular,
     textAlign: "center",
     writingDirection: "rtl",

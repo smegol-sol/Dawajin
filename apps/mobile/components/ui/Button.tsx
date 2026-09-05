@@ -86,11 +86,13 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: font.size.content,
+    lineHeight: font.lineHeight.content,
     fontFamily: font.familyBold,
     writingDirection: "rtl",
   },
   reason: {
     fontSize: font.size.technicalRef,
+    lineHeight: font.lineHeight.technicalRef,
     fontFamily: font.familyRegular,
     color: color.textBody,
     writingDirection: "rtl",

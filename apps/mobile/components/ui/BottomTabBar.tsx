@@ -76,6 +76,7 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: font.size.tabLabel,
+    lineHeight: font.lineHeight.tabLabel,
     writingDirection: "rtl",
   },
   badge: {
@@ -92,6 +93,7 @@ const styles = StyleSheet.create({
   },
   badgeText: {
     fontSize: font.size.technicalRef,
+    lineHeight: font.lineHeight.technicalRef,
     color: color.textOnDark,
     fontFamily: font.familyNumber,
     writingDirection: "ltr",

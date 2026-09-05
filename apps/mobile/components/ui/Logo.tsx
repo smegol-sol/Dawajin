@@ -103,6 +103,7 @@ const styles = StyleSheet.create({
   },
   markLetter: {
     fontSize: font.size.subtitle,
+    lineHeight: font.lineHeight.subtitle,
     fontFamily: font.familyBold,
     writingDirection: "rtl",
   },
@@ -114,6 +115,7 @@ const styles = StyleSheet.create({
   },
   wordmark: {
     fontSize: font.size.screenTitle,
+    lineHeight: font.lineHeight.screenTitle,
     fontFamily: font.familyBold,
     color: color.brandPrimary,
     writingDirection: "rtl",

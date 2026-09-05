@@ -6,8 +6,10 @@ import tokens from "../../apps/mobile/constants/tokens.json" with { type: "json"
 /**
  * فاحص رموز التصميم — يمنع لونًا حرفيًا · رماديًا أفتح من #4A4A4A · إيموجي ·
  * نصف قطر خارج المقياس · وزن/عائلة خط خارج المسموح · نص محتوى أصغر من
- * $minContentSize (backend-technical-spec.md §21 · app-complete-spec.md §7.2
- * و§12: "لا وزن أخف من 500"، "الحد الأدنى لنص المحتوى 15px").
+ * $minContentSize · **وكتلةَ نمطٍ تضبط `fontSize` بلا `fontFamily` أو بلا
+ * `lineHeight`** (backend-technical-spec.md §21 · app-complete-spec.md §7.2
+ * و§12: "لا وزن أخف من 500"، "الحد الأدنى لنص المحتوى 15px"، "ارتفاع السطر:
+ * 1.7 للنص · 1.4 للعناوين المضغوطة · 1 للأرقام الكبيرة").
  *
  * القيم المسموحة كلها تُقرأ من tokens.json/theme.ts — لا تُكرَّر كثوابت هنا،
  * فتعديل الرمز المركزي يكفي لتحديث الفاحص بلا تعارض بينهما.
@@ -75,6 +77,13 @@ const STYLE_BLOCK = /(\w+):\s*\{([^{}]*)\}/g;
  * يوم تصير العائلةُ ثابتةً في الكتلة** (القرار 268).
  */
 const FONT_FAMILY_EXEMPT = new Set(["components/ui/BottomTabBar.tsx:label"]);
+
+/**
+ * **ولا قائمةَ استثناءٍ لفحص `lineHeight` اليوم — والقياسُ قبل بنائه** (القرار
+ * 293): **ستٌّ وستون كتلةً تُردّ في تسعةٍ وعشرين ملفًا، وصفرُ إنذارٍ كاذب،
+ * وصفرُ استثناءٍ يلزم** — إذ لا موضعَ واحدًا في `apps/mobile` يضبط `lineHeight`
+ * في موضع الاستدعاء. **وأيُّ استثناءٍ قادم يُكتب بعلّته كأخيه أعلاه.**
+ */
 
 const MIN_CONTENT_SIZE = tokens.typography.$minContentSize;
 const ALLOWED_SMALL_SIZES = new Set([
@@ -154,6 +163,51 @@ function isGrayscaleLighterThanBody(hex: string): boolean {
   return r > 0x4a; // أفتح من #4A4A4A
 }
 
+/**
+ * **الخاصّيةُ الغائبة لا القيمةُ المكتوبة** (القرار 289): بقيةُ الفحوص تقرأ ما
+ * كُتب، **فكتلةٌ تضبط `fontSize` وتُغفل خاصّيةً لازمةً تمرّ صامتة**.
+ *
+ * **وخاصّيتان لازمتان اليوم:**
+ *
+ * - **`fontFamily`** — بلا ضبطها **يسقط النصّ العربيّ على خطّ النظام**، وهو ما
+ *   وقع في `PlaceholderScreen` فأصاب **ثمانَ عشرةَ شاشة** (289).
+ * - **`lineHeight`** — بلا ضبطها **يُقصّ النصّ العربيّ رأسيًّا على أندرويد**:
+ *   ارتفاعُ السطر الافتراضيّ لا يسع نزلاتِ الحروف، **ورآه المالك على جهازه**
+ *   (القرار 293). **وستٌّ وستون كتلةً كانت كذلك — كلُّ كتلةٍ في التطبيق.**
+ *
+ * ## واتجاهُ الخطأ معلَن (القرار 270)
+ *
+ * **يفشل ظلمًا** حين تُضبط الخاصّية في موضع الاستدعاء لا في الكتلة —
+ * **مقيس لـ`fontFamily`: موضعٌ واحد من ثلاثةٍ يوم كُتب**، وله استثناءٌ بعلّته؛
+ * **ومقيس لـ`lineHeight`: صفرُ مواضعَ يوم كُتب**، فلا استثناء.
+ *
+ * **ولا يمرّ ظلمًا فيما يفحصه.** **ويفوته ما لا يُكتب في كتلةِ نمطٍ أصلًا**
+ * (نمطٌ مضمَّن في JSX) — **وذاك يمسكه ماسحُ الشاشات في تأكيدات التخطيط
+ * لـ`fontFamily`، ولا يمسكه شيءٌ لـ`lineHeight`: المتصفّح يفيض بالنصّ ولا
+ * يقصّه، فالعمى بنيويّ لا نقصُ فاحص** (البند 37).
+ */
+function styleBlockViolations(relPath: string, content: string): string[] {
+  const found: string[] = [];
+  for (const match of content.matchAll(STYLE_BLOCK)) {
+    const body = match[2] ?? "";
+    if (!body.includes("fontSize")) continue;
+    const name = match[1] ?? "";
+    if (!body.includes("fontFamily") && !FONT_FAMILY_EXEMPT.has(`${relPath}:${name}`)) {
+      found.push(
+        `${relPath}: كتلة «${name}» تضبط fontSize بلا fontFamily — ` +
+          `النصّ العربيّ يسقط على خطّ النظام`
+      );
+    }
+    if (!body.includes("lineHeight")) {
+      found.push(
+        `${relPath}: كتلة «${name}» تضبط fontSize بلا lineHeight — ` +
+          `النصّ العربيّ يُقصّ رأسيًّا على أندرويد؛ استخدم font.lineHeight بنفس اسم الحجم`
+      );
+    }
+  }
+  return found;
+}
+
 export function checkDesignTokens(): { ok: boolean; message: string } {
   const allowedHex = collectAllowedHexColors();
   const allowedRadii = new Set(Object.values(tokens.radius as Record<string, number>));
@@ -192,24 +246,7 @@ export function checkDesignTokens(): { ok: boolean; message: string } {
       }
     }
 
-    // **الخاصّيةُ الغائبة لا القيمةُ المكتوبة** (القرار 289): كلُّ الفحوص
-    // أعلاه تقرأ ما كُتب، **فكتلةٌ تضبط `fontSize` ولا تضبط `fontFamily`
-    // تمرّ صامتةً** — **ونصُّها العربيّ يسقط على خطّ النظام**، وهو ما وقع في
-    // `PlaceholderScreen` فأصاب **ثمانَ عشرةَ شاشة**.
-    //
-    // **واتجاهُ خطئه معلَن (270): يفشل ظلمًا** حين تُضبط العائلة في موضع
-    // الاستدعاء — **مقيس: موضعٌ واحد من ثلاثةٍ يوم كُتب**، وله استثناءٌ بعلّته.
-    // **ولا يمرّ ظلمًا فيما يفحصه**، **ويفوته ما لا يُكتب في كتلةِ نمطٍ أصلًا**
-    // — **وذاك يمسكه ماسحُ الشاشات في تأكيدات التخطيط**.
-    for (const match of content.matchAll(STYLE_BLOCK)) {
-      const body = match[2] ?? "";
-      if (!body.includes("fontSize") || body.includes("fontFamily")) continue;
-      if (FONT_FAMILY_EXEMPT.has(`${relPath}:${match[1] ?? ""}`)) continue;
-      violations.push(
-        `${relPath}: كتلة «${match[1] ?? ""}» تضبط fontSize بلا fontFamily — ` +
-          `النصّ العربيّ يسقط على خطّ النظام`
-      );
-    }
+    violations.push(...styleBlockViolations(relPath, content));
 
     for (const match of content.matchAll(FONT_FAMILY_ASSIGNMENT)) {
       const literal = extractFontLiteral(match[1] ?? "");

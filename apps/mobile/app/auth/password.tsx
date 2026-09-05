@@ -170,12 +170,14 @@ const styles = StyleSheet.create({
   },
   appName: {
     fontSize: font.size.screenTitle,
+    lineHeight: font.lineHeight.screenTitle,
     fontFamily: font.familyBold,
     color: color.brandPrimary,
     writingDirection: "rtl",
   },
   tagline: {
     fontSize: font.size.content,
+    lineHeight: font.lineHeight.content,
     fontFamily: font.familyRegular,
     color: color.textBody,
     textAlign: "center",
@@ -191,6 +193,7 @@ const styles = StyleSheet.create({
   },
   formError: {
     fontSize: font.size.content,
+    lineHeight: font.lineHeight.content,
     fontFamily: font.familyRegular,
     color: color.statusCritical,
     writingDirection: "rtl",

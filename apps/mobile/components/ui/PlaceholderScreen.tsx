@@ -70,12 +70,14 @@ const styles = StyleSheet.create({
    */
   title: {
     fontSize: font.size.screenTitle,
+    lineHeight: font.lineHeight.screenTitle,
     fontFamily: font.familyBold,
     color: color.brandPrimary,
     writingDirection: "rtl",
   },
   note: {
     fontSize: font.size.content,
+    lineHeight: font.lineHeight.content,
     fontFamily: font.familyRegular,
     color: color.textBody,
     writingDirection: "rtl",

@@ -104,12 +104,14 @@ const styles = StyleSheet.create({
   },
   legendText: {
     fontSize: font.size.content,
+    lineHeight: font.lineHeight.content,
     fontFamily: font.familyRegular,
     color: color.textBody,
     writingDirection: "rtl",
   },
   empty: {
     fontSize: font.size.content,
+    lineHeight: font.lineHeight.content,
     fontFamily: font.familyRegular,
     color: color.textBody,
     writingDirection: "rtl",

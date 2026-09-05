@@ -150,6 +150,7 @@ function ClimateFields({
 const styles = StyleSheet.create({
   fieldError: {
     fontSize: font.size.content,
+    lineHeight: font.lineHeight.content,
     fontFamily: font.familyBold,
     color: color.statusCritical,
     writingDirection: "rtl",

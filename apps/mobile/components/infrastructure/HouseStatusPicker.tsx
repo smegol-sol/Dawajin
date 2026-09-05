@@ -94,6 +94,7 @@ const styles = StyleSheet.create({
   // نفس رموز تسمية `FormField` — التسمية واحدة في الورقة وإن لم تكن حقلًا
   label: {
     fontSize: font.size.content,
+    lineHeight: font.lineHeight.content,
     fontFamily: font.familyRegular,
     color: color.brandPrimary,
     writingDirection: "rtl",

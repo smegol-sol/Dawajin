@@ -54,6 +54,7 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: font.size.badge,
+    lineHeight: font.lineHeight.badge,
     fontFamily: font.familyBold,
     writingDirection: "rtl",
   },

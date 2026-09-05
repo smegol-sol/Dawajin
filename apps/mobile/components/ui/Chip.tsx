@@ -51,6 +51,7 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: font.size.content,
+    lineHeight: font.lineHeight.content,
     fontFamily: font.familyRegular,
     color: color.brandPrimary,
     writingDirection: "rtl",

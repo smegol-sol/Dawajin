@@ -78,6 +78,7 @@ const styles = StyleSheet.create({
   },
   message: {
     fontSize: font.size.content,
+    lineHeight: font.lineHeight.content,
     fontFamily: font.familyRegular,
     color: color.textBody,
     writingDirection: "rtl",
@@ -93,6 +94,7 @@ const styles = StyleSheet.create({
   },
   actionLabel: {
     fontSize: font.size.content,
+    lineHeight: font.lineHeight.content,
     fontFamily: font.familyBold,
     color: color.textOnDark,
     writingDirection: "rtl",

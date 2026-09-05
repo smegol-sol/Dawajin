@@ -82,6 +82,41 @@ export const statusDerived = Object.fromEntries(
   ])
 ) as Record<keyof typeof STATUS_TONE_COLOR, { background: string; border: string }>;
 
+type SizeName = keyof typeof tokens.typography.size;
+
+/**
+ * **نسبةُ ارتفاع السطر لكل حجم — من §7.2 نصًّا**: «ارتفاع السطر: 1.7 للنص ·
+ * 1.4 للعناوين المضغوطة · 1 للأرقام الكبيرة». **والتوزيع من جدول الأحجام في
+ * §7.2 نفسه لا اجتهادًا**: 18 «قيم المؤشرات · عناوين البطاقات» و20 «عنوان
+ * فرعي» و24 «عنوان الشاشة» عناوينُ مضغوطة، و44 و34 أرقامٌ كبيرة، والباقي نصّ.
+ *
+ * **و`satisfies` يجعلها شاملة إلزامًا**: حجمٌ جديد في `tokens.json` بلا نسبةٍ
+ * هنا **يسقط في `typecheck`** فلا يبلغ الشاشة بلا ارتفاع سطر — **واتجاهُ
+ * سكوتها صحيح** (القرار 276): ما لا يُدرَج لا يُبنى أصلًا.
+ */
+const LINE_HEIGHT_RATIO = {
+  content: tokens.typography.lineHeight.body,
+  badge: tokens.typography.lineHeight.body,
+  tabLabel: tokens.typography.lineHeight.body,
+  technicalRef: tokens.typography.lineHeight.body,
+  indicatorValue: tokens.typography.lineHeight.headingCompact,
+  subtitle: tokens.typography.lineHeight.headingCompact,
+  screenTitle: tokens.typography.lineHeight.headingCompact,
+  heroNumber: tokens.typography.lineHeight.heroNumber,
+  numberStepperValue: tokens.typography.lineHeight.heroNumber,
+} as const satisfies Record<SizeName, number>;
+
+/**
+ * **ارتفاع السطر بالبكسل لا نسبةً** — React Native يأخذ `lineHeight` رقمًا
+ * مطلقًا (خلافًا لـCSS)، **فالضربُ هنا مرة واحدة لا في كل كتلة نمط**.
+ */
+const lineHeightBySize = Object.fromEntries(
+  Object.entries(LINE_HEIGHT_RATIO).map(([name, ratio]) => [
+    name,
+    tokens.typography.size[name as SizeName] * ratio,
+  ])
+) as Record<SizeName, number>;
+
 export const font = {
   /**
    * أسماء العائلات كما يسجّلها expo-font عند التحميل من
@@ -101,9 +136,14 @@ export const font = {
   familyNumber: Platform.select({ ios: "Menlo", default: "monospace" }),
   weightRegular: tokens.typography.weights.regular as 500,
   weightBold: tokens.typography.weights.bold as 700,
-  lineHeightBody: tokens.typography.lineHeight.body,
-  lineHeightHeadingCompact: tokens.typography.lineHeight.headingCompact,
-  lineHeightHeroNumber: tokens.typography.lineHeight.heroNumber,
+  /**
+   * **ارتفاع السطر لكل حجم — لا نسبةً مجرّدة** (القرار 293). كانت الثلاثُ
+   * السابقة (`lineHeightBody`/`lineHeightHeadingCompact`/`lineHeightHeroNumber`)
+   * **نسبًا مصدَّرةً بلا مستدعٍ واحد في المستودع كلّه**، فبقيت §7.2 غيرَ
+   * منزَّلة على أيّ كتلة نمط — **والنصّ العربيّ يُقصّ رأسيًّا على أندرويد**.
+   * **والاستعمال بحجمه هو ما يمنع النسبة من البقاء تعريفًا.**
+   */
+  lineHeight: lineHeightBySize,
   size: tokens.typography.size,
 } as const;
 
