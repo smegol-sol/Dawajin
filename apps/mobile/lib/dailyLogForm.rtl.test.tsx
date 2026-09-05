@@ -14,7 +14,10 @@ import {
   patchFeedRow,
   removeFeedRow,
   draftErrors,
+  draftPatchKeys,
   errorSummary,
+  feedRowPatchKeys,
+  fieldErrorKey,
   rowErrors,
   sampleError,
   stageOfProduct,
@@ -333,5 +336,43 @@ describe("التاريخ ومعرّف العطالة", () => {
     expect(newClientId()).toMatch(UUID_V4);
 
     Object.defineProperty(globalThis, "crypto", { value: original, configurable: true });
+  });
+});
+
+/**
+ * **مفاتيحُ المحو** (القرار 294) — **بها تُمحى الرسالةُ عند إصلاح حقلها وحده**.
+ *
+ * **واتجاهُ خطأ هذه الشواهد معلَن (270): تمرّ ظلمًا على ما لا يُبنى منها مفتاحٌ
+ * أصلًا** — فهي تقيس شكلَ المفتاح لا وصولَه إلى الشاشة؛ **وذاك تقيسه شواهدُ
+ * الشاشة**. **ولا تفشل ظلمًا.**
+ */
+describe("مفاتيحُ محو الرسائل (294)", () => {
+  it("**المفتاح يحمل الحقلَ والصفَّ معًا — فخطأُ صفٍّ لا يمحوه إصلاحُ صفٍّ آخر**", () => {
+    expect(fieldErrorKey({ kind: "feed-product", rowKey: "r1" })).toBe("feed-product:r1");
+    expect(fieldErrorKey({ kind: "feed-product", rowKey: "r2" })).not.toBe("feed-product:r1");
+    expect(fieldErrorKey({ kind: "feed-bags", rowKey: "r1" })).not.toBe("feed-product:r1");
+  });
+
+  it("**وعيّنةُ الوزن مفتاحٌ واحد بلا صفّ — رقمان يكتبان خطأً واحدًا**", () => {
+    expect(fieldErrorKey({ kind: "sample" })).toBe("sample");
+  });
+
+  /**
+   * **المفاتيح من أسماء حقول التعديل لا من اقترانٍ مكتوب** — **واختيارُ الصنف
+   * يكتب المرحلةَ معه** (292) **فيمحو خطأيهما بلا سطرٍ يقرن بينهما**.
+   */
+  it("**تعديلُ الصنف يحمل المرحلةَ معه فيُمحى خطآهما، والأكياسُ لا**", () => {
+    expect(feedRowPatchKeys("r1", { productId: 7, stage: "بادئ" })).toEqual([
+      "feed-product:r1",
+      "feed-stage:r1",
+    ]);
+    expect(feedRowPatchKeys("r1", { bags: 3 })).toEqual(["feed-bags:r1"]);
+    expect(feedRowPatchKeys("r1", {})).toEqual([]);
+  });
+
+  it("**وتعديلُ العيّنة يمحوها بأيّ رقميها، وما لا خطأ له لا يمحو شيئًا**", () => {
+    expect(draftPatchKeys({ sampledBirds: 5 })).toEqual(["sample"]);
+    expect(draftPatchKeys({ sampledWeightKg: 2.5 })).toEqual(["sample"]);
+    expect(draftPatchKeys({ mortalityCount: 3 })).toEqual([]);
   });
 });

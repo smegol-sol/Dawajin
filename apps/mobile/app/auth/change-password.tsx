@@ -10,6 +10,7 @@ import { color, font, radius, spacing } from "@/constants/theme";
 import { useBlockHardwareBack } from "@/hooks/useBlockHardwareBack";
 import { LoginRequestError, changePassword, fetchCurrentUser } from "@/lib/api";
 import { targetAfterLogin } from "@/lib/authFlow";
+import { useFieldErrors } from "@/lib/fieldErrors";
 import { clearToken, readToken } from "@/lib/session";
 
 /**
@@ -34,16 +35,30 @@ import { clearToken, readToken } from "@/lib/session";
 
 type FieldName = "current" | "next" | "confirm" | "form";
 
+interface FieldMessage {
+  field: FieldName;
+  message: string;
+}
+
+/** **مفتاحُ المحو هو اسمُ الحقل نفسه** (القرار 294). */
+const fieldOf = (error: FieldMessage): string => error.field;
+
 export default function ChangePasswordScreen() {
   const router = useRouter();
   const [currentPassword, setCurrentPassword] = useState("");
   const [nextPassword, setNextPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [error, setError] = useState<{ field: FieldName; message: string } | null>(null);
+  // **تُمحى كلُّ رسالةٍ عند إصلاح حقلها وحده** (القرار 294)
+  const errors = useFieldErrors<FieldMessage>(fieldOf);
+  const error = errors.shown[0] ?? null;
   const [submitting, setSubmitting] = useState(false);
 
   // زر الرجوع في أندرويد لا يتجاوز هذه الشاشة — التغيير إجباري
   useBlockHardwareBack();
+
+  const setError = (next: FieldMessage | null): void => {
+    errors.show(next === null ? [] : [next]);
+  };
 
   async function handleSubmit(): Promise<void> {
     const invalid = validate({ currentPassword, nextPassword, confirmPassword });
@@ -83,9 +98,9 @@ export default function ChangePasswordScreen() {
         values={{ currentPassword, nextPassword, confirmPassword }}
         error={error}
         onChange={{
-          current: setCurrentPassword,
-          next: setNextPassword,
-          confirm: setConfirmPassword,
+          current: errors.bind("current", setCurrentPassword),
+          next: errors.bind("next", setNextPassword),
+          confirm: errors.bind("confirm", setConfirmPassword),
         }}
       />
     </AuthScreen>
@@ -120,7 +135,7 @@ function PasswordFields({
   onChange,
 }: {
   values: { currentPassword: string; nextPassword: string; confirmPassword: string };
-  error: { field: FieldName; message: string } | null;
+  error: FieldMessage | null;
   onChange: {
     current: (next: string) => void;
     next: (next: string) => void;
@@ -217,7 +232,7 @@ function validate(input: {
   currentPassword: string;
   nextPassword: string;
   confirmPassword: string;
-}): { field: FieldName; message: string } | null {
+}): FieldMessage | null {
   if (input.currentPassword.length === 0) {
     return { field: "current", message: "أدخل كلمة المرور الحالية" };
   }
@@ -242,7 +257,7 @@ async function submitChange(args: {
   currentPassword: string;
   nextPassword: string;
   router: ReturnType<typeof useRouter>;
-}): Promise<{ field: FieldName; message: string } | null> {
+}): Promise<FieldMessage | null> {
   const { currentPassword, nextPassword, router } = args;
   const token = await readToken();
   if (token === null) {

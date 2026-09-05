@@ -134,7 +134,7 @@ function CardHeader({
   testID?: string | undefined;
 }) {
   return (
-      <View style={styles.headerRow}>
+    <View style={styles.headerRow}>
       <Text style={[styles.title, isIdentity && styles.titleOnDark]}>{title}</Text>
       <View style={styles.headerEnd}>
         {badge}

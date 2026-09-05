@@ -9,6 +9,7 @@ import { Logo } from "@/components/ui/Logo";
 import { color, font, radius, spacing } from "@/constants/theme";
 import { LoginRequestError, fetchAccountsForPhone } from "@/lib/api";
 import { LOGIN_VALIDATION, loginErrorView, type LoginErrorView } from "@/lib/authErrors";
+import { useFieldErrors } from "@/lib/fieldErrors";
 import { setPendingLogin } from "@/lib/pendingLogin";
 
 /**
@@ -27,11 +28,20 @@ import { setPendingLogin } from "@/lib/pendingLogin";
  * بلا AppHeader: هذه شاشة ما قبل الدخول، لا حساب ولا إشعارات ولا رجوع
  * (§8.8 يصف متغيّرَي الهيدر داخل التطبيق بعد الدخول).
  */
+/** **مفتاحُ المحو هو اسمُ الحقل نفسه** (القرار 294). */
+const fieldOf = (error: LoginErrorView): string => error.field;
+
 export default function LoginScreen() {
   const router = useRouter();
   const [phone, setPhone] = useState("");
-  const [error, setError] = useState<LoginErrorView | null>(null);
+  // **تُمحى الرسالة عند إصلاح حقلها وحده** (القرار 294)
+  const errors = useFieldErrors<LoginErrorView>(fieldOf);
+  const error = errors.shown[0] ?? null;
   const [submitting, setSubmitting] = useState(false);
+
+  const setError = (next: LoginErrorView | null): void => {
+    errors.show(next === null ? [] : [next]);
+  };
 
   async function handleSubmit(): Promise<void> {
     const invalid = validate(phone);

@@ -12,7 +12,12 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ListState } from "@/components/ui/ListState";
 import { color } from "@/constants/theme";
 import { bestEffort } from "@/lib/bestEffort";
-import { beginRestore, restoreSnapshot, retryRestore, subscribeRestore } from "@/lib/sessionRestore";
+import {
+  beginRestore,
+  restoreSnapshot,
+  retryRestore,
+  subscribeRestore,
+} from "@/lib/sessionRestore";
 
 bestEffort(SplashScreen.preventAutoHideAsync());
 

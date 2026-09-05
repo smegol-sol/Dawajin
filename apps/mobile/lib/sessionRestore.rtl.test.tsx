@@ -85,7 +85,6 @@ describe("استعادة الجلسة — فصل «لا جلسة» عن «تعذ
     expect(outcome).toEqual({ kind: "signed-out" });
     expect(clearTokenMock).toHaveBeenCalledTimes(1);
   });
-
 });
 
 describe("استعادة الجلسة — الإعادة الواحدة وحدود النداء", () => {

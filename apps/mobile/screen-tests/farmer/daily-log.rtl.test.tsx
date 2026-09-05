@@ -281,6 +281,56 @@ describe("النقص يُكشف عند الضغط لا قبله", () => {
 });
 
 /**
+ * **الوجه الثاني لحكم 292** (القرار 294): **«لا حمرةَ قبل الضغط» فوقه، و«لا
+ * حمرةَ بعد أن يزول موجبُها» هنا** — قاعدةٌ واحدة بطرفين.
+ *
+ * **ومرّ في تجربةٍ كنّا نفحصها بالذات:** اختار المالك الصنف **فعاد الزرُّ
+ * أخضر والعلامةُ باقية تحت الحقل الذي أصلحه** — **ولم ننتبه لأن الزرَّ سرق
+ * النظر**.
+ */
+describe("العلامة تُمحى عند إصلاح حقلها وحده (294)", () => {
+  /** **الطرف الأول: يُصلَح فتُمحى.** */
+  it("**اختيارُ الصنف يمحو «اختر العلف» عن صفّه**", async () => {
+    await renderWithActiveBatch();
+    fireEvent.press(screen.getByText("إضافة نوع علف آخر"));
+    fireEvent.press(screen.getByText("حفظ السجل"));
+    await waitFor(() => {
+      expect(screen.getByText("اختر العلف")).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByText("علف بادئ"));
+
+    expect(screen.queryByText("اختر العلف")).toBeNull();
+  });
+
+  /**
+   * **الطرف الثاني — وهو ما يفرّق** (حكم المالك): **بلا هذا الشاهد يمرّ علاجٌ
+   * يمحو كلَّ شيء عند أيّ كتابة**، **ويخضرّ الطرفُ الأول وحده**.
+   *
+   * **ويقيس الفرقَ مرتين في طلبٍ واحد:** حقلٌ آخر **في الصفّ نفسه** (الأكياس)،
+   * **وصفٌّ آخر** — **فالمفتاح يحمل الحقلَ والصفَّ معًا لا أحدهما**.
+   */
+  it("**ولا يمحو أكياسَ صفّه ولا صفًّا آخر**", async () => {
+    await renderWithActiveBatch();
+    fireEvent.press(screen.getByText("إضافة نوع علف آخر"));
+    fireEvent.press(screen.getByText("إضافة نوع علف آخر"));
+    fireEvent.press(screen.getByText("حفظ السجل"));
+    await waitFor(() => {
+      expect(screen.getAllByText("اختر العلف")).toHaveLength(2);
+    });
+    expect(screen.getAllByText("الكمية أكبر من صفر")).toHaveLength(2);
+
+    // **الصفُّ الأول وحده** — رقائقُ الصنف تتكرّر بتكرار الصفوف
+    const [firstRowChip] = screen.getAllByText("علف بادئ");
+    if (firstRowChip === undefined) throw new Error("لا رقائقَ صنفٍ في الشاشة");
+    fireEvent.press(firstRowChip);
+
+    expect(screen.getAllByText("اختر العلف")).toHaveLength(1);
+    expect(screen.getAllByText("الكمية أكبر من صفر")).toHaveLength(2);
+  });
+});
+
+/**
  * **المرحلةُ تُشتقّ من الصنف ولا تُسأل** (القرار 292).
  *
  * **والمرونةُ باقية:** خلطُ مرحلتين صفَّان بصنفين، وكلٌّ يحمل مرحلته.

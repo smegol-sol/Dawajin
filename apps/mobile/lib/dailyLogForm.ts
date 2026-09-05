@@ -178,6 +178,48 @@ export function draftErrors(draft: DailyLogDraft): FieldError[] {
   return errors;
 }
 
+/**
+ * **مفتاحُ الحقل الذي يخصّه الخطأ** (القرار 294) — **به يُمحى عند الكتابة فيه
+ * وحده**، **ولا يُمحى بكتابةٍ في سواه**. **والصفُّ جزءٌ من المفتاح** فخطأُ صفٍّ
+ * لا يمحوه إصلاحُ صفٍّ آخر.
+ */
+export function fieldErrorKey(error: FieldError): string {
+  return error.kind === "sample" ? "sample" : `${error.kind}:${error.rowKey}`;
+}
+
+/**
+ * **صنفُ الخطأ لكلّ حقلٍ في صفّ العلف** — **و`satisfies` يجعلها شاملةً
+ * إلزامًا**: حقلٌ جديد في `FeedRowDraft` بلا صنفٍ هنا **يسقط في `typecheck`**،
+ * **فلا يُكتب فيه ورسالتُه باقية**. **واتجاهُ سكوتها صحيح** (276).
+ */
+const FEED_FIELD_ERROR_KIND = {
+  productId: "feed-product",
+  stage: "feed-stage",
+  bags: "feed-bags",
+} as const satisfies Record<keyof Omit<FeedRowDraft, "key">, FieldError["kind"]>;
+
+/**
+ * **مفاتيحُ ما كتبه هذا التعديل — مشتقّةٌ من أسماء حقوله لا من اقترانٍ مكتوب.**
+ *
+ * **واختيارُ الصنف يكتب المرحلةَ معه** (القرار 292) **فيُمحى خطآهما معًا** —
+ * **بلا سطرٍ يقرن بينهما هنا**: التعديلُ نفسُه يحمل الاسمين.
+ */
+export function feedRowPatchKeys(rowKey: string, patch: Partial<FeedRowDraft>): string[] {
+  return Object.keys(FEED_FIELD_ERROR_KIND)
+    .filter((field) => field in patch)
+    .map(
+      (field) => `${FEED_FIELD_ERROR_KIND[field as keyof typeof FEED_FIELD_ERROR_KIND]}:${rowKey}`
+    );
+}
+
+/**
+ * **مفاتيحُ تعديلٍ على النموذج كلِّه** — **عيّنةُ الوزن رقمان يكتبان خطأً
+ * واحدًا**، فكتابةُ أيٍّ منهما تمحوه. **وما لا خطأ له لا يمحو شيئًا.**
+ */
+export function draftPatchKeys(patch: Partial<DailyLogDraft>): string[] {
+  return "sampledBirds" in patch || "sampledWeightKg" in patch ? ["sample"] : [];
+}
+
 /** **نصُّ الحقل الناقص — قصيرٌ لأنه يُقرأ تحت الحقل لا في فقرة.** */
 export function fieldErrorMessage(error: FieldError): string {
   switch (error.kind) {

@@ -18,9 +18,7 @@ import { clearToken, readToken } from "./session";
 export const RESTORE_TIMEOUT_MS = 8_000;
 
 export type SessionOutcome =
-  | { kind: "signed-out" }
-  | { kind: "signed-in"; user: AuthenticatedUser }
-  | { kind: "unreachable" };
+  { kind: "signed-out" } | { kind: "signed-in"; user: AuthenticatedUser } | { kind: "unreachable" };
 
 export type RestoreState = { status: "pending" } | { status: "settled"; outcome: SessionOutcome };
 

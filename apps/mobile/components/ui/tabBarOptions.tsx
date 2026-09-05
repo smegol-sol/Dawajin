@@ -67,9 +67,7 @@ export function useTabBarScreenOptions(): BottomTabNavigationOptions {
  * **ورفيع عمدًا**: نصّ بلونه ووزنه — الوزن 700 للنشط و500 لغيره (§8.9) —
  * ولا نسخ لمنطق المكتبة.
  */
-export function tabLabel(
-  label: string
-): (props: { focused: boolean; color: string }) => ReactNode {
+export function tabLabel(label: string): (props: { focused: boolean; color: string }) => ReactNode {
   return function TabLabel({ focused, color: tintColor }) {
     return (
       <Text

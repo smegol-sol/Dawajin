@@ -77,10 +77,7 @@ export function AppHeader({
   const insets = useSafeAreaInsets();
 
   return (
-    <View
-      style={[styles.container, { paddingTop: spacing.md + insets.top }]}
-      testID="app-header"
-    >
+    <View style={[styles.container, { paddingTop: spacing.md + insets.top }]} testID="app-header">
       {/* أيقونات النظام فوق الترويسة الخضراء: داكنة عليها 1.28:1 وبيضاء
           12.72:1 (القرار #175). والضبط هنا لا على الجذر لأن شاشات المصادقة
           بلا ترويسة وخلفيتها فاتحة — فتحتاج العكس. */}

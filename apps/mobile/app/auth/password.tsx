@@ -9,6 +9,7 @@ import { color, font, radius, spacing } from "@/constants/theme";
 import { LoginRequestError, login } from "@/lib/api";
 import { LOGIN_VALIDATION, loginErrorView, type LoginErrorView } from "@/lib/authErrors";
 import { targetAfterLogin } from "@/lib/authFlow";
+import { useFieldErrors } from "@/lib/fieldErrors";
 import { clearPendingLogin, getPendingLogin } from "@/lib/pendingLogin";
 import { saveToken } from "@/lib/session";
 
@@ -27,12 +28,21 @@ import { saveToken } from "@/lib/session";
  *
  * بلا AppHeader كسابقتيها: ما قبل الدخول، لا جلسة ولا إشعارات (القرار #93).
  */
+/** **مفتاحُ المحو هو اسمُ الحقل نفسه** (القرار 294). */
+const fieldOf = (error: LoginErrorView): string => error.field;
+
 export default function PasswordScreen() {
   const router = useRouter();
   const pending = getPendingLogin();
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<LoginErrorView | null>(null);
+  // **تُمحى الرسالة عند إصلاح حقلها وحده** (القرار 294)
+  const errors = useFieldErrors<LoginErrorView>(fieldOf);
+  const error = errors.shown[0] ?? null;
   const [submitting, setSubmitting] = useState(false);
+
+  const setError = (next: LoginErrorView | null): void => {
+    errors.show(next === null ? [] : [next]);
+  };
 
   const tenantId = pending?.selectedTenantId ?? null;
 
@@ -74,7 +84,11 @@ export default function PasswordScreen() {
         />
       }
     >
-      <PasswordFields password={password} error={error} onPasswordChange={setPassword} />
+      <PasswordFields
+        password={password}
+        error={error}
+        onPasswordChange={errors.bind("password", setPassword)}
+      />
     </AuthScreen>
   );
 }
