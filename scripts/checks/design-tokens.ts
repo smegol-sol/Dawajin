@@ -223,10 +223,28 @@ function isGrayscaleLighterThanBody(hex: string): boolean {
  * لـ`fontFamily`، ولا يمسكه شيءٌ لـ`lineHeight`: المتصفّح يفيض بالنصّ ولا
  * يقصّه، فالعمى بنيويّ لا نقصُ فاحص** (البند 37).
  */
+/**
+ * **جسمُ الكتلة بلا تعليقاتها** — **وبدونه يمرّ الفاحصُ ظلمًا** (القرار 296).
+ *
+ * **العطبُ مقيسٌ بإسقاطٍ مشغَّل:** الفحصُ يسأل `body.includes("lineHeight")`،
+ * **فكتلةٌ تشرح في تعليقها لماذا لا تضبط الارتفاع تُرضيه بذكر الاسم** —
+ * **وحُذفت `tabBarOptions.tsx:label` من قائمة الاستثناء فبقي الفاحصُ أخضر**.
+ * **فالقائمةُ كانت تحرس لا شيء** (صنفُ 267: حدٌّ يولد باطلًا)، **والثقبُ أوسعُ
+ * منها**: يشمل قاعدةَ `fontFamily` كذلك (289)، **وأيَّ كتلةٍ يذكر تعليقُها
+ * اسمَ الخاصّية**.
+ *
+ * **واتجاهُ الخطأ انقلب بالإصلاح** (270): كان **يمرّ ظلمًا** — وهو الأسوأ لأنه
+ * يُدرِّب القارئ على الوثوق بالخضرة — **وصار لا يمرّ ظلمًا فيما يفحصه**.
+ */
+function withoutComments(body: string): string {
+  return body.replaceAll(/\/\*[\s\S]*?\*\//g, " ").replaceAll(/\/\/[^\n]*/g, " ");
+}
+
 function styleBlockViolations(relPath: string, content: string): string[] {
   const found: string[] = [];
   for (const match of content.matchAll(STYLE_BLOCK)) {
-    const body = match[2] ?? "";
+    // **بلا التعليقات** — وإلّا أرضى الفاحصَ تعليقٌ يذكر اسمَ الخاصّية
+    const body = withoutComments(match[2] ?? "");
     if (!body.includes("fontSize")) continue;
     const name = match[1] ?? "";
     if (!body.includes("fontFamily") && !FONT_FAMILY_EXEMPT.has(`${relPath}:${name}`)) {
