@@ -83,7 +83,9 @@ export function tabLabel(label: string): (props: { focused: boolean; color: stri
 const styles = StyleSheet.create({
   label: {
     fontSize: font.size.tabLabel,
-    lineHeight: font.lineHeight.tabLabel,
+    // **بلا `lineHeight` — استثناءٌ مسمًّى** (القرار 296): وجودُه يقتطع
+    // التسميةَ أفقيًّا على أندرويد. **صمد لثلاث ملاحظات**، وعلّتُه وشرطُ
+    // سقوطه في ترويسة `LINE_HEIGHT_EXEMPT` بفاحص رموز التصميم.
     fontFamily: font.familyRegular,
     textAlign: "center",
     writingDirection: "rtl",

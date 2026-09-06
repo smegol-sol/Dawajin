@@ -70,14 +70,16 @@ const styles = StyleSheet.create({
    */
   title: {
     fontSize: font.size.screenTitle,
-    lineHeight: font.lineHeight.screenTitle,
+    // **بلا `lineHeight` — استثناءٌ مسمًّى** (القرار 296): وجودُه يبتر
+    // العنوانَ من آخره («الرئيسية – المر»). **علّتُه وشرطُ سقوطه في ترويسة
+    // `LINE_HEIGHT_EXEMPT` بفاحص رموز التصميم.**
     fontFamily: font.familyBold,
     color: color.brandPrimary,
     writingDirection: "rtl",
   },
   note: {
     fontSize: font.size.content,
-    lineHeight: font.lineHeight.content,
+    // **بلا `lineHeight`** — نفسُ الاستثناء («قيد» بدل «قيد البناء»).
     fontFamily: font.familyRegular,
     color: color.textBody,
     writingDirection: "rtl",
