@@ -29,16 +29,33 @@ describe("ارتفاع السطر — §7.2", () => {
    * `font.lineHeight.content` بـ`font.size.content * font.lineHeight...`
    * تطابقُ مجموعٍ بمجموعٍ من مصدرٍ واحد، تخضرّ ولو انحرف المصدر كلُّه.
    */
-  it("**النصّ 1.7 · العناوين المضغوطة 1.4 · الأرقام الكبيرة 1**", () => {
-    expect(font.lineHeight.content).toBeCloseTo(15 * 1.7); // 25.5
-    expect(font.lineHeight.badge).toBeCloseTo(13 * 1.7); // 22.1
-    expect(font.lineHeight.tabLabel).toBeCloseTo(12 * 1.7); // 20.4
-    expect(font.lineHeight.technicalRef).toBeCloseTo(11 * 1.7); // 18.7
-    expect(font.lineHeight.indicatorValue).toBeCloseTo(18 * 1.4); // 25.2
-    expect(font.lineHeight.subtitle).toBeCloseTo(20 * 1.4); // 28
-    expect(font.lineHeight.screenTitle).toBeCloseTo(24 * 1.4); // 33.6
-    expect(font.lineHeight.heroNumber).toBeCloseTo(44); // 44 × 1
-    expect(font.lineHeight.numberStepperValue).toBeCloseTo(34); // 34 × 1
+  it("**النصّ 1.7 · العناوين المضغوطة 1.4 · الأرقام الكبيرة 1 — مُقرَّبةً لأعلى**", () => {
+    expect(font.lineHeight.content).toBe(26); // 15 × 1.7 = 25.5
+    expect(font.lineHeight.badge).toBe(23); // 13 × 1.7 = 22.1
+    expect(font.lineHeight.tabLabel).toBe(21); // 12 × 1.7 = 20.4
+    expect(font.lineHeight.technicalRef).toBe(19); // 11 × 1.7 = 18.7
+    expect(font.lineHeight.indicatorValue).toBe(26); // 18 × 1.4 = 25.2
+    expect(font.lineHeight.subtitle).toBe(28); // 20 × 1.4 = 28 بالضبط
+    expect(font.lineHeight.screenTitle).toBe(34); // 24 × 1.4 = 33.6
+    expect(font.lineHeight.heroNumber).toBe(44); // 44 × 1
+    expect(font.lineHeight.numberStepperValue).toBe(34); // 34 × 1
+  });
+
+  /**
+   * **الكسرُ يقصّ النصّ على أندرويد** (القرار 296) — **مقيسٌ على جهاز المالك
+   * في ثلاث جولات**. **والتقريبُ لأعلى لا لأقرب**: لأسفلَ يُضيّق الصندوق
+   * فيعيد العطب.
+   *
+   * **وشاهدُ الصحيح لا يقلّ لزومًا عن شاهد الكسر:** `subtitle` حاصلُه **28
+   * بالضبط**، **فالسطرُ الأخير يمسك تقريبًا يرفع صحيحًا إلى صحيح** — وذلك ما
+   * يقع لو بلغت بقايا حجمٍ جديدٍ العائمةُ حدَّ الرفع.
+   */
+  it("**كلُّ ارتفاعٍ عددٌ صحيح — ولا كسرَ واحد**", () => {
+    for (const [name, value] of Object.entries(font.lineHeight)) {
+      expect(`${name}=${String(value)}`).toBe(`${name}=${String(Math.trunc(value))}`);
+    }
+    // **والصحيحُ لا يُرفع**: 20 × 1.4 يبقى 28 لا 29
+    expect(font.lineHeight.subtitle).toBe(font.size.subtitle * 1.4);
   });
 
   /**
